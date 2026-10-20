@@ -203,7 +203,7 @@ class TestLauncherScript:
 
     @pytest.fixture
     def launcher_path(self) -> Path:
-        p = Path(__file__).resolve().parent.parent / "nautilus" / "launcher.sh"
+        p = Path(__file__).resolve().parent.parent / "src" / "media_toolbox" / "nautilus" / "launcher.sh"
         assert p.is_file(), f"launcher.sh not found at expected path: {p}"
         return p
 
@@ -707,10 +707,10 @@ class TestNautilusCLISubcommands:
 
     def test_cli_subcommands_headless_execution_does_not_load_gi(self) -> None:
         """Assert executing install-nautilus --dry-run in standalone subprocess loads zero gi modules."""
-        toolbox_root = Path(__file__).resolve().parent.parent
-        python_dir = str(toolbox_root.parent)
+        repo_root = Path(__file__).resolve().parent.parent
+        src_dir = str(repo_root / "src")
         env = os.environ.copy()
-        env["PYTHONPATH"] = python_dir
+        env["PYTHONPATH"] = f"{src_dir}:{env.get('PYTHONPATH', '')}"
 
         code = (
             "import sys\n"
@@ -765,9 +765,9 @@ class TestNautilusModuleInvariants:
 
     def test_installer_has_zero_gui_imports(self) -> None:
         """Assert media_toolbox/nautilus/installer.py has zero GUI imports using AST scanner."""
-        from media_toolbox.tests.test_headless_ast import scan_ast_for_gui_violations
+        from tests.test_headless_ast import scan_ast_for_gui_violations
 
-        installer_file = Path(__file__).resolve().parent.parent / "nautilus" / "installer.py"
+        installer_file = Path(__file__).resolve().parent.parent / "src" / "media_toolbox" / "nautilus" / "installer.py"
         if not installer_file.is_file():
             pytest.skip("installer.py not implemented yet")
 

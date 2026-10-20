@@ -322,7 +322,7 @@ def test_container_faststart() -> None:
 
 def test_presets_zero_gui() -> None:
     """Presets module must have zero imports from GUI toolkits."""
-    target_path = Path(__file__).resolve().parent.parent / "core" / "presets.py"
+    target_path = Path(__file__).resolve().parent.parent / "src" / "media_toolbox" / "core" / "presets.py"
     with open(target_path, "r", encoding="utf-8") as f:
         tree = ast.parse(f.read(), filename=str(target_path))
 

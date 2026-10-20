@@ -749,7 +749,7 @@ class TestRunnerHeadlessASTInvariant:
     """Verifies that core/runner.py maintains zero GUI imports invariant."""
 
     def test_runner_zero_gui_imports(self) -> None:
-        runner_path = Path(__file__).resolve().parent.parent / "core" / "runner.py"
+        runner_path = Path(__file__).resolve().parent.parent / "src" / "media_toolbox" / "core" / "runner.py"
         with open(runner_path, "r", encoding="utf-8") as f:
             tree = ast.parse(f.read(), filename=str(runner_path))
 

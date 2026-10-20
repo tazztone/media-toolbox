@@ -235,7 +235,7 @@ def test_filter_args_helpers() -> None:
 
 def test_filtergraph_zero_gui() -> None:
     """Filtergraph module must have zero imports from GUI toolkits."""
-    target_path = Path(__file__).resolve().parent.parent / "core" / "filtergraph.py"
+    target_path = Path(__file__).resolve().parent.parent / "src" / "media_toolbox" / "core" / "filtergraph.py"
     with open(target_path, "r", encoding="utf-8") as f:
         tree = ast.parse(f.read(), filename=str(target_path))
 

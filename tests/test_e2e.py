@@ -724,7 +724,7 @@ class TestScenario6HeadlessBatchCLIPipeline:
 
     def test_headless_ast_zero_gi_in_sys_modules(self) -> None:
         """Verify that batch CLI execution does not load 'gi' into sys.modules."""
-        repo_python = str(Path(__file__).resolve().parent.parent.parent)
+        repo_python = str(Path(__file__).resolve().parent.parent / "src")
         env = os.environ.copy()
         env["PYTHONPATH"] = f"{repo_python}:{env.get('PYTHONPATH', '')}"
         code = (
@@ -804,8 +804,7 @@ class TestScenario7NautilusContextMenuDispatch:
 
     def test_nautilus_launcher_script_syntax_and_spaces(self) -> None:
         """Launcher script passes bash -n validation and correctly preserves space-separated paths."""
-        toolbox_root = Path(__file__).resolve().parent.parent
-        launcher_path = toolbox_root / "nautilus" / "launcher.sh"
+        launcher_path = Path(__file__).resolve().parent.parent / "src" / "media_toolbox" / "nautilus" / "launcher.sh"
         assert launcher_path.is_file()
 
         # 1. Syntax check

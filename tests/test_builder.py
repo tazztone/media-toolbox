@@ -408,7 +408,7 @@ def test_negative_target_size_raises(invalid_size: float) -> None:
 
 def test_builder_zero_gui() -> None:
     """Builder module must have zero imports from GUI toolkits."""
-    target_path = Path(__file__).resolve().parent.parent / "core" / "builder.py"
+    target_path = Path(__file__).resolve().parent.parent / "src" / "media_toolbox" / "core" / "builder.py"
     with open(target_path, "r", encoding="utf-8") as f:
         tree = ast.parse(f.read(), filename=str(target_path))
 

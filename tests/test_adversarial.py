@@ -674,8 +674,8 @@ class TestAdversarialDesktopAndAST:
 
     def test_launcher_sh_path_injection_spaces_semicolons_metacharacters(self, tmp_path: Path) -> None:
         """Launcher script must never execute injected shell commands from Nautilus paths."""
-        repo_root = Path(__file__).resolve().parent.parent.parent.parent
-        launcher_script = repo_root / "python" / "media_toolbox" / "nautilus" / "launcher.sh"
+        repo_root = Path(__file__).resolve().parent.parent
+        launcher_script = repo_root / "src" / "media_toolbox" / "nautilus" / "launcher.sh"
         assert launcher_script.is_file(), f"launcher.sh not found at {launcher_script}"
 
         canary_file = tmp_path / "pwned_canary.txt"
@@ -779,7 +779,7 @@ class TestAdversarialDesktopAndAST:
             "media_toolbox.__main__",
         ]
 
-        repo_python = str(Path(__file__).resolve().parent.parent.parent.parent / "python")
+        repo_python = str(Path(__file__).resolve().parent.parent / "src")
         env = os.environ.copy()
         env["PYTHONPATH"] = f"{repo_python}:{env.get('PYTHONPATH', '')}"
 

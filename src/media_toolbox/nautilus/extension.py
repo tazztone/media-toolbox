@@ -167,6 +167,7 @@ def find_python_interpreter() -> str:
             return str(cand)
 
     for known in (
+        Path("/home/tazztone/_coding/media-toolbox/.venv/bin/python3"),
         Path("/home/tazztone/_coding/scripts/.venv/bin/python3"),
         Path.home() / ".local/share/media_toolbox/venv/bin/python3",
         Path.home() / ".venv/bin/python3",
@@ -182,18 +183,22 @@ def get_toolbox_env() -> dict[str, str]:
     env = os.environ.copy()
     try:
         ext_path = Path(__file__).resolve()
-        repo_py = ext_path.parent.parent.parent
-        if (repo_py / "media_toolbox" / "__init__.py").is_file():
+        repo_src = ext_path.parent.parent.parent
+        if (repo_src / "media_toolbox" / "__init__.py").is_file():
             pp = env.get("PYTHONPATH", "")
-            env["PYTHONPATH"] = f"{repo_py}:{pp}" if pp else str(repo_py)
+            env["PYTHONPATH"] = f"{repo_src}:{pp}" if pp else str(repo_src)
             return env
     except Exception:
         pass
 
-    known_py = Path("/home/tazztone/_coding/scripts/python")
-    if (known_py / "media_toolbox" / "__init__.py").is_file():
-        pp = env.get("PYTHONPATH", "")
-        env["PYTHONPATH"] = f"{known_py}:{pp}" if pp else str(known_py)
+    for candidate_src in (
+        Path("/home/tazztone/_coding/media-toolbox/src"),
+        Path("/home/tazztone/_coding/scripts/python"),
+    ):
+        if (candidate_src / "media_toolbox" / "__init__.py").is_file():
+            pp = env.get("PYTHONPATH", "")
+            env["PYTHONPATH"] = f"{candidate_src}:{pp}" if pp else str(candidate_src)
+            break
 
     return env
 

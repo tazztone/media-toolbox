@@ -263,7 +263,7 @@ class TestHeadlessInvariant:
         from pathlib import Path
         import subprocess
 
-        python_root = Path(__file__).resolve().parent.parent.parent
+        python_root = Path(__file__).resolve().parent.parent / "src"
         env = os.environ.copy()
         env["PYTHONPATH"] = str(python_root)
 

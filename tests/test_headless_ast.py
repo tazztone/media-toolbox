@@ -44,8 +44,8 @@ FORBIDDEN_KEYWORDS = (
 
 
 def get_toolbox_root() -> Path:
-    """Return Path to python/media_toolbox root."""
-    return Path(__file__).resolve().parent.parent
+    """Return Path to src/media_toolbox root."""
+    return Path(__file__).resolve().parent.parent / "src" / "media_toolbox"
 
 
 def discover_headless_source_files() -> list[Path]:
