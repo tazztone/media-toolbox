@@ -552,7 +552,7 @@ class TestAdversarialCLIFuzzing:
 
         out, err = capsys.readouterr()
         assert code == 1
-        assert "Transcoding failed" in err or "Output file is same as input" in err
+        assert "point to the same file" in err or "Transcoding failed" in err or "Output file is same as input" in err
 
     def test_cli_nonexistent_input_file_handling(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Non-existent files passed to inspect, transcode, or extract-audio return exit code 1."""

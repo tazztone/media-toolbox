@@ -1125,7 +1125,7 @@ class TestCancellationFlow:
         mock_footer.status_label.set_text.assert_called_with("Cancelling transcode...")
 
     def test_worker_catches_runner_cancelled_error(self, gi_env, tmp_path: Path) -> None:
-        """Verify MainWindow._worker_thread_entry catches RunnerCancelledError, deletes partial file, and schedules _on_cancelled_idle."""
+        """Verify MainWindow._worker_thread_entry catches RunnerCancelledError, preserves destination, and schedules _on_cancelled_idle."""
         _, _, _, _, _, GLib = gi_env
         from media_toolbox.ui.window import MainWindow
 
@@ -1133,32 +1133,33 @@ class TestCancellationFlow:
         mock_win.is_transcoding = True
         mock_win._on_cancelled_idle.return_value = GLib.SOURCE_REMOVE
 
-        partial_file = tmp_path / "cancelled_output.mp4"
-        partial_file.write_bytes(b"partial video data")
-        assert partial_file.exists()
+        pre_existing_file = tmp_path / "cancelled_output.mp4"
+        pre_existing_file.write_bytes(b"original video data")
+        assert pre_existing_file.exists()
 
         cancel_event = threading.Event()
         cancel_event.set()
 
         with patch("media_toolbox.ui.window.run_ffmpeg_pipeline", side_effect=RunnerCancelledError("Process killed")):
             MainWindow._worker_thread_entry(
-                mock_win, [["ffmpeg"]], 10.0, partial_file, cancel_event
+                mock_win, [["ffmpeg"]], 10.0, pre_existing_file, cancel_event
             )
 
-        # File is unlinked
-        assert not partial_file.exists()
+        # File is safely preserved, not deleted
+        assert pre_existing_file.exists()
+        assert pre_existing_file.read_bytes() == b"original video data"
 
         # GLib main context dispatches scheduled _on_cancelled_idle
         ctx = GLib.MainContext.default()
         while ctx.pending():
             ctx.iteration(False)
 
-        mock_win._on_cancelled_idle.assert_called_once_with(partial_file)
+        mock_win._on_cancelled_idle.assert_called_once_with(pre_existing_file)
 
         # Verify MainWindow._on_cancelled_idle logic directly
         mock_win_idle = MagicMock()
         mock_win_idle.is_transcoding = True
-        ret = MainWindow._on_cancelled_idle(mock_win_idle, partial_file)
+        ret = MainWindow._on_cancelled_idle(mock_win_idle, pre_existing_file)
 
         assert ret == GLib.SOURCE_REMOVE
         assert mock_win_idle.is_transcoding is False
@@ -1166,24 +1167,25 @@ class TestCancellationFlow:
         mock_win_idle.progress_footer.finish.assert_called_with(False, "Operation cancelled")
         mock_win_idle.toast_overlay.add_toast.assert_called_once()
 
-    def test_cancellation_deletes_partial_output_file(self, tmp_path: Path) -> None:
-        """Verify MainWindow._worker_thread_entry removes unplayable partial output files upon cancellation."""
+    def test_cancellation_preserves_pre_existing_output_file(self, tmp_path: Path) -> None:
+        """Verify MainWindow._worker_thread_entry does not delete pre-existing output files upon cancellation."""
         from media_toolbox.ui.window import MainWindow
 
         mock_win = MagicMock()
         mock_win._on_cancelled_idle.return_value = False
 
-        partial_file = tmp_path / "partially_encoded.mp4"
-        partial_file.write_bytes(b"corrupt partial chunk")
-        assert partial_file.exists()
+        pre_existing_file = tmp_path / "partially_encoded.mp4"
+        pre_existing_file.write_bytes(b"original output bytes")
+        assert pre_existing_file.exists()
 
         cancel_event = threading.Event()
         cancel_event.set()
 
         with patch("media_toolbox.ui.window.run_ffmpeg_pipeline", side_effect=RunnerCancelledError("Aborted")):
-            MainWindow._worker_thread_entry(mock_win, [["ffmpeg"]], 5.0, partial_file, cancel_event)
+            MainWindow._worker_thread_entry(mock_win, [["ffmpeg"]], 5.0, pre_existing_file, cancel_event)
 
-        assert not partial_file.exists()
+        assert pre_existing_file.exists()
+        assert pre_existing_file.read_bytes() == b"original output bytes"
 
     def test_window_close_request_aborts_active_transcode(self) -> None:
         """Verify MainWindow._on_close_request signals cancel_event when transcoding and permits window closure."""

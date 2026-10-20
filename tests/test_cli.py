@@ -642,6 +642,46 @@ class TestCliTranscodeCommand:
         exit_code = cli.main(["transcode", "in.mp4", "out.mp4", "--speed", "-1.5"])
         assert exit_code != 0
 
+    def test_transcode_conflicting_output_paths(
+        self,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Conflicting positional and -o output flags exits with error."""
+        exit_code = cli.main(["transcode", "in.mp4", "out1.mp4", "-o", "out2.mp4"])
+        assert exit_code == 2
+        captured = capsys.readouterr().err
+        assert "Conflicting output paths" in captured
+
+    def test_transcode_destination_exists_refused_without_overwrite(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Existing destination is refused without -f / --overwrite."""
+        inp = tmp_path / "in.mp4"
+        inp.touch()
+        out = tmp_path / "out.mp4"
+        out.touch()
+
+        exit_code = cli.main(["transcode", str(inp), str(out)])
+        assert exit_code == 1
+        captured = capsys.readouterr().err
+        assert "already exists" in captured
+
+    def test_transcode_collision_rejected(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Input and output pointing to same file is rejected."""
+        inp = tmp_path / "in.mp4"
+        inp.touch()
+
+        exit_code = cli.main(["transcode", str(inp), str(inp), "--overwrite"])
+        assert exit_code == 1
+        captured = capsys.readouterr().err
+        assert "same file" in captured
+
     @patch("media_toolbox.cli.run_ffmpeg_pipeline")
     @patch("media_toolbox.cli.build_ffmpeg_commands")
     @patch("media_toolbox.cli.probe_media")
@@ -667,7 +707,7 @@ class TestCliTranscodeCommand:
             "discord-h264",
         ])
         assert exit_code == 0
-        assert mock_builder.call_args[0][1] == "flag_out.mp4"
+        assert Path(mock_builder.call_args[0][1]).name == "flag_out.mp4"
         opts: EncodeOptions = mock_builder.call_args[0][2]
         assert opts.target_size_mb == 25.0
         assert opts.preset == "discord-h264"
@@ -752,7 +792,7 @@ class TestCliExtractAudioCommand:
 
         exit_code = cli.main(["extract-audio", "in.mp4", "-o", "flag_out.mp3"])
         assert exit_code == 0
-        assert mock_builder.call_args[0][1] == "flag_out.mp3"
+        assert Path(mock_builder.call_args[0][1]).name == "flag_out.mp3"
 
     @patch("media_toolbox.cli.probe_media")
     def test_extract_audio_missing_input_file(

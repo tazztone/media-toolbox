@@ -25,6 +25,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, GLib, Gtk
 
 from media_toolbox.core.builder import build_ffmpeg_commands
+from media_toolbox.core.jobs import JobConfig, run_job
 from media_toolbox.core.models import EncodeOptions, MediaInfo, ProgressEvent
 from media_toolbox.core.presets import list_audio_presets, list_video_presets
 from media_toolbox.core.probe import probe_media
@@ -554,19 +555,15 @@ class MainWindow(Adw.ApplicationWindow):
 
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
-        try:
-            cmds = build_ffmpeg_commands(
-                input_path=str(self.input_file),
-                output_path=str(out_path),
-                options=options,
-                media_info=self.media_info,
-                include_progress=True,
-            )
-        except Exception as e:
-            self.toast_overlay.add_toast(Adw.Toast(title=f"Configuration error: {e}"))
-            return
+        config = JobConfig(
+            input_path=self.input_file,
+            output_path=out_path,
+            options=options,
+            media_info=self.media_info,
+            overwrite=True,
+        )
 
-        self._start_worker(cmds, self.media_info.duration or 0.0, out_path, "Transcoding video...")
+        self._start_worker(config, "Transcoding video...")
 
     def _start_extract_audio(self) -> None:
         if not self.input_file or not self.media_info:
@@ -581,37 +578,43 @@ class MainWindow(Adw.ApplicationWindow):
 
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
-        try:
-            cmds = build_ffmpeg_commands(
-                input_path=str(self.input_file),
-                output_path=str(out_path),
-                options=options,
-                media_info=self.media_info,
-                include_progress=True,
-            )
-        except Exception as e:
-            self.toast_overlay.add_toast(Adw.Toast(title=f"Configuration error: {e}"))
-            return
+        config = JobConfig(
+            input_path=self.input_file,
+            output_path=out_path,
+            options=options,
+            media_info=self.media_info,
+            overwrite=True,
+        )
 
-        self._start_worker(cmds, self.media_info.duration or 0.0, out_path, "Extracting audio...")
+        self._start_worker(config, "Extracting audio...")
 
     def _start_worker(
         self,
-        cmds: list[list[str]],
-        duration: float,
-        output_path: Path,
-        title: str,
+        target_or_cmds: Any,
+        *args: Any,
     ) -> None:
         self.cancel_event = threading.Event()
         self.is_transcoding = True
         self._set_ui_controls_sensitive(False)
         if hasattr(self, "open_btn") and self.open_btn is not None:
             self.open_btn.set_sensitive(False)
-        self.progress_footer.start(title)
+
+        if isinstance(target_or_cmds, JobConfig):
+            title = args[0] if args else "Processing media..."
+            self.progress_footer.start(title)
+            worker_args: tuple[Any, ...] = (target_or_cmds, self.cancel_event)
+        else:
+            # Legacy signature: (cmds, duration, output_path, title)
+            cmds = target_or_cmds
+            duration = args[0]
+            output_path = args[1]
+            title = args[2] if len(args) > 2 else "Processing media..."
+            self.progress_footer.start(title)
+            worker_args = (cmds, duration, output_path, self.cancel_event)
 
         worker_thread = threading.Thread(
             target=self._worker_thread_entry,
-            args=(cmds, duration, output_path, self.cancel_event),
+            args=worker_args,
             daemon=True,
             name="MediaToolboxWorker",
         )
@@ -622,12 +625,32 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _worker_thread_entry(
         self,
-        cmds: list[list[str]],
-        total_duration: float,
-        output_path: Path,
-        cancel_event: threading.Event,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
-        """Worker thread running FFmpeg pipeline in background without blocking UI thread."""
+        """Worker thread running FFmpeg job in background without blocking UI thread."""
+        if len(args) == 2 and isinstance(args[0], JobConfig):
+            config = args[0]
+            cancel_event = args[1]
+            try:
+                result = run_job(
+                    config=config,
+                    progress_callback=lambda evt: GLib.idle_add(self._on_progress_idle, evt),
+                    pipeline_progress_callback=lambda p, t, evt: GLib.idle_add(self._on_pass_progress_idle, p, t, evt),
+                    cancel_event=cancel_event,
+                )
+                GLib.idle_add(self._on_success_idle, result.output_path)
+            except RunnerCancelledError:
+                GLib.idle_add(self._on_cancelled_idle, Path(config.output_path))
+            except RunnerError as err:
+                err_msg = err.last_error_line or str(err)
+                GLib.idle_add(self._on_error_idle, err_msg)
+            except Exception as exc:
+                GLib.idle_add(self._on_error_idle, str(exc))
+            return
+
+        # Legacy fallback signature: (cmds, total_duration, output_path, cancel_event)
+        cmds, total_duration, output_path, cancel_event = args[0], args[1], args[2], args[3]
         try:
             run_ffmpeg_pipeline(
                 cmds=cmds,
@@ -638,12 +661,6 @@ class MainWindow(Adw.ApplicationWindow):
             )
             GLib.idle_add(self._on_success_idle, output_path)
         except RunnerCancelledError:
-            # Clean up incomplete output file on cancellation
-            if output_path.exists():
-                try:
-                    output_path.unlink()
-                except OSError:
-                    pass
             GLib.idle_add(self._on_cancelled_idle, output_path)
         except RunnerError as err:
             err_msg = err.last_error_line or str(err)

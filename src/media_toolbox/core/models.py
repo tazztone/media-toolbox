@@ -23,6 +23,21 @@ class ProbeError(MediaToolboxError):
     pass
 
 
+class FileCollisionError(MediaToolboxError):
+    """Raised when input and output resolve to the same underlying file."""
+    pass
+
+
+class DestinationExistsError(MediaToolboxError):
+    """Raised when the target output file exists and overwrite was not permitted."""
+    pass
+
+
+class OutputPublishError(MediaToolboxError):
+    """Raised when the finished output cannot be validated or published."""
+    pass
+
+
 @dataclass(frozen=True, slots=True)
 class VideoStream:
     """Represents an inspected video or image track in a container."""

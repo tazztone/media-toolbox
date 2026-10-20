@@ -39,6 +39,9 @@ python3 -m media_toolbox.cli transcode video.mp4 --preset discord-h264 -o output
 # 2-Pass target size transcode
 python3 -m media_toolbox.cli transcode video.mp4 --target-mb 25 -o output.mp4
 
+# Overwrite existing destination safely
+python3 -m media_toolbox.cli transcode video.mp4 output.mp4 --overwrite
+
 # Extract audio
 python3 -m media_toolbox.cli extract-audio video.mp4 -o audio.mp3
 ```

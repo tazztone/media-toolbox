@@ -24,9 +24,13 @@ from typing import Any, Callable, Optional, Sequence
 
 from media_toolbox import __version__
 from media_toolbox.core.builder import build_ffmpeg_commands
+from media_toolbox.core.jobs import JobConfig, run_job
 from media_toolbox.core.models import (
+    DestinationExistsError,
     EncodeOptions,
+    FileCollisionError,
     MediaInfo,
+    OutputPublishError,
     ProbeError,
     ProgressEvent,
 )
@@ -376,6 +380,12 @@ def handle_inspect(args: argparse.Namespace) -> int:
 
 def handle_transcode(args: argparse.Namespace) -> int:
     """Handle 'transcode' subcommand."""
+    if args.output and args.output_opt and args.output != args.output_opt:
+        sys.stderr.write(
+            f"Error: Conflicting output paths specified: '{args.output}' and '{args.output_opt}'\n"
+        )
+        return 2
+
     output_path = args.output or args.output_opt
     if not output_path:
         sys.stderr.write("Error: Output path is required (pass positional argument or via -o/--output)\n")
@@ -416,18 +426,13 @@ def handle_transcode(args: argparse.Namespace) -> int:
         normalize_audio=args.normalize,
     )
 
-    try:
-        cmds = build_ffmpeg_commands(
-            str(args.input),
-            str(output_path),
-            options,
-            media_info=media_info,
-            pass_logfile=args.pass_logfile,
-            include_progress=True,
-        )
-    except ValueError as err:
-        sys.stderr.write(f"Error building FFmpeg command: {err}\n")
-        return 2
+    config = JobConfig(
+        input_path=args.input,
+        output_path=output_path,
+        options=options,
+        media_info=media_info,
+        overwrite=getattr(args, "overwrite", False),
+    )
 
     cancel_event = threading.Event()
 
@@ -441,23 +446,35 @@ def handle_transcode(args: argparse.Namespace) -> int:
         orig_sigint = None
 
     reporter = create_progress_reporter(quiet=args.quiet)
-    duration = media_info.duration if media_info else None
 
     try:
-        run_ffmpeg_pipeline(
-            cmds,
-            total_duration_seconds=duration,
+        run_job(
+            config,
             progress_callback=reporter,
             cancel_event=cancel_event,
+            builder=build_ffmpeg_commands,
+            runner=run_ffmpeg_pipeline,
         )
         if not args.quiet:
             sys.stdout.write(f"✓ Transcoding complete: {output_path}\n")
         return 0
+    except DestinationExistsError as err:
+        sys.stderr.write(f"Error: {err}\n")
+        return 1
+    except FileCollisionError as err:
+        sys.stderr.write(f"Error: {err}\n")
+        return 1
+    except ValueError as err:
+        sys.stderr.write(f"Error building FFmpeg command: {err}\n")
+        return 2
     except RunnerCancelledError:
         sys.stderr.write("Operation cancelled by user.\n")
         return 130
     except RunnerError as err:
         sys.stderr.write(f"Transcoding failed: {err}\n")
+        return 1
+    except OutputPublishError as err:
+        sys.stderr.write(f"Output publication failed: {err}\n")
         return 1
     finally:
         if orig_sigint is not None:
@@ -469,6 +486,12 @@ def handle_transcode(args: argparse.Namespace) -> int:
 
 def handle_extract_audio(args: argparse.Namespace) -> int:
     """Handle 'extract-audio' subcommand."""
+    if args.output and args.output_opt and args.output != args.output_opt:
+        sys.stderr.write(
+            f"Error: Conflicting output paths specified: '{args.output}' and '{args.output_opt}'\n"
+        )
+        return 2
+
     output_path = args.output or args.output_opt
     if not output_path:
         sys.stderr.write("Error: Output path is required (pass positional argument or via -o/--output)\n")
@@ -495,17 +518,13 @@ def handle_extract_audio(args: argparse.Namespace) -> int:
         normalize_audio=args.normalize,
     )
 
-    try:
-        cmds = build_ffmpeg_commands(
-            str(args.input),
-            str(output_path),
-            options,
-            media_info=media_info,
-            include_progress=True,
-        )
-    except ValueError as err:
-        sys.stderr.write(f"Error building audio extraction command: {err}\n")
-        return 2
+    config = JobConfig(
+        input_path=args.input,
+        output_path=output_path,
+        options=options,
+        media_info=media_info,
+        overwrite=getattr(args, "overwrite", False),
+    )
 
     cancel_event = threading.Event()
 
@@ -519,23 +538,35 @@ def handle_extract_audio(args: argparse.Namespace) -> int:
         orig_sigint = None
 
     reporter = create_progress_reporter(quiet=args.quiet)
-    duration = media_info.duration if media_info else None
 
     try:
-        run_ffmpeg_pipeline(
-            cmds,
-            total_duration_seconds=duration,
+        run_job(
+            config,
             progress_callback=reporter,
             cancel_event=cancel_event,
+            builder=build_ffmpeg_commands,
+            runner=run_ffmpeg_pipeline,
         )
         if not args.quiet:
             sys.stdout.write(f"✓ Audio extraction complete: {output_path}\n")
         return 0
+    except DestinationExistsError as err:
+        sys.stderr.write(f"Error: {err}\n")
+        return 1
+    except FileCollisionError as err:
+        sys.stderr.write(f"Error: {err}\n")
+        return 1
+    except ValueError as err:
+        sys.stderr.write(f"Error building audio extraction command: {err}\n")
+        return 2
     except RunnerCancelledError:
         sys.stderr.write("Operation cancelled by user.\n")
         return 130
     except RunnerError as err:
         sys.stderr.write(f"Extraction failed: {err}\n")
+        return 1
+    except OutputPublishError as err:
+        sys.stderr.write(f"Output publication failed: {err}\n")
         return 1
     finally:
         if orig_sigint is not None:
@@ -713,6 +744,7 @@ def build_parser() -> argparse.ArgumentParser:
     trans_parser.add_argument("--audio-bitrate", type=int, default=128, help="Target audio bitrate in kbps (default: 128)")
     trans_parser.add_argument("--mute-audio", action="store_true", help="Remove audio stream from output")
     trans_parser.add_argument("--normalize", action="store_true", help="Normalize audio loudness using EBU R128")
+    trans_parser.add_argument("-f", "--overwrite", action="store_true", help="Overwrite destination file if it exists")
     trans_parser.add_argument("--quiet", action="store_true", help="Suppress interactive progress bar")
     trans_parser.add_argument("--pass-logfile", default=None, help="Custom logfile prefix for two-pass mode")
 
@@ -721,6 +753,7 @@ def build_parser() -> argparse.ArgumentParser:
     audio_parser.add_argument("input", help="Source media file")
     audio_parser.add_argument("output", nargs="?", default=None, help="Destination audio file (or specify via -o/--output)")
     audio_parser.add_argument("-o", "--output", dest="output_opt", default=None, help="Destination audio file")
+    audio_parser.add_argument("-f", "--overwrite", action="store_true", help="Overwrite destination file if it exists")
     audio_parser.add_argument("--codec", default=None, help="Audio codec (e.g. mp3, aac, opus, flac)")
     audio_parser.add_argument("--bitrate", type=int, default=192, help="Audio bitrate in kbps (default: 192)")
     audio_parser.add_argument("--speed", type=float, default=None, help="Audio playback speed multiplier")
