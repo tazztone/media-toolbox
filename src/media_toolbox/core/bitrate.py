@@ -19,7 +19,6 @@ DEFAULT_AUDIO_BITRATE_KBPS: int = 128
 DEFAULT_MUX_OVERHEAD_MARGIN: float = 0.03  # 3% container safety margin
 DEFAULT_MIN_VIDEO_BITRATE_KBPS: int = 64  # Minimum video bitrate floor
 KBITS_PER_MB: float = 8000.0  # 1 MB = 1,000,000 bytes * 8 / 1000 = 8000 kbits (decimal)
-KBITS_PER_MIB: float = 8192.0  # 1 MiB = 1024 * 1024 * 8 / 1024 = 8192 kbits (binary)
 
 __all__ = [
     "calculate_target_video_bitrate",
@@ -27,7 +26,6 @@ __all__ = [
     "DEFAULT_MUX_OVERHEAD_MARGIN",
     "DEFAULT_MIN_VIDEO_BITRATE_KBPS",
     "KBITS_PER_MB",
-    "KBITS_PER_MIB",
     "TargetSizeTooSmallError",
 ]
 

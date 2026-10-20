@@ -24,10 +24,8 @@ def format_duration(seconds: Optional[float]) -> str:
     """Format duration in seconds as HH:MM:SS.ff, or 'N/A' if unknown."""
     if seconds is None or seconds < 0:
         return "N/A"
-    hours = int(seconds // 3600)
-    rem = seconds % 3600
-    mins = int(rem // 60)
-    secs = rem % 60
+    mins, secs = divmod(seconds, 60.0)
+    hours, mins = divmod(int(mins), 60)
     return f"{hours:02d}:{mins:02d}:{secs:05.2f}"
 
 

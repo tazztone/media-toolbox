@@ -68,7 +68,6 @@ __all__ = [
     "main",
     "probe_media",
     "build_ffmpeg_commands",
-    "run_ffmpeg",
     "run_ffmpeg_pipeline",
     "handle_install_nautilus",
     "handle_uninstall_nautilus",

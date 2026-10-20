@@ -10,7 +10,6 @@ from media_toolbox.core.bitrate import (
     DEFAULT_MIN_VIDEO_BITRATE_KBPS,
     DEFAULT_MUX_OVERHEAD_MARGIN,
     KBITS_PER_MB,
-    KBITS_PER_MIB,
     TargetSizeTooSmallError,
     calculate_target_video_bitrate,
 )
