@@ -3,7 +3,7 @@ Version=1.0
 Type=Application
 Name=Media Toolbox
 Comment=Modern Python Media Inspection & Transcoding Toolbox
-Exec=media_toolbox %F
+Exec=media-toolbox-gui %F
 Icon=video-x-generic
 Terminal=false
 Categories=AudioVideo;AudioVideoEditing;Audio;Video;
@@ -15,4 +15,4 @@ Actions=Inspect;
 
 [Desktop Action Inspect]
 Name=Inspect Media Metadata
-Exec=media_toolbox inspect %f
+Exec=media-toolbox inspect %f

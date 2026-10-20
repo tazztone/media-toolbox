@@ -19,6 +19,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 from typing import Optional
 
 __all__ = [
@@ -36,7 +37,7 @@ Version=1.0
 Type=Application
 Name=Media Toolbox
 Comment=Modern Python Media Inspection & Transcoding Toolbox
-Exec=media_toolbox %F
+Exec=media-toolbox-gui %F
 Icon=video-x-generic
 Terminal=false
 Categories=AudioVideo;AudioVideoEditing;Audio;Video;
@@ -48,7 +49,7 @@ Actions=Inspect;
 
 [Desktop Action Inspect]
 Name=Inspect Media Metadata
-Exec=media_toolbox inspect %f
+Exec=media-toolbox inspect %f
 """
 
 
@@ -131,11 +132,16 @@ def install_nautilus(
     # Read launcher content
     if src_launcher.is_file():
         launcher_content = src_launcher.read_text(encoding="utf-8")
+        if 'INSTALLED_PYTHON=""' in launcher_content:
+            launcher_content = launcher_content.replace(
+                'INSTALLED_PYTHON=""',
+                f'INSTALLED_PYTHON="{sys.executable}"',
+            )
     else:
         launcher_content = (
             "#!/usr/bin/env bash\n"
             "# Media-Toolbox launcher fallback\n"
-            "exec python3 -m media_toolbox.ui.app \"$@\"\n"
+            f"exec {sys.executable} -m media_toolbox.ui.app \"$@\"\n"
         )
 
     # Read extension content

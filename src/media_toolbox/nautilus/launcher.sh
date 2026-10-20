@@ -33,7 +33,13 @@ if [[ -n "${MEDIA_TOOLBOX_PYTHON:-}" && -x "$MEDIA_TOOLBOX_PYTHON" ]]; then
     PYTHON="$MEDIA_TOOLBOX_PYTHON"
 fi
 
-# (b) Resolve relative to script location
+# (b) Baked interpreter from installer
+INSTALLED_PYTHON=""
+if [[ -z "$PYTHON" && -n "$INSTALLED_PYTHON" && -x "$INSTALLED_PYTHON" ]]; then
+    PYTHON="$INSTALLED_PYTHON"
+fi
+
+# (c) Resolve relative to script location
 if [[ -z "$PYTHON" ]]; then
     SCRIPT_PATH="$(readlink -f -- "$0" 2>/dev/null || realpath -- "$0" 2>/dev/null || echo "$0")"
     SCRIPT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" >/dev/null 2>&1 && pwd)"
@@ -88,10 +94,17 @@ fi
 
 # 4. Dispatch execution
 if [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]]; then
+    if command -v media-toolbox-gui >/dev/null 2>&1; then
+        nohup media-toolbox-gui "${FILES[@]}" >/dev/null 2>&1 &
+        exit 0
+    fi
     # Graphical environment: launch GUI detached
     nohup "$PYTHON" -m media_toolbox.ui.app "${FILES[@]}" >/dev/null 2>&1 &
     exit 0
 else
+    if command -v media-toolbox >/dev/null 2>&1; then
+        exec media-toolbox "${FILES[@]}"
+    fi
     # Terminal / headless fallback: run CLI
     exec "$PYTHON" -m media_toolbox.cli "${FILES[@]}"
 fi

@@ -526,7 +526,7 @@ class TestNautilusInstaller:
         assert entry.get("Type") == "Application"
         assert entry.get("Name") == "Media Toolbox"
         assert entry.get("Terminal") in ("false", "False")
-        assert "Exec" in entry
+        assert entry.get("Exec") == "media-toolbox-gui %F"
         assert "Categories" in entry
         assert "AudioVideo;" in entry.get("Categories")
         assert "MimeType" in entry
@@ -551,6 +551,13 @@ class TestNautilusInstaller:
         assert first_run == second_run
         launcher = tmp_path / "nautilus" / "scripts" / "Media-Toolbox"
         assert (launcher.stat().st_mode & 0o777) == 0o755
+
+    def test_install_nautilus_bakes_current_python_interpreter(self, tmp_path: Path) -> None:
+        """Assert installer bakes sys.executable into installed launcher script."""
+        installer.install_nautilus(dest_dir=tmp_path)
+        launcher = tmp_path / "nautilus" / "scripts" / "Media-Toolbox"
+        content = launcher.read_text(encoding="utf-8")
+        assert f'INSTALLED_PYTHON="{sys.executable}"' in content
 
     def test_install_nautilus_dry_run(self, tmp_path: Path) -> None:
         """Assert dry_run=True returns planned paths without creating them on disk."""
