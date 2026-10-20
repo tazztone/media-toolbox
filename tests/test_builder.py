@@ -310,6 +310,21 @@ def test_two_pass_identical_vf(sample_mediainfo_standard_mp4: MediaInfo) -> None
     assert "setpts=(1.0/1.5)*PTS" in pass1_vf[0]
 
 
+def test_two_pass_speed_adjusts_bitrate(sample_mediainfo_standard_mp4: MediaInfo) -> None:
+    """Sped-up playback reduces effective duration and increases video bitrate to hit target size."""
+    options_1x = EncodeOptions(two_pass=True, target_size_mb=25.0, speed=1.0)
+    options_2x = EncodeOptions(two_pass=True, target_size_mb=25.0, speed=2.0)
+    cmds_1x = build_ffmpeg_commands("in.mp4", "out.mp4", options_1x, media_info=sample_mediainfo_standard_mp4)
+    cmds_2x = build_ffmpeg_commands("in.mp4", "out.mp4", options_2x, media_info=sample_mediainfo_standard_mp4)
+
+    b_idx_1x = cmds_1x[1].index("-b:v")
+    b_idx_2x = cmds_2x[1].index("-b:v")
+    br_1x = int(cmds_1x[1][b_idx_1x + 1].rstrip("k"))
+    br_2x = int(cmds_2x[1][b_idx_2x + 1].rstrip("k"))
+
+    assert br_2x > br_1x * 1.8
+
+
 def test_two_pass_mute_audio(sample_mediainfo_standard_mp4: MediaInfo) -> None:
     """Muted two-pass encoding disables audio on both passes and gives 100% bitrate to video."""
     options_muted = EncodeOptions(two_pass=True, target_size_mb=25.0, mute_audio=True)

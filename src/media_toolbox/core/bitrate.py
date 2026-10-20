@@ -1,21 +1,25 @@
 """
 Bitrate calculation engine for media_toolbox.
 
-This module provides deterministic video bitrate calculation for two-pass
-encoding targeting fixed file sizes, incorporating container multiplexing
-overhead safety margins and minimum bitrate clamping.
+Provides deterministic video bitrate calculation for two-pass encoding
+targeting fixed file sizes (using standard decimal Megabytes and FFmpeg decimal kbps),
+compensating for container multiplexing overhead, playback speed, and audio allocation.
 
-INVARIANT: Zero GUI imports (gi, Gtk, Adw, etc.).
+INVARIANT: Strict zero GUI imports (gi, Gtk, Adw, Nautilus, tkinter, PyQt, PySide).
 """
 
 from __future__ import annotations
 
 import math
+from typing import Optional
+
+from media_toolbox.core.models import TargetSizeTooSmallError
 
 DEFAULT_AUDIO_BITRATE_KBPS: int = 128
 DEFAULT_MUX_OVERHEAD_MARGIN: float = 0.03  # 3% container safety margin
 DEFAULT_MIN_VIDEO_BITRATE_KBPS: int = 64  # Minimum video bitrate floor
-KBITS_PER_MB: float = 8192.0  # 1 MiB = 1024 * 1024 * 8 / 1024 = 8192 kbits
+KBITS_PER_MB: float = 8000.0  # 1 MB = 1,000,000 bytes * 8 / 1000 = 8000 kbits (decimal)
+KBITS_PER_MIB: float = 8192.0  # 1 MiB = 1024 * 1024 * 8 / 1024 = 8192 kbits (binary)
 
 __all__ = [
     "calculate_target_video_bitrate",
@@ -23,6 +27,8 @@ __all__ = [
     "DEFAULT_MUX_OVERHEAD_MARGIN",
     "DEFAULT_MIN_VIDEO_BITRATE_KBPS",
     "KBITS_PER_MB",
+    "KBITS_PER_MIB",
+    "TargetSizeTooSmallError",
 ]
 
 
@@ -32,33 +38,34 @@ def calculate_target_video_bitrate(
     audio_bitrate_kbps: int = DEFAULT_AUDIO_BITRATE_KBPS,
     mux_overhead_margin: float = DEFAULT_MUX_OVERHEAD_MARGIN,
     min_video_bitrate_kbps: int = DEFAULT_MIN_VIDEO_BITRATE_KBPS,
+    speed: Optional[float] = None,
+    clamp_to_min: bool = False,
 ) -> int:
     """
     Calculate target video bitrate in kbps for two-pass encoding.
 
     Formula:
-        total_kbits = target_size_mb * 8192.0
+        effective_duration = duration_seconds / speed (if speed provided)
+        total_kbits = target_size_mb * 8000.0 (decimal MB)
         usable_kbits = total_kbits * (1.0 - mux_overhead_margin)
-        total_bitrate_kbps = usable_kbits / duration_seconds
+        total_bitrate_kbps = usable_kbits / effective_duration
         net_video_bitrate_kbps = total_bitrate_kbps - audio_bitrate_kbps
-        video_bitrate_kbps = max(min_video_bitrate_kbps, int(round(net_video_bitrate_kbps)))
 
     Parameters:
-        target_size_mb: Desired total output file size in Megabytes (MiB).
-        duration_seconds: Total duration of the media in seconds.
-        audio_bitrate_kbps: Allocated audio bitrate in kbps. Use 0 for silent or muted video.
+        target_size_mb: Desired total output file size in decimal Megabytes (MB).
+        duration_seconds: Duration of source media in seconds.
+        audio_bitrate_kbps: Allocated audio bitrate in kbps (0 for muted/silent).
         mux_overhead_margin: Safety margin fraction reserved for container overhead (0.0 <= margin < 1.0).
-        min_video_bitrate_kbps: Floor video bitrate to prevent invalid or unplayable output.
+        min_video_bitrate_kbps: Floor video bitrate to prevent unplayable output.
+        speed: Playback speed multiplier (changes effective output duration).
+        clamp_to_min: If True, clamps unattainable budgets to min_video_bitrate_kbps instead of raising.
 
     Returns:
-        Target video bitrate in kilobits per second (kbps) as an integer >= min_video_bitrate_kbps.
+        Target video bitrate in kilobits per second (kbps) as an integer.
 
     Raises:
-        ValueError: If duration_seconds <= 0 or not finite.
-        ValueError: If target_size_mb <= 0 or not finite.
-        ValueError: If audio_bitrate_kbps < 0.
-        ValueError: If mux_overhead_margin is not in [0.0, 1.0).
-        ValueError: If min_video_bitrate_kbps < 0.
+        ValueError: If duration_seconds or target_size_mb are non-positive or non-finite.
+        TargetSizeTooSmallError: If net video bitrate is below min_video_bitrate_kbps and clamp_to_min is False.
     """
     if not math.isfinite(duration_seconds) or duration_seconds <= 0:
         raise ValueError(f"duration_seconds must be a positive finite number, got {duration_seconds}")
@@ -77,10 +84,32 @@ def calculate_target_video_bitrate(
     if min_video_bitrate_kbps < 0:
         raise ValueError(f"min_video_bitrate_kbps cannot be negative, got {min_video_bitrate_kbps}")
 
+    eff_duration = duration_seconds
+    if speed is not None:
+        if not math.isfinite(speed) or speed <= 0:
+            raise ValueError(f"speed must be a positive finite number, got {speed}")
+        eff_duration = duration_seconds / speed
+
     total_kbits = float(target_size_mb) * KBITS_PER_MB
     usable_kbits = total_kbits * (1.0 - float(mux_overhead_margin))
-    total_bitrate_kbps = usable_kbits / float(duration_seconds)
+    total_bitrate_kbps = usable_kbits / float(eff_duration)
 
     net_video_bitrate_kbps = total_bitrate_kbps - float(audio_bitrate_kbps)
-    clamped_video_bitrate = max(int(min_video_bitrate_kbps), int(round(net_video_bitrate_kbps)))
-    return clamped_video_bitrate
+
+    if net_video_bitrate_kbps < min_video_bitrate_kbps:
+        if clamp_to_min:
+            return int(min_video_bitrate_kbps)
+
+        min_kbits_needed = (float(min_video_bitrate_kbps) + float(audio_bitrate_kbps)) * float(eff_duration)
+        min_required_total_kbits = min_kbits_needed / (1.0 - float(mux_overhead_margin))
+        min_required_mb = round(min_required_total_kbits / KBITS_PER_MB, 2)
+
+        raise TargetSizeTooSmallError(
+            target_size_mb=target_size_mb,
+            duration_seconds=eff_duration,
+            audio_bitrate_kbps=audio_bitrate_kbps,
+            min_required_mb=min_required_mb,
+            min_video_bitrate_kbps=min_video_bitrate_kbps,
+        )
+
+    return int(round(net_video_bitrate_kbps))

@@ -253,6 +253,7 @@ def build_two_pass_commands(
         target_size_mb=target_mb,
         duration_seconds=duration,
         audio_bitrate_kbps=audio_br,
+        speed=options.speed,
     )
 
     log_prefix = pass_logfile or os.path.join(tempfile.gettempdir(), f"ffmpeg2pass_{os.getpid()}")

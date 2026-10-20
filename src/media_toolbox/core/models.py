@@ -38,6 +38,31 @@ class OutputPublishError(MediaToolboxError):
     pass
 
 
+class TargetSizeTooSmallError(MediaToolboxError):
+    """Raised when the requested target file size is too small for media duration and audio budget."""
+
+    def __init__(
+        self,
+        target_size_mb: float,
+        duration_seconds: float,
+        audio_bitrate_kbps: int,
+        min_required_mb: float,
+        min_video_bitrate_kbps: int = 64,
+        message: str = "",
+    ) -> None:
+        self.target_size_mb = target_size_mb
+        self.duration_seconds = duration_seconds
+        self.audio_bitrate_kbps = audio_bitrate_kbps
+        self.min_required_mb = min_required_mb
+        self.min_video_bitrate_kbps = min_video_bitrate_kbps
+        msg = (
+            message
+            or f"Target size {target_size_mb:.2f} MB is unattainable for {duration_seconds:.1f}s media. "
+            f"Minimum achievable size is ~{min_required_mb:.2f} MB (at {min_video_bitrate_kbps} kbps video floor + {audio_bitrate_kbps} kbps audio)."
+        )
+        super().__init__(msg)
+
+
 @dataclass(frozen=True, slots=True)
 class VideoStream:
     """Represents an inspected video or image track in a container."""

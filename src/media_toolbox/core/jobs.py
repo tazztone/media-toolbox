@@ -181,7 +181,12 @@ def run_job(
         except Exception:
             media_info = None
 
-    duration = media_info.duration if media_info else None
+    raw_duration = media_info.duration if media_info else None
+    duration = (
+        raw_duration / config.options.speed
+        if (raw_duration is not None and config.options.speed and config.options.speed > 0)
+        else raw_duration
+    )
 
     # Ensure target directory exists
     out_path.parent.mkdir(parents=True, exist_ok=True)

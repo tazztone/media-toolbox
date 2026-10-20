@@ -321,7 +321,7 @@ class TestScenario1DiscordVideoCompression:
         return MediaInfo(format=fmt, video_streams=(v,), audio_streams=(a,))
 
     def test_discord_bitrate_math_and_margin(self) -> None:
-        """25MB budget over 180s reserving 3% mux overhead computes exactly 976 kbps video bitrate."""
+        """25MB budget over 180s reserving 3% mux overhead computes exactly 950 kbps video bitrate."""
         bitrate = calculate_target_video_bitrate(
             target_size_mb=25.0,
             duration_seconds=180.0,
@@ -329,7 +329,7 @@ class TestScenario1DiscordVideoCompression:
             mux_overhead_margin=0.03,
             min_video_bitrate_kbps=64,
         )
-        assert bitrate == 976
+        assert bitrate == 950
 
     def test_discord_two_pass_command_structure(self, gameplay_media_info: MediaInfo) -> None:
         """Two-pass H.264 commands configure Pass 1 null sink and Pass 2 stereo faststart output."""
@@ -354,14 +354,14 @@ class TestScenario1DiscordVideoCompression:
 
         # Pass 1 verifications
         assert "-pass" in pass1_cmd and pass1_cmd[pass1_cmd.index("-pass") + 1] == "1"
-        assert "-b:v" in pass1_cmd and pass1_cmd[pass1_cmd.index("-b:v") + 1] == "976k"
+        assert "-b:v" in pass1_cmd and pass1_cmd[pass1_cmd.index("-b:v") + 1] == "950k"
         assert "-an" in pass1_cmd
         assert "-f" in pass1_cmd and pass1_cmd[pass1_cmd.index("-f") + 1] == "null"
         assert pass1_cmd[-1] == os.devnull
 
         # Pass 2 verifications
         assert "-pass" in pass2_cmd and pass2_cmd[pass2_cmd.index("-pass") + 1] == "2"
-        assert "-b:v" in pass2_cmd and pass2_cmd[pass2_cmd.index("-b:v") + 1] == "976k"
+        assert "-b:v" in pass2_cmd and pass2_cmd[pass2_cmd.index("-b:v") + 1] == "950k"
         assert "-c:a" in pass2_cmd and pass2_cmd[pass2_cmd.index("-c:a") + 1] == "aac"
         assert "-b:a" in pass2_cmd and pass2_cmd[pass2_cmd.index("-b:a") + 1] == "128k"
         assert "-ac" in pass2_cmd and pass2_cmd[pass2_cmd.index("-ac") + 1] == "2"

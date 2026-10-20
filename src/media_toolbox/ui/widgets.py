@@ -209,7 +209,7 @@ class RateControlWidget(Adw.PreferencesGroup):
         )
         self.target_size_row = Adw.SpinRow(
             title="Target File Size (MB)",
-            subtitle="Target file size in Megabytes. Computes exact video bitrate across 2 passes.",
+            subtitle="Target file size in Megabytes. Computes estimated video bitrate across 2 passes with container overhead margin.",
             adjustment=self.target_size_adj,
             climb_rate=1.0,
             digits=1,

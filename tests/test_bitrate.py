@@ -6,10 +6,13 @@ from __future__ import annotations
 
 import pytest
 from media_toolbox.core.bitrate import (
-    calculate_target_video_bitrate,
     DEFAULT_AUDIO_BITRATE_KBPS,
-    DEFAULT_MUX_OVERHEAD_MARGIN,
     DEFAULT_MIN_VIDEO_BITRATE_KBPS,
+    DEFAULT_MUX_OVERHEAD_MARGIN,
+    KBITS_PER_MB,
+    KBITS_PER_MIB,
+    TargetSizeTooSmallError,
+    calculate_target_video_bitrate,
 )
 
 
@@ -19,18 +22,18 @@ class TestBitrateCalculation:
     @pytest.mark.parametrize(
         "target_mb, duration_s, audio_kbps, margin, expected_kbps",
         [
-            # 25MB, 60s, 128k audio, 3% margin -> 3183 kbps
-            (25.0, 60.0, 128, 0.03, 3183),
-            # 8MB (Discord limit), 120s, 128k audio, 3% margin -> 402 kbps
-            (8.0, 120.0, 128, 0.03, 402),
-            # 100MB, 1800s (30 min), 192k audio, 5% margin -> 240 kbps
-            (100.0, 1800.0, 192, 0.05, 240),
-            # Zero margin: 25MB, 60s, 128k audio, 0% margin -> 3285 kbps
-            (25.0, 60.0, 128, 0.0, 3285),
-            # Zero audio bitrate (muted/silent video): 10MB, 100s, 0k audio, 3% margin -> 795 kbps
-            (10.0, 100.0, 0, 0.03, 795),
-            # Integer inputs: 25, 60, 128 -> 3183 kbps
-            (25, 60, 128, 0.03, 3183),
+            # 25MB, 60s, 128k audio, 3% margin -> (25 * 8000 * 0.97 / 60) - 128 = 3105 kbps
+            (25.0, 60.0, 128, 0.03, 3105),
+            # 8MB (Discord limit), 120s, 128k audio, 3% margin -> (8 * 8000 * 0.97 / 120) - 128 = 389 kbps
+            (8.0, 120.0, 128, 0.03, 389),
+            # 100MB, 1800s (30 min), 192k audio, 5% margin -> (100 * 8000 * 0.95 / 1800) - 192 = 230 kbps
+            (100.0, 1800.0, 192, 0.05, 230),
+            # Zero margin: 25MB, 60s, 128k audio, 0% margin -> (25 * 8000 * 1.0 / 60) - 128 = 3205 kbps
+            (25.0, 60.0, 128, 0.0, 3205),
+            # Zero audio bitrate (muted/silent video): 10MB, 100s, 0k audio, 3% margin -> 776 kbps
+            (10.0, 100.0, 0, 0.03, 776),
+            # Integer inputs: 25, 60, 128 -> 3105 kbps
+            (25, 60, 128, 0.03, 3105),
         ],
     )
     def test_bitrate_standard_scenarios(
@@ -46,30 +49,53 @@ class TestBitrateCalculation:
         assert isinstance(result, int)
 
     def test_bitrate_default_parameters(self) -> None:
-        # target_mb=25.0, duration_seconds=60.0 with all defaults
+        # target_mb=25.0, duration_seconds=60.0 with all defaults -> 3105 kbps
         result = calculate_target_video_bitrate(25.0, 60.0)
-        assert result == 3183
+        assert result == 3105
+
+    def test_bitrate_speed_scaling(self) -> None:
+        # 25 MB, 60s video sped up by 2.0x -> effective 30s -> higher bitrate
+        # (25 * 8000 * 0.97 / 30) - 128 = 6339 kbps
+        result_fast = calculate_target_video_bitrate(25.0, 60.0, speed=2.0)
+        assert result_fast == 6339
+
+        # 25 MB, 60s video slowed down to 0.5x -> effective 120s -> lower bitrate
+        # (25 * 8000 * 0.97 / 120) - 128 = 1489 kbps
+        result_slow = calculate_target_video_bitrate(25.0, 60.0, speed=0.5)
+        assert result_slow == 1489
 
     @pytest.mark.parametrize(
-        "target_mb, duration_s, audio_kbps, expected_clamp",
+        "target_mb, duration_s, audio_kbps",
         [
-            # Extreme long duration (1 hour) with tiny size (1 MB) -> clamps to 64
-            (1.0, 3600.0, 128, 64),
-            # Duration where net bitrate is negative -> clamps to 64
-            (0.5, 600.0, 128, 64),
-            # Net bitrate slightly positive (e.g. 50 kbps) -> clamps to 64
-            (1.6, 60.0, 160, 64),
+            # Extreme long duration (1 hour) with tiny size (1 MB)
+            (1.0, 3600.0, 128),
+            # Duration where net bitrate is negative
+            (0.5, 600.0, 128),
+            # Net bitrate slightly below floor
+            (1.0, 60.0, 160),
         ],
     )
-    def test_bitrate_clamps_to_minimum(
-        self, target_mb: float, duration_s: float, audio_kbps: int, expected_clamp: int
+    def test_bitrate_too_small_raises_typed_error(
+        self, target_mb: float, duration_s: float, audio_kbps: int
     ) -> None:
+        with pytest.raises(TargetSizeTooSmallError) as exc_info:
+            calculate_target_video_bitrate(
+                target_size_mb=target_mb,
+                duration_seconds=duration_s,
+                audio_bitrate_kbps=audio_kbps,
+            )
+        err = exc_info.value
+        assert err.target_size_mb == target_mb
+        assert err.min_required_mb > target_mb
+
+    def test_bitrate_clamps_to_minimum_when_explicitly_requested(self) -> None:
         result = calculate_target_video_bitrate(
-            target_size_mb=target_mb,
-            duration_seconds=duration_s,
-            audio_bitrate_kbps=audio_kbps,
+            target_size_mb=1.0,
+            duration_seconds=3600.0,
+            audio_bitrate_kbps=128,
+            clamp_to_min=True,
         )
-        assert result == expected_clamp
+        assert result == DEFAULT_MIN_VIDEO_BITRATE_KBPS
 
     def test_custom_min_video_bitrate(self) -> None:
         # Clamping to custom floor 100 kbps
@@ -78,6 +104,7 @@ class TestBitrateCalculation:
             duration_seconds=3600.0,
             audio_bitrate_kbps=128,
             min_video_bitrate_kbps=100,
+            clamp_to_min=True,
         )
         assert result == 100
 
@@ -87,6 +114,7 @@ class TestBitrateCalculation:
             duration_seconds=3600.0,
             audio_bitrate_kbps=128,
             min_video_bitrate_kbps=0,
+            clamp_to_min=True,
         )
         assert result_zero == 0
 
