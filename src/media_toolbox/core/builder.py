@@ -37,6 +37,7 @@ from media_toolbox.core.presets import (
     is_video_preset,
 )
 from media_toolbox.core.probe import probe_media
+from media_toolbox.core.validation import normalize_preset_name, validate_encode_options
 
 
 def resolve_video_preset(options: EncodeOptions) -> Optional[VideoPreset]:
@@ -434,15 +435,11 @@ def build_ffmpeg_commands(
     input_str = str(input_path)
     output_str = str(output_path)
 
-    # Validation
-    if options.extract_audio and options.mute_audio:
-        raise ValueError("Cannot simultaneously extract and mute audio")
-    if options.speed is not None and options.speed <= 0:
-        raise ValueError(f"Speed multiplier must be positive, got {options.speed}")
-    if options.target_size_mb is not None and options.target_size_mb <= 0:
-        raise ValueError(f"target_size_mb must be positive, got {options.target_size_mb}")
+    # Centralized validation upfront
+    validate_encode_options(options, media_info=media_info, output_path=output_str)
 
-    preset_lower = options.preset.strip().lower() if options.preset else ""
+    canon_preset = normalize_preset_name(options.preset)
+    preset_lower = canon_preset if canon_preset else ""
     codec_lower = options.video_codec.strip().lower() if options.video_codec else ""
 
     # Mode 1: Audio Extraction / Audio-Only Presets
@@ -455,8 +452,6 @@ def build_ffmpeg_commands(
 
     # Mode 2: Animated GIF
     if preset_lower == "gif" or (not is_video_preset(preset_lower) and codec_lower == "gif"):
-        if options.two_pass:
-            raise ValueError("Two-pass encoding is not supported for GIF preset")
         return [build_gif_command(input_str, output_str, options, include_progress=include_progress)]
 
     # Mode 3: Two-Pass Bitrate Targeting
