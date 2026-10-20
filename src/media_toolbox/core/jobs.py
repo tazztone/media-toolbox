@@ -49,6 +49,7 @@ class JobConfig:
     media_info: Optional[MediaInfo] = None
     overwrite: bool = False
     sigterm_timeout: float = 2.0
+    allow_unprobed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -242,8 +243,13 @@ def run_job(
     if media_info is None:
         try:
             media_info = probe_media(in_path)
-        except Exception:
-            media_info = None
+        except Exception as err:
+            if config.allow_unprobed:
+                media_info = None
+            else:
+                if isinstance(err, ProbeError):
+                    raise
+                raise ProbeError(f"Failed to probe '{in_path}': {err}") from err
 
     raw_duration = media_info.duration if media_info else None
     duration = (

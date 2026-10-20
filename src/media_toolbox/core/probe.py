@@ -9,8 +9,9 @@ INVARIANT: Must have ZERO imports from GUI toolkits (gi, Gtk, Adw, etc.).
 
 from __future__ import annotations
 
-import json
 from fractions import Fraction
+import json
+import math
 from pathlib import Path
 import subprocess
 from typing import Any, Optional
@@ -49,7 +50,7 @@ def parse_optional_float(val: Any) -> Optional[float]:
         return None
     try:
         f = float(val_str)
-        return f if f >= 0.0 else None
+        return f if math.isfinite(f) and f >= 0.0 else None
     except (ValueError, OverflowError):
         return None
 
@@ -177,34 +178,37 @@ def parse_probe_json(data: dict[str, Any]) -> MediaInfo:
     for s in raw_streams:
         if not isinstance(s, dict):
             continue
-        codec_type = s.get("codec_type")
-        if codec_type == "video":
-            video_streams.append(
-                VideoStream(
-                    index=int(s.get("index") or 0),
-                    codec_name=str(s.get("codec_name", "")),
-                    width=int(s.get("width") or 0),
-                    height=int(s.get("height") or 0),
-                    fps=parse_stream_fps(s),
-                    bit_rate=parse_optional_int(s.get("bit_rate")),
-                    duration=parse_optional_float(s.get("duration")),
-                    pix_fmt=str(s["pix_fmt"]) if s.get("pix_fmt") else None,
-                    rotation=parse_rotation(s),
-                    is_attached_pic=is_attached_pic(s),
+        try:
+            codec_type = s.get("codec_type")
+            if codec_type == "video":
+                video_streams.append(
+                    VideoStream(
+                        index=int(s.get("index") or 0),
+                        codec_name=str(s.get("codec_name", "")),
+                        width=int(s.get("width") or 0),
+                        height=int(s.get("height") or 0),
+                        fps=parse_stream_fps(s),
+                        bit_rate=parse_optional_int(s.get("bit_rate")),
+                        duration=parse_optional_float(s.get("duration")),
+                        pix_fmt=str(s["pix_fmt"]) if s.get("pix_fmt") else None,
+                        rotation=parse_rotation(s),
+                        is_attached_pic=is_attached_pic(s),
+                    )
                 )
-            )
-        elif codec_type == "audio":
-            audio_streams.append(
-                AudioStream(
-                    index=int(s.get("index") or 0),
-                    codec_name=str(s.get("codec_name", "")),
-                    channels=int(s.get("channels") or 0),
-                    sample_rate=int(s.get("sample_rate") or 0),
-                    channel_layout=str(s["channel_layout"]) if s.get("channel_layout") else None,
-                    bit_rate=parse_optional_int(s.get("bit_rate")),
-                    duration=parse_optional_float(s.get("duration")),
+            elif codec_type == "audio":
+                audio_streams.append(
+                    AudioStream(
+                        index=int(s.get("index") or 0),
+                        codec_name=str(s.get("codec_name", "")),
+                        channels=int(s.get("channels") or 0),
+                        sample_rate=int(s.get("sample_rate") or 0),
+                        channel_layout=str(s["channel_layout"]) if s.get("channel_layout") else None,
+                        bit_rate=parse_optional_int(s.get("bit_rate")),
+                        duration=parse_optional_float(s.get("duration")),
+                    )
                 )
-            )
+        except (ValueError, TypeError, OverflowError) as e:
+            raise ProbeError(f"Malformed stream entry in ffprobe metadata: {e}") from e
 
     return MediaInfo(
         format=format_info,
@@ -213,20 +217,25 @@ def parse_probe_json(data: dict[str, Any]) -> MediaInfo:
     )
 
 
-def probe_media(file_path: str | Path, ffprobe_bin: str = "ffprobe") -> MediaInfo:
+def probe_media(
+    file_path: str | Path,
+    ffprobe_bin: str = "ffprobe",
+    timeout: float = 30.0,
+) -> MediaInfo:
     """
     Probe a media file using ffprobe and return strongly typed MediaInfo.
 
     Args:
         file_path: Path to target media file.
         ffprobe_bin: Path or binary name of ffprobe executable.
+        timeout: Execution deadline in seconds.
 
     Returns:
         Populated MediaInfo dataclass.
 
     Raises:
         FileNotFoundError: If input file_path does not exist.
-        ProbeError: If ffprobe execution fails or emits malformed data.
+        ProbeError: If ffprobe execution fails, times out, or emits malformed data.
     """
     path = Path(file_path).expanduser().resolve()
     if not path.is_file():
@@ -242,7 +251,15 @@ def probe_media(file_path: str | Path, ffprobe_bin: str = "ffprobe") -> MediaInf
     ]
 
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise ProbeError(f"ffprobe timed out after {timeout:.1f}s inspecting '{path}'") from e
     except FileNotFoundError as e:
         raise ProbeError(f"ffprobe binary not found at '{ffprobe_bin}'") from e
     except OSError as e:

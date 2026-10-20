@@ -6,12 +6,14 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+import subprocess
 from unittest.mock import MagicMock, patch
 import pytest
 
 from media_toolbox.core.models import MediaInfo, ProbeError
 from media_toolbox.core.probe import (
     parse_frame_rate,
+    parse_optional_float,
     parse_probe_json,
     parse_rotation,
     probe_media,
@@ -233,3 +235,26 @@ class TestProbeMediaExecution:
 
         with pytest.raises(ProbeError, match="ffprobe binary not found"):
             probe_media(dummy_file, ffprobe_bin="nonexistent_ffprobe_bin")
+
+    @patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="ffprobe", timeout=5.0))
+    def test_probe_media_timeout(self, mock_run: MagicMock, tmp_path: Path) -> None:
+        dummy_file = tmp_path / "valid.mp4"
+        dummy_file.write_bytes(b"content")
+
+        with pytest.raises(ProbeError, match="ffprobe timed out"):
+            probe_media(dummy_file, timeout=5.0)
+
+    def test_parse_optional_float_non_finite(self) -> None:
+        assert parse_optional_float("inf") is None
+        assert parse_optional_float("-inf") is None
+        assert parse_optional_float("nan") is None
+        assert parse_optional_float("+inf") is None
+        assert parse_optional_float("123.45") == 123.45
+
+    def test_parse_probe_json_malformed_stream_field(self) -> None:
+        bad_json = {
+            "format": {"filename": "test.mp4", "format_name": "mp4", "duration": "10.0"},
+            "streams": [{"codec_type": "video", "index": "not_an_int"}],
+        }
+        with pytest.raises(ProbeError, match="Malformed stream entry"):
+            parse_probe_json(bad_json)

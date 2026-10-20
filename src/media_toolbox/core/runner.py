@@ -309,7 +309,7 @@ class ProgressParser:
                 v = self._block.get(k, "")
                 try:
                     return int(float(v))
-                except (ValueError, TypeError):
+                except (ValueError, TypeError, OverflowError):
                     return 0
 
             def _to_float(k: str) -> float:
@@ -498,14 +498,24 @@ def run_ffmpeg(
 
     pgid = proc.pid  # Cache process group ID immediately
 
-    # Dedicated thread draining proc.stderr to prevent 64KB kernel buffer deadlocks (bounded tail)
-    stderr_lines: deque[str] = deque(maxlen=500)
+    # Dedicated thread draining proc.stderr to prevent buffer deadlocks (bounded tail in characters/bytes)
+    stderr_chunks: deque[str] = deque()
+    stderr_chars: int = 0
+    max_stderr_chars: int = 512 * 1024
 
     def _drain_stderr() -> None:
+        nonlocal stderr_chars
         try:
             if proc.stderr is not None:
-                for line in proc.stderr:
-                    stderr_lines.append(line)
+                while True:
+                    chunk = proc.stderr.read(4096)
+                    if not chunk:
+                        break
+                    stderr_chunks.append(chunk)
+                    stderr_chars += len(chunk)
+                    while stderr_chars > max_stderr_chars and stderr_chunks:
+                        popped = stderr_chunks.popleft()
+                        stderr_chars -= len(popped)
         except Exception:
             pass
         finally:
@@ -573,7 +583,7 @@ def run_ffmpeg(
 
         stderr_thread.join(timeout=1.0)
 
-    full_stderr = "".join(stderr_lines)
+    full_stderr = "".join(stderr_chunks)
 
     if cancel_event is not None and cancel_event.is_set():
         raise RunnerCancelledError("Process was cancelled", cmd=effective_cmd, returncode=proc.returncode, stderr=full_stderr)

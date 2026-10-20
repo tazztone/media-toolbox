@@ -24,7 +24,7 @@ from typing import Any, Callable, Optional, Sequence
 
 from media_toolbox import __version__
 from media_toolbox.core.builder import build_ffmpeg_commands
-from media_toolbox.core.jobs import JobConfig, run_job
+from media_toolbox.core.jobs import JobConfig, run_job, validate_job_paths
 from media_toolbox.core.models import (
     DestinationExistsError,
     EncodeOptions,
@@ -33,6 +33,7 @@ from media_toolbox.core.models import (
     OutputPublishError,
     ProbeError,
     ProgressEvent,
+    TargetSizeTooSmallError,
 )
 from media_toolbox.core.probe import probe_media
 from media_toolbox.core.runner import (
@@ -401,15 +402,31 @@ def handle_transcode(args: argparse.Namespace) -> int:
         sys.stderr.write(f"Error: {err}\n")
         return 2
 
+    # Validate paths early before expensive probing
+    try:
+        validate_job_paths(args.input, output_path, overwrite=getattr(args, "overwrite", False))
+    except DestinationExistsError as err:
+        sys.stderr.write(f"Error: {err}\n")
+        return 1
+    except FileCollisionError as err:
+        sys.stderr.write(f"Error: {err}\n")
+        return 1
+    except FileNotFoundError as err:
+        sys.stderr.write(f"Error: Input file not found: {err}\n")
+        return 1
+
     # Probe input to obtain duration and stream layout
     try:
         media_info = probe_media(args.input)
     except FileNotFoundError as err:
         sys.stderr.write(f"Error: Input file not found: {err}\n")
         return 1
+    except ProbeError as err:
+        sys.stderr.write(f"Error probing media: {err}\n")
+        return 1
     except Exception as err:
-        sys.stderr.write(f"Warning: Could not probe media: {err}\n")
-        media_info = None
+        sys.stderr.write(f"Error probing media: {err}\n")
+        return 1
 
     options = EncodeOptions(
         preset=args.preset,
@@ -458,15 +475,21 @@ def handle_transcode(args: argparse.Namespace) -> int:
         if not args.quiet:
             sys.stdout.write(f"✓ Transcoding complete: {output_path}\n")
         return 0
+    except TargetSizeTooSmallError as err:
+        sys.stderr.write(f"Error: {err}\n")
+        return 2
+    except ValueError as err:
+        sys.stderr.write(f"Error building FFmpeg command: {err}\n")
+        return 2
     except DestinationExistsError as err:
         sys.stderr.write(f"Error: {err}\n")
         return 1
     except FileCollisionError as err:
         sys.stderr.write(f"Error: {err}\n")
         return 1
-    except ValueError as err:
-        sys.stderr.write(f"Error building FFmpeg command: {err}\n")
-        return 2
+    except (FileNotFoundError, OSError) as err:
+        sys.stderr.write(f"Error: {err}\n")
+        return 1
     except RunnerCancelledError:
         sys.stderr.write("Operation cancelled by user.\n")
         return 130
@@ -501,14 +524,30 @@ def handle_extract_audio(args: argparse.Namespace) -> int:
         sys.stderr.write(f"Error: Speed multiplier must be positive, got {args.speed}\n")
         return 2
 
+    # Validate paths early before expensive probing
+    try:
+        validate_job_paths(args.input, output_path, overwrite=getattr(args, "overwrite", False))
+    except DestinationExistsError as err:
+        sys.stderr.write(f"Error: {err}\n")
+        return 1
+    except FileCollisionError as err:
+        sys.stderr.write(f"Error: {err}\n")
+        return 1
+    except FileNotFoundError as err:
+        sys.stderr.write(f"Error: Input file not found: {err}\n")
+        return 1
+
     try:
         media_info = probe_media(args.input)
     except FileNotFoundError as err:
         sys.stderr.write(f"Error: Input file not found: {err}\n")
         return 1
+    except ProbeError as err:
+        sys.stderr.write(f"Error probing media: {err}\n")
+        return 1
     except Exception as err:
-        sys.stderr.write(f"Warning: Could not probe media: {err}\n")
-        media_info = None
+        sys.stderr.write(f"Error probing media: {err}\n")
+        return 1
 
     options = EncodeOptions(
         extract_audio=True,
@@ -550,15 +589,21 @@ def handle_extract_audio(args: argparse.Namespace) -> int:
         if not args.quiet:
             sys.stdout.write(f"✓ Audio extraction complete: {output_path}\n")
         return 0
+    except TargetSizeTooSmallError as err:
+        sys.stderr.write(f"Error: {err}\n")
+        return 2
+    except ValueError as err:
+        sys.stderr.write(f"Error building audio extraction command: {err}\n")
+        return 2
     except DestinationExistsError as err:
         sys.stderr.write(f"Error: {err}\n")
         return 1
     except FileCollisionError as err:
         sys.stderr.write(f"Error: {err}\n")
         return 1
-    except ValueError as err:
-        sys.stderr.write(f"Error building audio extraction command: {err}\n")
-        return 2
+    except (FileNotFoundError, OSError) as err:
+        sys.stderr.write(f"Error: {err}\n")
+        return 1
     except RunnerCancelledError:
         sys.stderr.write("Operation cancelled by user.\n")
         return 130

@@ -28,6 +28,7 @@ from media_toolbox.core.models import (
     MediaInfo,
     ProbeError,
     ProgressEvent,
+    TargetSizeTooSmallError,
     VideoStream,
 )
 from media_toolbox.core.runner import RunnerCancelledError, RunnerError
@@ -737,6 +738,42 @@ class TestCliTranscodeCommand:
         opts: EncodeOptions = mock_builder.call_args[0][2]
         assert opts.target_size_mb == 25.0
         assert opts.preset == "discord-h264"
+
+    @patch("media_toolbox.cli.run_job")
+    @patch("media_toolbox.cli.validate_job_paths")
+    @patch("media_toolbox.cli.probe_media")
+    def test_transcode_target_size_too_small_exits_2(
+        self,
+        mock_probe: MagicMock,
+        mock_val: MagicMock,
+        mock_run_job: MagicMock,
+        mock_standard_video_info: MediaInfo,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Target size too small raises TargetSizeTooSmallError and exits with code 2."""
+        mock_probe.return_value = mock_standard_video_info
+        mock_run_job.side_effect = TargetSizeTooSmallError(0.1, 60.0, 128, 1.5, message="Target size 0.1MB is too small")
+
+        exit_code = cli.main(["transcode", "in.mp4", "out.mp4", "--target-mb", "0.1"])
+        assert exit_code == 2
+        err = capsys.readouterr().err
+        assert "too small" in err
+
+    @patch("media_toolbox.cli.validate_job_paths")
+    @patch("media_toolbox.cli.probe_media")
+    def test_transcode_probe_error_exits_1(
+        self,
+        mock_probe: MagicMock,
+        mock_val: MagicMock,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Probe error during transcode reports error and exits with code 1."""
+        mock_probe.side_effect = ProbeError("Corrupted media bitstream")
+
+        exit_code = cli.main(["transcode", "in.mp4", "out.mp4"])
+        assert exit_code == 1
+        err = capsys.readouterr().err
+        assert "corrupted media" in err.lower() or "error probing" in err.lower()
 
 
 # ---------------------------------------------------------------------------

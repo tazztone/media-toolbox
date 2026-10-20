@@ -296,6 +296,25 @@ class TestProgressParserStream:
         assert events[-1].is_completed is True
         assert events[-1].percentage == 100.0
 
+    def test_progress_parser_overflow_handled(self) -> None:
+        """Verify integer fields with overflowing numeric strings do not raise OverflowError."""
+        lines = [
+            "frame=1e310\n",
+            "fps=30.0\n",
+            "out_time_us=1000000\n",
+            "progress=continue\n",
+        ]
+        parser = ProgressParser(total_duration=10.0)
+        evt = None
+        for line in lines:
+            res = parser.feed_line(line)
+            if res is not None:
+                evt = res
+
+        assert evt is not None
+        # On overflow conversion failure it safely defaults to 0
+        assert evt.frame == 0
+
     def test_progress_parser_monotonic_generator_with_na(self) -> None:
         """Verify parse_progress_stream generator yields monotonic events through N/A blocks."""
         stream = [
@@ -481,6 +500,24 @@ class TestRunnerErrorHandling:
 
         assert exc_info.value.returncode == 1
         assert len(exc_info.value.stderr) == 131072
+
+    def test_runner_stderr_bounded_tail_retention(self) -> None:
+        """Subprocess emits 1MB to stderr; buffer bounds memory and retains tail."""
+        script = (
+            "import sys\n"
+            "sys.stderr.write('A' * 600000 + 'FINAL_TAIL_LINE\\n')\n"
+            "sys.stderr.flush()\n"
+            "sys.exit(1)\n"
+        )
+        cmd = [sys.executable, "-c", script]
+
+        with pytest.raises(RunnerError) as exc_info:
+            run_ffmpeg(cmd)
+
+        assert exc_info.value.returncode == 1
+        # Bounded to approx 512KB
+        assert len(exc_info.value.stderr) <= 512 * 1024 + 4096
+        assert "FINAL_TAIL_LINE" in exc_info.value.stderr
 
 
 # ---------------------------------------------------------------------------
