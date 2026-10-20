@@ -64,6 +64,21 @@ def build_scale_filter(scale: tuple[int, int]) -> str:
         raise ValueError(f"Invalid scale dimensions: {scale}")
 
 
+def _parse_ratio_dims(ratio_str: str) -> Optional[tuple[float, float, str, str]]:
+    """Parse 'rw:rh' string into (rw, rh, w_str, h_str) tuple if valid."""
+    if ":" in ratio_str and ratio_str.count(":") == 1:
+        parts = ratio_str.split(":")
+        try:
+            rw, rh = float(parts[0]), float(parts[1])
+            if rw > 0 and rh > 0:
+                w_str = str(int(rw)) if rw.is_integer() else str(rw)
+                h_str = str(int(rh)) if rh.is_integer() else str(rh)
+                return rw, rh, w_str, h_str
+        except (ValueError, OverflowError):
+            pass
+    return None
+
+
 def build_crop_filter(crop: str) -> str:
     """
     Generate center crop filter for aspect ratios or custom geometries.
@@ -73,18 +88,12 @@ def build_crop_filter(crop: str) -> str:
         return ASPECT_RATIO_CROPS[crop_clean]
     if crop_clean.startswith("crop="):
         return crop_clean
-    if ":" in crop_clean and crop_clean.count(":") == 1:
-        parts = crop_clean.split(":")
-        try:
-            rw, rh = float(parts[0]), float(parts[1])
-            if rw > 0 and rh > 0 and (rw <= 100 and rh <= 100):
-                w_str = str(int(rw)) if rw.is_integer() else str(rw)
-                h_str = str(int(rh)) if rh.is_integer() else str(rh)
-                if rw == rh:
-                    return "crop=min(iw\\,ih):min(iw\\,ih):(iw-ow)/2:(ih-oh)/2"
-                return f"crop=min(iw\\,ih*({w_str}/{h_str})):min(ih\\,iw*({h_str}/{w_str})):(iw-ow)/2:(ih-oh)/2"
-        except ValueError:
-            pass
+    dims = _parse_ratio_dims(crop_clean)
+    if dims and dims[0] <= 100 and dims[1] <= 100:
+        rw, rh, w_str, h_str = dims
+        if rw == rh:
+            return "crop=min(iw\\,ih):min(iw\\,ih):(iw-ow)/2:(ih-oh)/2"
+        return f"crop=min(iw\\,ih*({w_str}/{h_str})):min(ih\\,iw*({h_str}/{w_str})):(iw-ow)/2:(ih-oh)/2"
     return f"crop={crop_clean}"
 
 
@@ -103,23 +112,16 @@ def build_pad_filter(pad: str | tuple[int, int]) -> str:
         return ASPECT_RATIO_PADS[pad_clean]
     if pad_clean.startswith("pad="):
         return pad_clean
-    if ":" in pad_clean and pad_clean.count(":") == 1:
-        parts = pad_clean.split(":")
-        try:
-            rw, rh = float(parts[0]), float(parts[1])
-            if rw > 0 and rh > 0 and (rw <= 100 and rh <= 100):
-                w_str = str(int(rw)) if rw.is_integer() else str(rw)
-                h_str = str(int(rh)) if rh.is_integer() else str(rh)
-                if rw == rh:
-                    return "pad=max(iw\\,ih):max(ih\\,iw):(ow-iw)/2:(oh-ih)/2:black"
-                return f"pad=max(iw\\,ih*({w_str}/{h_str})):max(ih\\,iw*({h_str}/{w_str})):(ow-iw)/2:(oh-ih)/2:black"
-            elif rw > 0 and rh > 0:
-                w_int, h_int = int(rw), int(rh)
-                w_even = max(2, w_int - (w_int % 2))
-                h_even = max(2, h_int - (h_int % 2))
-                return f"pad={w_even}:{h_even}:(ow-iw)/2:(oh-ih)/2:black"
-        except ValueError:
-            pass
+    dims = _parse_ratio_dims(pad_clean)
+    if dims:
+        rw, rh, w_str, h_str = dims
+        if rw <= 100 and rh <= 100:
+            if rw == rh:
+                return "pad=max(iw\\,ih):max(ih\\,iw):(ow-iw)/2:(oh-ih)/2:black"
+            return f"pad=max(iw\\,ih*({w_str}/{h_str})):max(ih\\,iw*({h_str}/{w_str})):(ow-iw)/2:(oh-ih)/2:black"
+        w_even = max(2, int(rw) - (int(rw) % 2))
+        h_even = max(2, int(rh) - (int(rh) % 2))
+        return f"pad={w_even}:{h_even}:(ow-iw)/2:(oh-ih)/2:black"
     return f"pad={pad_clean}"
 
 

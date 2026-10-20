@@ -149,11 +149,6 @@ class RunnerFileNotFoundError(FileNotFoundError, RunnerError):
         )
 
 
-# Backward-compatible aliases for cross-module compatibility
-ProcessExecutionError = RunnerError
-ProcessCancelledError = RunnerCancelledError
-
-
 # ---------------------------------------------------------------------------
 # Parsing & Normalization Helpers
 # ---------------------------------------------------------------------------
@@ -211,17 +206,8 @@ def parse_time_to_seconds(
                 is_negative = s.startswith("-")
                 clean = s.lstrip("-")
                 parts = clean.split(":")
-                if len(parts) == 3:
-                    h, m, sec = float(parts[0]), float(parts[1]), float(parts[2])
-                    total = h * 3600.0 + m * 60.0 + sec
-                    return 0.0 if is_negative else max(0.0, total)
-                elif len(parts) == 2:
-                    m, sec = float(parts[0]), float(parts[1])
-                    total = m * 60.0 + sec
-                    return 0.0 if is_negative else max(0.0, total)
-                elif len(parts) == 1:
-                    total = float(parts[0])
-                    return 0.0 if is_negative else max(0.0, total)
+                total = sum(float(x) * (60**i) for i, x in enumerate(reversed(parts)))
+                return 0.0 if is_negative else max(0.0, total)
             except (ValueError, OverflowError):
                 pass
 
