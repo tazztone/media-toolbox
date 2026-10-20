@@ -84,6 +84,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.cancel_event: Optional[threading.Event] = None
         self.is_transcoding: bool = False
         self.open_btn: Optional[Gtk.Button] = None
+        self._probe_request_id: int = 0
 
         self._build_ui()
         self.connect("close-request", self._on_close_request)
@@ -396,8 +397,8 @@ class MainWindow(Adw.ApplicationWindow):
         except Exception:
             pass  # User cancelled
 
-    def load_media_file(self, path: str | Path) -> None:
-        """Inspect media file and configure widgets."""
+    def load_media_file(self, path: str | Path, sync: bool = False) -> None:
+        """Inspect media file and configure widgets asynchronously."""
         if self.is_transcoding:
             self.toast_overlay.add_toast(Adw.Toast(title="Cannot load file while transcoding is in progress."))
             return
@@ -406,11 +407,29 @@ class MainWindow(Adw.ApplicationWindow):
             self.toast_overlay.add_toast(Adw.Toast(title=f"File not found: {p.name}"))
             return
 
+        self._probe_request_id += 1
+        req_id = self._probe_request_id
+        self.window_title.set_subtitle(f"Probing {p.name}...")
+
+        if sync:
+            self._probe_worker(p, req_id)
+        else:
+            threading.Thread(
+                target=self._probe_worker,
+                args=(p, req_id),
+                daemon=True,
+            ).start()
+
+    def _probe_worker(self, p: Path, req_id: int) -> None:
         try:
             media_info = probe_media(p)
+            GLib.idle_add(self._on_probe_success, p, req_id, media_info)
         except Exception as exc:
-            self.toast_overlay.add_toast(Adw.Toast(title=f"Failed to probe media: {exc}"))
-            return
+            GLib.idle_add(self._on_probe_error, p, req_id, str(exc))
+
+    def _on_probe_success(self, p: Path, req_id: int, media_info: MediaInfo) -> bool:
+        if req_id != self._probe_request_id:
+            return False  # Discard stale completion
 
         self.input_file = p
         self.media_info = media_info
@@ -424,6 +443,15 @@ class MainWindow(Adw.ApplicationWindow):
         self.audio_widget.set_has_audio(media_info.has_audio)
         self._update_default_output_paths()
         self.main_stack.set_visible_child_name("loaded")
+        return False
+
+    def _on_probe_error(self, p: Path, req_id: int, error_msg: str) -> bool:
+        if req_id != self._probe_request_id:
+            return False
+
+        self.window_title.set_subtitle("No media selected")
+        self.toast_overlay.add_toast(Adw.Toast(title=f"Failed to probe media: {error_msg}"))
+        return False
 
     # -----------------------------------------------------------------------
     # Preset & Output Path Management

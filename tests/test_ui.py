@@ -1234,3 +1234,60 @@ class TestPerformanceAndTiming:
         """Assert no active MediaToolboxWorker threads remain alive."""
         active_names = [t.name for t in threading.enumerate() if t.is_alive()]
         assert "MediaToolboxWorker" not in active_names
+
+    def test_monotonic_progress_footer_bar(self) -> None:
+        """Verify ProgressFooterWidget maintains non-decreasing progress unless pass changes."""
+        from media_toolbox.ui.widgets import ProgressFooterWidget
+        from media_toolbox.core.models import ProgressEvent
+
+        mock_footer = MagicMock()
+        mock_footer._current_fraction = 0.0
+        mock_footer._last_pass_info = None
+
+        # Step 1: 50%
+        ProgressFooterWidget.update_progress(mock_footer, ProgressEvent(percentage=50.0))
+        mock_footer.progress_bar.set_fraction.assert_called_with(0.5)
+        mock_footer.pct_label.set_text.assert_called_with("50.0%")
+        assert mock_footer._current_fraction == 0.5
+
+        # Step 2: 40% (jitter backwards) should NOT regress
+        ProgressFooterWidget.update_progress(mock_footer, ProgressEvent(percentage=40.0))
+        mock_footer.progress_bar.set_fraction.assert_called_with(0.5)
+        mock_footer.pct_label.set_text.assert_called_with("50.0%")
+        assert mock_footer._current_fraction == 0.5
+
+        # Step 3: 75%
+        ProgressFooterWidget.update_progress(mock_footer, ProgressEvent(percentage=75.0))
+        mock_footer.progress_bar.set_fraction.assert_called_with(0.75)
+        mock_footer.pct_label.set_text.assert_called_with("75.0%")
+        assert mock_footer._current_fraction == 0.75
+
+        # Step 4: pass change allows reset for pass 2
+        ProgressFooterWidget.update_progress(mock_footer, ProgressEvent(percentage=10.0), pass_info="Pass 2/2")
+        mock_footer.progress_bar.set_fraction.assert_called_with(0.1)
+        mock_footer.pct_label.set_text.assert_called_with("10.0%")
+        assert mock_footer._current_fraction == 0.1
+
+    def test_async_probe_sequence_counter_discards_stale_completion(self, gi_env, tmp_path: Path) -> None:
+        """Verify stale probe completion from earlier request ID is discarded."""
+        from media_toolbox.ui.window import MainWindow
+        from media_toolbox.core.models import MediaInfo, FormatInfo
+
+        mock_win = MagicMock()
+        mock_win._probe_request_id = 2  # Current request is 2
+
+        file1 = tmp_path / "first.mp4"
+        info1 = MediaInfo(format=FormatInfo(filename="first.mp4", format_name="mp4", duration=10.0))
+
+        file2 = tmp_path / "second.mp4"
+        info2 = MediaInfo(format=FormatInfo(filename="second.mp4", format_name="mp4", duration=20.0))
+
+        # Stale completion with req_id=1
+        ret1 = MainWindow._on_probe_success(mock_win, file1, 1, info1)
+        assert ret1 is False
+        mock_win.window_title.set_subtitle.assert_not_called()
+
+        # Current completion with req_id=2
+        ret2 = MainWindow._on_probe_success(mock_win, file2, 2, info2)
+        assert ret2 is False
+        mock_win.window_title.set_subtitle.assert_called_with(file2.name)

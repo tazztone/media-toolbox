@@ -43,15 +43,19 @@ def isolate_gi_sys_modules() -> Generator[None, None, None]:
     Module-level teardown fixture ensuring PyGObject and Nautilus mock modules
     do not leak into sys.modules after Nautilus tests complete.
     """
+    initial = set(sys.modules.keys())
     yield
     to_delete = [
         k
         for k in list(sys.modules.keys())
-        if k == "gi"
-        or k.startswith("gi.")
-        or k.startswith("gi_")
-        or k in ("gobject", "glib", "gio", "gtk", "nautilus")
-        or k.startswith("media_toolbox.nautilus.extension")
+        if k not in initial
+        and (
+            k == "gi"
+            or k.startswith("gi.")
+            or k.startswith("gi_")
+            or k in ("gobject", "glib", "gio", "gtk", "nautilus")
+            or k.startswith("media_toolbox.nautilus.extension")
+        )
     ]
     for k in to_delete:
         sys.modules.pop(k, None)
