@@ -16,7 +16,7 @@ src/media_toolbox/
 ├── core/
 │   ├── __init__.py
 │   ├── models.py             # Frozen dataclasses (VideoStream, AudioStream, FormatInfo, MediaInfo, ProgressEvent, exceptions)
-│   ├── jobs.py               # Transactional execution, same-filesystem staging (.tmp_<token>/), safe atomic publication
+│   ├── jobs.py               # Transactional execution, same-filesystem staging (.tmp_media_toolbox_), safe atomic publication
 │   ├── validation.py         # Centralized option, preset, rate-mode, and extension validation
 │   ├── probe.py              # ffprobe JSON deserializer, N/A duration fallback, fractional fps
 │   ├── bitrate.py            # 2-pass bitrate math, speed-aware output duration, container mux margin, budget floor validation

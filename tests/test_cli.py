@@ -40,6 +40,25 @@ import media_toolbox.__main__ as main_module
 # ---------------------------------------------------------------------------
 
 
+def _fake_builder(in_p: str, out_p: str, *args: Any, **kwargs: Any) -> list[list[str]]:
+    return [["ffmpeg", "-i", str(in_p), str(out_p)]]
+
+
+def _fake_runner(cmds: list[list[str]], **kwargs: Any) -> None:
+    if cmds and cmds[-1]:
+        p = Path(cmds[-1][-1])
+        if not str(p).startswith("/dev/") and p.name != "null":
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes(b"dummy encoded output")
+
+
+@pytest.fixture(autouse=True)
+def _cli_test_sandbox(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    for name in ("in.mp4", "input.mp4", "sample_video.mp4", "test.mp4"):
+        (tmp_path / name).write_bytes(b"dummy input media")
+
+
 @pytest.fixture
 def mock_standard_video_info() -> MediaInfo:
     """Pre-built MediaInfo representing a standard 1080p MP4 video with stereo AAC audio."""
@@ -453,7 +472,8 @@ class TestCliTranscodeCommand:
     ) -> None:
         """Options --preset, --crf, --speed map cleanly to EncodeOptions."""
         mock_probe.return_value = mock_standard_video_info
-        mock_builder.return_value = [["ffmpeg", "-i", "in.mp4", "out.mp4"]]
+        mock_builder.side_effect = _fake_builder
+        mock_runner.side_effect = _fake_runner
 
         exit_code = cli.main([
             "transcode",
@@ -488,7 +508,8 @@ class TestCliTranscodeCommand:
     ) -> None:
         """--target-size-mb and --two-pass correctly configure EncodeOptions."""
         mock_probe.return_value = mock_standard_video_info
-        mock_builder.return_value = [["ffmpeg", "pass1"], ["ffmpeg", "pass2"]]
+        mock_builder.side_effect = lambda in_p, out_p, *a, **k: [["ffmpeg", "pass1"], ["ffmpeg", "pass2", str(out_p)]]
+        mock_runner.side_effect = _fake_runner
 
         exit_code = cli.main([
             "transcode",
@@ -516,7 +537,8 @@ class TestCliTranscodeCommand:
     ) -> None:
         """--scale and --crop correctly configure dimensions and aspect cropping."""
         mock_probe.return_value = mock_standard_video_info
-        mock_builder.return_value = [["ffmpeg", "-i", "in.mp4", "out.mp4"]]
+        mock_builder.side_effect = _fake_builder
+        mock_runner.side_effect = _fake_runner
 
         exit_code = cli.main([
             "transcode",
@@ -545,7 +567,8 @@ class TestCliTranscodeCommand:
     ) -> None:
         """--scale accepting '1920x1080' syntax parses into (1920, 1080)."""
         mock_probe.return_value = mock_standard_video_info
-        mock_builder.return_value = [["ffmpeg", "-i", "in.mp4", "out.mp4"]]
+        mock_builder.side_effect = _fake_builder
+        mock_runner.side_effect = _fake_runner
 
         exit_code = cli.main(["transcode", "in.mp4", "out.mp4", "--scale", "1920x1080"])
         assert exit_code == 0
@@ -565,7 +588,8 @@ class TestCliTranscodeCommand:
     ) -> None:
         """--audio-codec maps to EncodeOptions.audio_codec."""
         mock_probe.return_value = mock_standard_video_info
-        mock_builder.return_value = [["ffmpeg", "-i", "in.mp4", "out.mp4"]]
+        mock_builder.side_effect = _fake_builder
+        mock_runner.side_effect = _fake_runner
 
         exit_code = cli.main(["transcode", "in.mp4", "out.mp4", "--audio-codec", "libopus"])
         assert exit_code == 0
@@ -586,7 +610,8 @@ class TestCliTranscodeCommand:
     ) -> None:
         """--quiet suppresses all progress and completion output."""
         mock_probe.return_value = mock_standard_video_info
-        mock_builder.return_value = [["ffmpeg", "-i", "in.mp4", "out.mp4"]]
+        mock_builder.side_effect = _fake_builder
+        mock_runner.side_effect = _fake_runner
 
         exit_code = cli.main(["transcode", "in.mp4", "out.mp4", "--quiet"])
         assert exit_code == 0
@@ -606,7 +631,7 @@ class TestCliTranscodeCommand:
     ) -> None:
         """RunnerError failure in transcode returns exit code 1 and writes to stderr."""
         mock_probe.return_value = mock_standard_video_info
-        mock_builder.return_value = [["ffmpeg", "-i", "in.mp4", "out.mp4"]]
+        mock_builder.side_effect = _fake_builder
         mock_runner.side_effect = RunnerError("FFmpeg transcode failed", returncode=1, stderr="Invalid CRF")
 
         exit_code = cli.main(["transcode", "in.mp4", "out.mp4"])
@@ -694,7 +719,8 @@ class TestCliTranscodeCommand:
     ) -> None:
         """Verify -o output flag, --target-mb alias, and discord-h264 preset."""
         mock_probe.return_value = mock_standard_video_info
-        mock_builder.return_value = [["ffmpeg", "-i", "in.mp4", "out.mp4"]]
+        mock_builder.side_effect = _fake_builder
+        mock_runner.side_effect = _fake_runner
 
         exit_code = cli.main([
             "transcode",
@@ -733,7 +759,8 @@ class TestCliExtractAudioCommand:
     ) -> None:
         """Default extract-audio options set extract_audio=True."""
         mock_probe.return_value = mock_standard_video_info
-        mock_builder.return_value = [["ffmpeg", "-i", "in.mp4", "-vn", "out.mp3"]]
+        mock_builder.side_effect = _fake_builder
+        mock_runner.side_effect = _fake_runner
 
         exit_code = cli.main(["extract-audio", "in.mp4", "out.mp3"])
         assert exit_code == 0
@@ -754,7 +781,8 @@ class TestCliExtractAudioCommand:
     ) -> None:
         """--codec, --bitrate, --speed, --normalize options map accurately."""
         mock_probe.return_value = mock_standard_video_info
-        mock_builder.return_value = [["ffmpeg", "-i", "in.mp4", "-vn", "out.opus"]]
+        mock_builder.side_effect = _fake_builder
+        mock_runner.side_effect = _fake_runner
 
         exit_code = cli.main([
             "extract-audio",
@@ -788,7 +816,8 @@ class TestCliExtractAudioCommand:
     ) -> None:
         """extract-audio supports -o / --output flag."""
         mock_probe.return_value = mock_standard_video_info
-        mock_builder.return_value = [["ffmpeg", "-i", "in.mp4", "-vn", "flag_out.mp3"]]
+        mock_builder.side_effect = _fake_builder
+        mock_runner.side_effect = _fake_runner
 
         exit_code = cli.main(["extract-audio", "in.mp4", "-o", "flag_out.mp3"])
         assert exit_code == 0
@@ -821,7 +850,7 @@ class TestCliExtractAudioCommand:
     ) -> None:
         """Runner failure in extract-audio prints error and exits non-zero."""
         mock_probe.return_value = mock_standard_video_info
-        mock_builder.return_value = [["ffmpeg", "-i", "in.mp4", "-vn", "out.mp3"]]
+        mock_builder.side_effect = _fake_builder
         mock_runner.side_effect = RunnerError("FFmpeg audio extract failed", returncode=1, stderr="No audio track")
 
         exit_code = cli.main(["extract-audio", "in.mp4", "out.mp3"])
@@ -981,7 +1010,7 @@ class TestCliFormattersAndEdgeCases:
     ) -> None:
         """User cancellation of transcode returns exit code 130."""
         mock_probe.return_value = mock_standard_video_info
-        mock_builder.return_value = [["ffmpeg", "-i", "in.mp4", "out.mp4"]]
+        mock_builder.side_effect = _fake_builder
         mock_runner.side_effect = RunnerCancelledError("Cancelled by user")
 
         exit_code = cli.main(["transcode", "in.mp4", "out.mp4"])
@@ -1002,7 +1031,7 @@ class TestCliFormattersAndEdgeCases:
     ) -> None:
         """User cancellation of extract-audio returns exit code 130."""
         mock_probe.return_value = mock_standard_video_info
-        mock_builder.return_value = [["ffmpeg", "-i", "in.mp4", "-vn", "out.mp3"]]
+        mock_builder.side_effect = _fake_builder
         mock_runner.side_effect = RunnerCancelledError("Cancelled by user")
 
         exit_code = cli.main(["extract-audio", "in.mp4", "out.mp3"])

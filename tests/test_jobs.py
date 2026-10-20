@@ -259,7 +259,119 @@ class TestTransactionalJobExecution:
             media_info=dummy_media_info,
         )
 
-        with pytest.raises(OutputPublishError, match="not produced or is empty"):
+        with pytest.raises(OutputPublishError, match="not produced"):
             run_job(config, runner=fake_silent_runner)
 
         assert not out.exists()
+
+    def test_empty_staging_output_raises_publish_error(
+        self,
+        tmp_path: Path,
+        dummy_media_info: MediaInfo,
+    ):
+        inp = tmp_path / "input.mp4"
+        inp.write_bytes(b"source")
+        out = tmp_path / "new_output.mp4"
+
+        def fake_empty_runner(cmds, **kwargs):
+            staging_file = Path(cmds[0][-1])
+            staging_file.touch()
+
+        config = JobConfig(
+            input_path=inp,
+            output_path=out,
+            options=EncodeOptions(),
+            media_info=dummy_media_info,
+        )
+
+        with pytest.raises(OutputPublishError, match="empty"):
+            run_job(config, runner=fake_empty_runner)
+
+        assert not out.exists()
+
+    def test_deterministic_race_destination_created_before_publication_preserved(
+        self,
+        tmp_path: Path,
+        dummy_media_info: MediaInfo,
+    ):
+        inp = tmp_path / "input.mp4"
+        inp.write_bytes(b"source")
+        out = tmp_path / "race_output.mp4"
+
+        def fake_racing_runner(cmds, **kwargs):
+            staging_file = Path(cmds[0][-1])
+            staging_file.write_bytes(b"staged content")
+            # Concurrently create destination right before publication
+            out.write_bytes(b"interfering content")
+
+        config = JobConfig(
+            input_path=inp,
+            output_path=out,
+            options=EncodeOptions(),
+            media_info=dummy_media_info,
+            overwrite=False,
+        )
+
+        with pytest.raises(DestinationExistsError, match="already exists"):
+            run_job(config, runner=fake_racing_runner)
+
+        # Pre-existing destination content must remain untouched
+        assert out.read_bytes() == b"interfering content"
+        # Temporary staging directory must be cleaned up
+        assert len(list(tmp_path.glob(".tmp_*"))) == 0
+
+    def test_cancellation_right_before_publication_discards_staging(
+        self,
+        tmp_path: Path,
+        dummy_media_info: MediaInfo,
+    ):
+        inp = tmp_path / "input.mp4"
+        inp.write_bytes(b"source")
+        out = tmp_path / "cancelled_output.mp4"
+        cancel_evt = threading.Event()
+
+        def fake_runner_cancelling_late(cmds, **kwargs):
+            staging_file = Path(cmds[0][-1])
+            staging_file.write_bytes(b"complete staging file")
+            # Cancellation requested right before runner returns
+            cancel_evt.set()
+
+        config = JobConfig(
+            input_path=inp,
+            output_path=out,
+            options=EncodeOptions(),
+            media_info=dummy_media_info,
+        )
+
+        with pytest.raises(RunnerCancelledError, match="cancelled before publication"):
+            run_job(config, runner=fake_runner_cancelling_late, cancel_event=cancel_evt)
+
+        assert not out.exists()
+        assert len(list(tmp_path.glob(".tmp_*"))) == 0
+
+    def test_publication_error_wrapped_and_chained(
+        self,
+        tmp_path: Path,
+        dummy_media_info: MediaInfo,
+    ):
+        inp = tmp_path / "input.mp4"
+        inp.write_bytes(b"source")
+        out = tmp_path / "pub_error_output.mp4"
+
+        def fake_runner(cmds, **kwargs):
+            staging_file = Path(cmds[0][-1])
+            staging_file.write_bytes(b"staged content")
+
+        config = JobConfig(
+            input_path=inp,
+            output_path=out,
+            options=EncodeOptions(),
+            media_info=dummy_media_info,
+            overwrite=True,
+        )
+
+        with patch("os.replace", side_effect=OSError("Disk failure")):
+            with pytest.raises(OutputPublishError) as exc_info:
+                run_job(config, runner=fake_runner)
+            assert exc_info.value.__cause__ is not None
+            assert "Disk failure" in str(exc_info.value.__cause__)

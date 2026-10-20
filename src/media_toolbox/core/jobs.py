@@ -14,12 +14,13 @@ INVARIANT: Strict zero GUI imports (gi, Gtk, Adw, Nautilus, tkinter, PyQt, PySid
 from __future__ import annotations
 
 from dataclasses import dataclass
+import errno
 import os
 from pathlib import Path
+import shutil
 import tempfile
 import threading
 from typing import Callable, Optional
-import unittest.mock
 import uuid
 
 from media_toolbox.core.builder import build_ffmpeg_commands
@@ -114,6 +115,81 @@ def validate_job_paths(
     return in_resolved, out_resolved
 
 
+def _fallback_noclobber_publish(staging_path: Path, out_path: Path) -> None:
+    """Atomic O_CREAT|O_EXCL fallback for filesystems lacking hard link support."""
+    try:
+        fd = os.open(out_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
+    except FileExistsError as err:
+        raise DestinationExistsError(
+            f"Destination file already exists: {out_path}. Use overwrite to replace."
+        ) from err
+    except OSError as err:
+        raise OutputPublishError(
+            f"Failed to publish output file to {out_path}: {err}"
+        ) from err
+
+    try:
+        with os.fdopen(fd, "wb") as dst, open(staging_path, "rb") as src:
+            shutil.copyfileobj(src, dst)
+    except Exception as err:
+        try:
+            out_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise OutputPublishError(
+            f"Failed to stream staging output to {out_path}: {err}"
+        ) from err
+
+
+def publish_output(
+    staging_path: Path,
+    out_path: Path,
+    *,
+    overwrite: bool = False,
+) -> None:
+    """
+    Publish staging file to destination path atomically and safely.
+
+    If overwrite is True:
+        Atomically replaces target using os.replace().
+    If overwrite is False:
+        Atomically creates target using same-filesystem hard link (os.link),
+        failing immediately with DestinationExistsError if destination exists.
+        Unlinks staging_path upon successful link.
+        Falls back to exclusive creation check (O_CREAT | O_EXCL) if hard links
+        are unsupported by the underlying filesystem.
+    """
+    if overwrite:
+        try:
+            os.replace(staging_path, out_path)
+        except OSError as err:
+            raise OutputPublishError(
+                f"Failed to atomically publish output to {out_path}: {err}"
+            ) from err
+        return
+
+    # No-overwrite path: atomic no-clobber
+    try:
+        os.link(staging_path, out_path)
+    except FileExistsError as err:
+        raise DestinationExistsError(
+            f"Destination file already exists: {out_path}. Use overwrite to replace."
+        ) from err
+    except OSError as err:
+        # Fall back if filesystem does not support hard links (e.g. FAT, EXDEV, permissions)
+        if err.errno in (errno.EPERM, errno.ENOSYS, errno.EOPNOTSUPP, errno.EXDEV):
+            _fallback_noclobber_publish(staging_path, out_path)
+        else:
+            raise OutputPublishError(
+                f"Failed to publish output file to {out_path}: {err}"
+            ) from err
+    else:
+        try:
+            staging_path.unlink()
+        except OSError:
+            pass
+
+
 def run_job(
     config: JobConfig,
     progress_callback: Optional[Callable[[ProgressEvent], None]] = None,
@@ -125,9 +201,9 @@ def run_job(
     """
     Execute a media transcode or extraction job transactionally.
 
-    Output is rendered to a unique staging file in the target directory and
-    published atomically via os.replace only when FFmpeg completes with exit code 0.
-    Any failure or cancellation discards the staging file and preserves any
+    Output is rendered to an isolated staging file in a private temporary directory
+    on the target filesystem and published atomically only when FFmpeg completes with exit code 0.
+    Any failure or cancellation discards the staging directory and preserves any
     pre-existing destination file.
 
     Args:
@@ -152,23 +228,11 @@ def run_job(
     builder_fn = builder or build_ffmpeg_commands
     runner_fn = runner or run_ffmpeg_pipeline
 
-    # If media_info is provided without file existing on disk (e.g. mocked in tests),
-    # bypass input file existence check while still validating collision.
-    in_raw = Path(config.input_path)
-    out_raw = Path(config.output_path)
-    if not in_raw.exists() and config.media_info is None:
-        raise FileNotFoundError(f"Input file not found: {in_raw}")
-
     in_path, out_path = validate_job_paths(
         config.input_path,
         config.output_path,
         overwrite=config.overwrite,
-    ) if in_raw.exists() else (in_raw.resolve(), out_raw.resolve())
-
-    if out_raw.exists() and not config.overwrite:
-        raise DestinationExistsError(
-            f"Destination file already exists: {out_raw}. Use overwrite to replace."
-        )
+    )
 
     if cancel_event is not None and cancel_event.is_set():
         raise RunnerCancelledError("Job cancelled before start")
@@ -191,11 +255,12 @@ def run_job(
     # Ensure target directory exists
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Staging directory on the same filesystem ensures atomic os.replace
-    token = uuid.uuid4().hex[:8]
-    staging_dir = out_path.parent / f".tmp_{token}"
-    staging_dir.mkdir(parents=True, exist_ok=True)
-    staging_path = staging_dir / out_path.name
+    # Staging directory on the same filesystem ensures atomic publication
+    staging_temp_dir = tempfile.TemporaryDirectory(
+        dir=out_path.parent,
+        prefix=".tmp_media_toolbox_",
+    )
+    staging_path = Path(staging_temp_dir.name) / out_path.name
 
     # Isolated temporary directory for multi-pass logs
     pass_tmp_dir: Optional[tempfile.TemporaryDirectory[str]] = None
@@ -203,7 +268,7 @@ def run_job(
 
     if config.options.two_pass or config.options.target_size_mb is not None:
         pass_tmp_dir = tempfile.TemporaryDirectory(prefix="media_toolbox_2pass_")
-        pass_logfile_prefix = str(Path(pass_tmp_dir.name) / f"pass_{token}")
+        pass_logfile_prefix = str(Path(pass_tmp_dir.name) / f"pass_{uuid.uuid4().hex[:8]}")
 
     try:
         cmds = builder_fn(
@@ -224,30 +289,23 @@ def run_job(
             sigterm_timeout=config.sigterm_timeout,
         )
 
+        # Check cancellation immediately prior to publishing
+        if cancel_event is not None and cancel_event.is_set():
+            raise RunnerCancelledError("Job cancelled before publication")
+
         # Output validation and atomic publication
-        if staging_path.exists():
-            file_size = staging_path.stat().st_size
-            if file_size == 0:
-                raise OutputPublishError(
-                    f"Encoded output file was not produced or is empty: {staging_path}"
-                )
+        if not staging_path.exists():
+            raise OutputPublishError(
+                f"Encoded output file was not produced: {staging_path}"
+            )
 
-            # Re-check overwrite policy before publishing to guard against race conditions
-            if out_path.exists() and not config.overwrite:
-                raise DestinationExistsError(
-                    f"Destination file appeared concurrently: {out_path}"
-                )
+        file_size = staging_path.stat().st_size
+        if file_size == 0:
+            raise OutputPublishError(
+                f"Encoded output file is empty (0 bytes): {staging_path}"
+            )
 
-            # Atomic publish
-            os.replace(staging_path, out_path)
-        else:
-            # If runner or builder was a unit test mock without file I/O, allow in mock test mode
-            if isinstance(runner_fn, unittest.mock.NonCallableMock) or isinstance(builder_fn, unittest.mock.NonCallableMock):
-                file_size = 0
-            else:
-                raise OutputPublishError(
-                    f"Encoded output file was not produced or is empty: {staging_path}"
-                )
+        publish_output(staging_path, out_path, overwrite=config.overwrite)
 
         return JobResult(
             input_path=in_path,
@@ -257,17 +315,11 @@ def run_job(
         )
 
     finally:
-        # Guaranteed cleanup of job-owned temporary artifacts
-        if staging_path.exists():
-            try:
-                staging_path.unlink()
-            except OSError:
-                pass
-        if staging_dir.exists():
-            try:
-                staging_dir.rmdir()
-            except OSError:
-                pass
+        # Guaranteed cleanup of job-owned staging and temporary artifacts
+        try:
+            staging_temp_dir.cleanup()
+        except OSError:
+            pass
 
         if pass_tmp_dir is not None:
             try:

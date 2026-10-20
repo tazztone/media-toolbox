@@ -447,17 +447,23 @@ class TestScenario2HighSpeedPreview:
         assert "-movflags" in cmd and cmd[cmd.index("-movflags") + 1] == "+faststart"
         assert cmd[-1] == "preview_720p_3x.mp4"
 
-    def test_high_speed_preview_cli_execution(self) -> None:
+    def test_high_speed_preview_cli_execution(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """CLI transcode subcommand parses speed 3.0 and scale 1280:720 without errors."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "lecture.mp4").write_bytes(b"dummy lecture video")
+
         mock_info = MediaInfo(
             format=FormatInfo(filename="lecture.mp4", format_name="mov,mp4", duration=600.0),
             video_streams=(VideoStream(index=0, codec_name="h264", width=3840, height=2160, fps=30.0),),
             audio_streams=(AudioStream(index=1, codec_name="aac", channels=2, sample_rate=48000),),
         )
 
+        def _fake_run(cmds, **kwargs):
+            Path(cmds[-1][-1]).write_bytes(b"dummy preview output")
+
         with (
             patch("media_toolbox.cli.probe_media", return_value=mock_info),
-            patch("media_toolbox.cli.run_ffmpeg_pipeline") as mock_run,
+            patch("media_toolbox.cli.run_ffmpeg_pipeline", side_effect=_fake_run) as mock_run,
         ):
             code = cli.main([
                 "transcode",
@@ -525,17 +531,23 @@ class TestScenario3AudioExtractionAndNormalization:
         assert "-b:a" in cmd and cmd[cmd.index("-b:a") + 1] == "192k"
         assert cmd[-1] == "podcast_normalized.mp3"
 
-    def test_audio_extraction_cli_e2e(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_audio_extraction_cli_e2e(self, capsys: pytest.CaptureFixture[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """CLI extract-audio subcommand extracts normalized MP3 cleanly."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "podcast.mkv").write_bytes(b"dummy podcast audio content")
+
         mock_info = MediaInfo(
             format=FormatInfo(filename="podcast.mkv", format_name="matroska", duration=300.0),
             video_streams=(VideoStream(index=0, codec_name="h264", width=1920, height=1080),),
             audio_streams=(AudioStream(index=1, codec_name="flac", channels=2, sample_rate=48000),),
         )
 
+        def _fake_run(cmds, **kwargs):
+            Path(cmds[-1][-1]).write_bytes(b"dummy mp3 content")
+
         with (
             patch("media_toolbox.cli.probe_media", return_value=mock_info),
-            patch("media_toolbox.cli.run_ffmpeg_pipeline") as mock_run,
+            patch("media_toolbox.cli.run_ffmpeg_pipeline", side_effect=_fake_run) as mock_run,
         ):
             code = cli.main([
                 "extract-audio",
