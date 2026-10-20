@@ -62,8 +62,13 @@ python3 -m media_toolbox.cli status-nautilus
 python3 -m media_toolbox.cli uninstall-nautilus
 ```
 
-## Running Tests
+## Running Tests & Git Hooks
 
 ```bash
-.venv/bin/pytest python/media_toolbox/tests/
+# Run test suite
+.venv/bin/pytest tests/
+
+# Configure and run local pre-commit hook (bash -n and pytest)
+git config core.hooksPath .githooks
+.githooks/pre-commit
 ```

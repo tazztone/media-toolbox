@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$REPO_ROOT"
+
+# 1. Shell script syntax check
+SHELL_FILES=$(find src tests -type f -name "*.sh" 2>/dev/null || true)
+for sh_file in $SHELL_FILES; do
+    [ -f "$sh_file" ] || continue
+    if ! bash -n "$sh_file"; then
+        echo "❌ Bash syntax error in $sh_file"
+        exit 1
+    fi
+done
+
+# 2. Run unit tests via local venv
+PYTEST_BIN="$REPO_ROOT/.venv/bin/pytest"
+if [ -x "$PYTEST_BIN" ]; then
+    "$PYTEST_BIN" tests/
+else
+    if command -v pytest &>/dev/null; then
+        pytest tests/
+    else
+        echo "⚠️  pytest not found in .venv/bin or PATH; skipping test runner."
+    fi
+fi
+
+exit 0
