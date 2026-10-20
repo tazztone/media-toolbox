@@ -229,3 +229,10 @@ def test_real_concurrent_two_pass_h265_isolation(synthetic_av_clip: Path, tmp_pa
     assert info1.primary_video.codec_name == "hevc"
     assert info2.primary_video.codec_name == "hevc"
 
+
+def test_real_check_encoder_available() -> None:
+    """Verifies check_encoder_available detection against real host ffmpeg."""
+    assert check_encoder_available("libx264") is True
+    assert check_encoder_available("nonexistent_codec_12345") is False
+
+

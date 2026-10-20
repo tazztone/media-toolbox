@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+import subprocess
+from unittest.mock import patch
 import pytest
 
 from media_toolbox.core.presets import (
@@ -263,9 +265,30 @@ def test_unsupported_two_pass_raises_value_error() -> None:
 def test_check_encoder_available() -> None:
     """Detects available encoders using ffmpeg -encoders output."""
     from media_toolbox.core.presets import check_encoder_available
-    # Real host ffmpeg has libx264
-    assert check_encoder_available("libx264") is True
-    assert check_encoder_available("nonexistent_codec_12345") is False
+
+    mock_stdout = (
+        "Encoders:\n"
+        " V..... = Video\n"
+        " A..... = Audio\n"
+        " V..... libx264              libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\n"
+        " V..... libx265              libx265 H.265 / HEVC\n"
+        " A..... aac                  AAC (Advanced Audio Coding)\n"
+    )
+
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=["ffmpeg", "-hide_banner", "-encoders"],
+            returncode=0,
+            stdout=mock_stdout,
+            stderr="",
+        )
+        assert check_encoder_available("libx264") is True
+        assert check_encoder_available("libx265") is True
+        assert check_encoder_available("aac") is True
+        assert check_encoder_available("nonexistent_codec_12345") is False
+
+    with patch("subprocess.run", side_effect=FileNotFoundError):
+        assert check_encoder_available("libx264") is False
 
 
 
