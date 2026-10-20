@@ -36,6 +36,8 @@ from media_toolbox.core.models import (
 )
 from media_toolbox.core.runner import RunnerCancelledError, RunnerError
 
+pytestmark = [pytest.mark.desktop]
+
 
 # ---------------------------------------------------------------------------
 # Lazy PyGObject & Fixture Setup

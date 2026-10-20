@@ -20,7 +20,10 @@ from media_toolbox.core.probe import probe_media
 
 has_ffmpeg = bool(shutil.which("ffmpeg"))
 has_ffprobe = bool(shutil.which("ffprobe"))
-pytestmark = pytest.mark.skipif(not (has_ffmpeg and has_ffprobe), reason="ffmpeg and ffprobe required")
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(not (has_ffmpeg and has_ffprobe), reason="ffmpeg and ffprobe required"),
+]
 
 
 @pytest.fixture

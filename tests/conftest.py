@@ -5,15 +5,17 @@ Pytest fixtures and test harness configuration for media_toolbox.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import sys
 from typing import Any
 import pytest
 
-# Ensure repository src directory is in sys.path
-python_root = Path(__file__).resolve().parent.parent / "src"
-if str(python_root) not in sys.path:
-    sys.path.insert(0, str(python_root))
+# Ensure repository src directory is in sys.path unless testing installed package
+if not os.environ.get("TEST_INSTALLED"):
+    python_root = Path(__file__).resolve().parent.parent / "src"
+    if str(python_root) not in sys.path:
+        sys.path.insert(0, str(python_root))
 
 from media_toolbox.core.models import (
     AudioStream,

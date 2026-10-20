@@ -31,6 +31,8 @@ import pytest
 from media_toolbox import cli
 from media_toolbox.nautilus import installer
 
+pytestmark = [pytest.mark.desktop]
+
 
 # ---------------------------------------------------------------------------
 # Module-Level Teardown & Invariant Fixture

@@ -41,7 +41,7 @@ jobs:
 
       - name: Run Headless Core & CLI Tests
         run: |
-          pytest -k "not test_ui and not test_nautilus"
+          pytest -m "not desktop"
 
   desktop-tests:
     name: Desktop & GUI Suite (Python ${{ matrix.python-version }})
@@ -71,9 +71,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install .[all]
 
-      - name: Run Full Test Suite in Virtual Framebuffer
+      - name: Run Desktop & GUI Tests in Virtual Framebuffer
         run: |
-          xvfb-run pytest tests/
+          xvfb-run pytest -m "desktop"
 
   packaging-smoke-test:
     name: Wheel Build & Installation Smoke Test
@@ -108,3 +108,8 @@ jobs:
           media-toolbox --help
           media-toolbox inspect --help
           media-toolbox transcode --help
+
+      - name: Run Headless Tests Against Installed Package (No Source Injection)
+        run: |
+          pip install pytest
+          TEST_INSTALLED=1 pytest -o pythonpath="" -m "not desktop and not integration" tests/
