@@ -15,4 +15,4 @@ Actions=Inspect;
 
 [Desktop Action Inspect]
 Name=Inspect Media Metadata
-Exec=media-toolbox inspect %f
+Exec=x-terminal-emulator -e media-toolbox inspect %f

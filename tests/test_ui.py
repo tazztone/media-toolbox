@@ -224,6 +224,28 @@ class TestMediaToolboxApp:
         app.do_open([], 0, "")
         mock_win.load_media_file.assert_not_called()
 
+    def test_app_do_open_multiple_files_loads_first_and_toasts_warning(self, gi_env, tmp_path: Path) -> None:
+        """Verify passing multiple files loads only the first and emits an in-app notice."""
+        _, _, _, _, Gio, _ = gi_env
+        from media_toolbox.ui.app import MediaToolboxApp
+
+        app = MediaToolboxApp()
+        mock_win = MagicMock()
+        app.window = mock_win
+
+        file1 = tmp_path / "first.mp4"
+        file1.touch()
+        file2 = tmp_path / "second.mp4"
+        file2.touch()
+
+        gfile1 = Gio.File.new_for_path(str(file1))
+        gfile2 = Gio.File.new_for_path(str(file2))
+
+        app.do_open([gfile1, gfile2], 2, "")
+        mock_win.load_media_file.assert_called_once_with(str(file1))
+        mock_win.toast_overlay.add_toast.assert_called_once()
+        mock_win.present.assert_called_once()
+
 
 # ---------------------------------------------------------------------------
 # 3. Form State to EncodeOptions Translation Tests

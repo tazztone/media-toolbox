@@ -27,6 +27,7 @@ __all__ = [
     "get_data_home",
     "get_nautilus_paths",
     "run_update_desktop_database",
+    "check_desktop_environment",
     "install_nautilus",
     "uninstall_nautilus",
     "status_nautilus",
@@ -49,7 +50,7 @@ Actions=Inspect;
 
 [Desktop Action Inspect]
 Name=Inspect Media Metadata
-Exec=media-toolbox inspect %f
+Exec=x-terminal-emulator -e media-toolbox inspect %f
 """
 
 
@@ -102,6 +103,43 @@ def run_update_desktop_database(applications_dir: Path) -> bool:
         return False
 
 
+def check_desktop_environment(python_bin: str = sys.executable) -> tuple[bool, str]:
+    """
+    Check if Python environment supports GTK 4.10+ and Libadwaita 1.0+.
+    Uses standard library subprocess to avoid GUI imports in installer.
+    """
+    check_code = (
+        "import sys\n"
+        "try:\n"
+        "    import gi\n"
+        "    gi.require_version('Gtk', '4.0')\n"
+        "    gi.require_version('Adw', '1')\n"
+        "    from gi.repository import Gtk, Adw\n"
+        "    major, minor = Gtk.get_major_version(), Gtk.get_minor_version()\n"
+        "    if (major, minor) < (4, 10):\n"
+        "        sys.exit(2)\n"
+        "except Exception as err:\n"
+        "    sys.stderr.write(str(err))\n"
+        "    sys.exit(1)\n"
+    )
+    try:
+        proc = subprocess.run(
+            [python_bin, "-c", check_code],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        if proc.returncode == 0:
+            return True, "GTK >= 4.10 and Libadwaita are available"
+        if proc.returncode == 2:
+            return False, "GTK version is older than required 4.10"
+        err = proc.stderr.strip() or "PyGObject / GTK4 / Libadwaita not found"
+        return False, err
+    except Exception as exc:
+        return False, str(exc)
+
+
 def install_nautilus(
     dest_dir: Optional[str | Path] = None,
     dry_run: bool = False,
@@ -116,6 +154,11 @@ def install_nautilus(
     Returns:
         List of Path objects representing installed files.
     """
+    # Check desktop environment requirements and warn if unsupported
+    gtk_ok, gtk_msg = check_desktop_environment(sys.executable)
+    if not gtk_ok:
+        sys.stderr.write(f"Warning: {gtk_msg}. Desktop GUI entry may fail to launch.\n")
+
     paths = get_nautilus_paths(dest_dir)
     targets = [paths["launcher"], paths["extension"], paths["desktop"]]
 
@@ -141,12 +184,20 @@ def install_nautilus(
         launcher_content = (
             "#!/usr/bin/env bash\n"
             "# Media-Toolbox launcher fallback\n"
-            f"exec {sys.executable} -m media_toolbox.ui.app \"$@\"\n"
+            f'exec "{sys.executable}" -m media_toolbox.ui.app "$@"\n'
         )
 
     # Read extension content
     if src_ext.is_file():
         ext_content = src_ext.read_text(encoding="utf-8")
+        if 'INSTALLED_PYTHON: str = ""' in ext_content or 'INSTALLED_PYTHON = ""' in ext_content:
+            ext_content = ext_content.replace(
+                'INSTALLED_PYTHON: str = ""',
+                f'INSTALLED_PYTHON: str = "{sys.executable}"',
+            ).replace(
+                'INSTALLED_PYTHON = ""',
+                f'INSTALLED_PYTHON = "{sys.executable}"',
+            )
     else:
         ext_content = "# python-nautilus extension placeholder\n"
 

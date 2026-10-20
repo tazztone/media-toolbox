@@ -86,6 +86,12 @@ class MediaToolboxApp(Adw.Application):
             first_path = files[0].get_path()
             if first_path:
                 self.window.load_media_file(first_path)
+            if len(files) > 1 and hasattr(self.window, "toast_overlay"):
+                ignored_count = len(files) - 1
+                s = "s" if ignored_count > 1 else ""
+                self.window.toast_overlay.add_toast(
+                    Adw.Toast(title=f"Loaded first file. {ignored_count} additional file{s} ignored.")
+                )
             self.window.present()
 
     def _on_action_quit(self, _action: Gio.SimpleAction, _param: Any) -> None:

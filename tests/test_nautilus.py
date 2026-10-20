@@ -485,6 +485,24 @@ class TestNautilusExtensionHeadless:
                 kwargs = mock_popen.call_args[1]
                 assert kwargs.get("start_new_session") is True or kwargs.get("close_fds") is True
 
+    def test_find_python_interpreter_prioritizes_baked_and_override(self, mock_nautilus_env: dict[str, Any], tmp_path: Path) -> None:
+        """find_python_interpreter respects MEDIA_TOOLBOX_PYTHON override and baked INSTALLED_PYTHON."""
+        ext = mock_nautilus_env["ext"]
+
+        py_override = tmp_path / "custom_python"
+        py_override.touch(mode=0o755)
+
+        # 1. MEDIA_TOOLBOX_PYTHON override
+        with patch.dict(os.environ, {"MEDIA_TOOLBOX_PYTHON": str(py_override)}):
+            assert ext.find_python_interpreter() == str(py_override)
+
+        # 2. Baked INSTALLED_PYTHON
+        py_baked = tmp_path / "baked_python"
+        py_baked.touch(mode=0o755)
+        with patch.object(ext, "INSTALLED_PYTHON", str(py_baked)):
+            with patch.dict(os.environ, {}, clear=True):
+                assert ext.find_python_interpreter() == str(py_baked)
+
 
 # ---------------------------------------------------------------------------
 # 3. Installer Testing
@@ -557,11 +575,28 @@ class TestNautilusInstaller:
         assert (launcher.stat().st_mode & 0o777) == 0o755
 
     def test_install_nautilus_bakes_current_python_interpreter(self, tmp_path: Path) -> None:
-        """Assert installer bakes sys.executable into installed launcher script."""
+        """Assert installer bakes sys.executable into installed launcher script and extension."""
         installer.install_nautilus(dest_dir=tmp_path)
         launcher = tmp_path / "nautilus" / "scripts" / "Media-Toolbox"
         content = launcher.read_text(encoding="utf-8")
         assert f'INSTALLED_PYTHON="{sys.executable}"' in content
+
+        extension = tmp_path / "nautilus-python" / "extensions" / "media_toolbox_nautilus.py"
+        ext_content = extension.read_text(encoding="utf-8")
+        assert f'INSTALLED_PYTHON: str = "{sys.executable}"' in ext_content
+
+    def test_check_desktop_environment(self) -> None:
+        """Assert check_desktop_environment checks GTK 4.10+ / Libadwaita availability."""
+        # Current venv has GTK 4.10+ / Libadwaita
+        ok, msg = installer.check_desktop_environment(sys.executable)
+        assert isinstance(ok, bool)
+        assert isinstance(msg, str)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stderr="No module named gi")
+            ok_fail, msg_fail = installer.check_desktop_environment("dummy_py")
+            assert ok_fail is False
+            assert "gi" in msg_fail
 
     def test_install_nautilus_dry_run(self, tmp_path: Path) -> None:
         """Assert dry_run=True returns planned paths without creating them on disk."""

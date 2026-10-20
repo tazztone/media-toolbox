@@ -79,6 +79,8 @@ except (ImportError, ValueError, AttributeError):
     GObject = _MockGObject  # type: ignore
     Nautilus = _MockNautilus  # type: ignore
 
+INSTALLED_PYTHON: str = ""
+
 SUPPORTED_MIME_PREFIXES = ("video/", "audio/")
 
 ADDITIONAL_MEDIA_MIMES = {
@@ -151,6 +153,10 @@ def find_python_interpreter() -> str:
     if override and os.path.isfile(override) and os.access(override, os.X_OK):
         return override
 
+    # Check baked installer interpreter
+    if INSTALLED_PYTHON and os.path.isfile(INSTALLED_PYTHON) and os.access(INSTALLED_PYTHON, os.X_OK):
+        return INSTALLED_PYTHON
+
     try:
         ext_path = Path(__file__).resolve()
         repo_root = ext_path.parent.parent.parent.parent
@@ -166,13 +172,9 @@ def find_python_interpreter() -> str:
         if cand.is_file() and os.access(cand, os.X_OK):
             return str(cand)
 
-    for known in (
-        Path.home() / ".local/share/media_toolbox/venv/bin/python3",
-        Path.home() / ".venv/bin/python3",
-        Path.home() / ".local/venv/bin/python3",
-    ):
-        if known.is_file() and os.access(known, os.X_OK):
-            return str(known)
+    which_py = shutil.which("python3") or shutil.which("python")
+    if which_py and os.access(which_py, os.X_OK):
+        return which_py
 
     return sys.executable or "/usr/bin/python3"
 

@@ -49,25 +49,12 @@ if [[ -z "$PYTHON" ]]; then
     fi
 fi
 
-# (c) Active virtualenv
+# (d) Active virtualenv
 if [[ -z "$PYTHON" && -n "${VIRTUAL_ENV:-}" && -x "$VIRTUAL_ENV/bin/python3" ]]; then
     PYTHON="$VIRTUAL_ENV/bin/python3"
 fi
 
-# (d) Well-known virtualenv paths
-if [[ -z "$PYTHON" ]]; then
-    for candidate in \
-        "$HOME/.local/share/media_toolbox/venv/bin/python3" \
-        "$HOME/.venv/bin/python3" \
-        "$HOME/.local/venv/bin/python3"; do
-        if [[ -x "$candidate" ]]; then
-            PYTHON="$candidate"
-            break
-        fi
-    done
-fi
-
-# (e) System fallback
+# (e) System fallback (PATH)
 if [[ -z "$PYTHON" ]]; then
     if command -v python3 >/dev/null 2>&1; then
         PYTHON="$(command -v python3)"
