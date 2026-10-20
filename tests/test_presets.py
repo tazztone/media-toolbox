@@ -206,7 +206,7 @@ def test_h264_cli_flags() -> None:
 
 
 def test_h265_cli_flags() -> None:
-    """H.265 video args include Apple ecosystem hvc1 tag."""
+    """H.265 video args include Apple ecosystem hvc1 tag and encoder-specific 2-pass."""
     args = H265_PRESET.build_video_args()
     assert args == [
         "-c:v", "libx265",
@@ -215,6 +215,58 @@ def test_h265_cli_flags() -> None:
         "-tag:v", "hvc1",
         "-pix_fmt", "yuv420p",
     ]
+
+    # Two-pass pass 1
+    p1 = H265_PRESET.build_video_args(
+        bitrate_kbps=1500,
+        pass_num=1,
+        pass_logfile="/tmp/p265_stats",
+    )
+    assert p1 == [
+        "-c:v", "libx265",
+        "-b:v", "1500k",
+        "-preset", "medium",
+        "-tag:v", "hvc1",
+        "-pix_fmt", "yuv420p",
+        "-x265-params", "pass=1:stats=/tmp/p265_stats",
+    ]
+    assert "-pass" not in p1
+    assert "-passlogfile" not in p1
+
+    # Two-pass pass 2
+    p2 = H265_PRESET.build_video_args(
+        bitrate_kbps=1500,
+        pass_num=2,
+        pass_logfile="/tmp/p265_stats",
+    )
+    assert p2 == [
+        "-c:v", "libx265",
+        "-b:v", "1500k",
+        "-preset", "medium",
+        "-tag:v", "hvc1",
+        "-pix_fmt", "yuv420p",
+        "-x265-params", "pass=2:stats=/tmp/p265_stats",
+    ]
+    assert "-pass" not in p2
+    assert "-passlogfile" not in p2
+
+
+def test_unsupported_two_pass_raises_value_error() -> None:
+    """Presets marked supports_two_pass=False must reject two-pass generation."""
+    with pytest.raises(ValueError, match="does not support two-pass"):
+        GIF_PRESET.build_video_args(bitrate_kbps=1000, pass_num=1)
+
+    with pytest.raises(ValueError, match="does not support two-pass"):
+        PRORES_PRESET.build_video_args(bitrate_kbps=50000, pass_num=1)
+
+
+def test_check_encoder_available() -> None:
+    """Detects available encoders using ffmpeg -encoders output."""
+    from media_toolbox.core.presets import check_encoder_available
+    # Real host ffmpeg has libx264
+    assert check_encoder_available("libx264") is True
+    assert check_encoder_available("nonexistent_codec_12345") is False
+
 
 
 def test_av1_cli_flags() -> None:

@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+import shutil
+import subprocess
 from typing import Optional
 
 
@@ -79,6 +81,11 @@ class VideoPreset:
         # Codec selection
         args.extend(["-c:v", self.codec_name])
 
+        if (pass_num is not None or bitrate_kbps is not None) and not self.supports_two_pass:
+            raise ValueError(
+                f"Preset '{self.name}' ({self.codec_name}) does not support two-pass bitrate encoding"
+            )
+
         # ProRes master encoding
         if self.codec_name == "prores_ks":
             profile = self.prores_profile if self.prores_profile is not None else 3
@@ -93,6 +100,10 @@ class VideoPreset:
 
         # Two-pass bitrate mode
         if pass_num is not None and bitrate_kbps is not None:
+            if not self.supports_two_pass:
+                raise ValueError(
+                    f"Preset '{self.name}' ({self.codec_name}) does not support two-pass bitrate encoding"
+                )
             args.extend(["-b:v", f"{int(bitrate_kbps)}k"])
             preset = (
                 speed_preset.strip().lower()
@@ -107,9 +118,16 @@ class VideoPreset:
             fmt = pix_fmt or self.default_pix_fmt
             if fmt:
                 args.extend(["-pix_fmt", fmt])
-            args.extend(["-pass", str(pass_num)])
-            if pass_logfile:
-                args.extend(["-passlogfile", pass_logfile])
+
+            if self.codec_name == "libx265":
+                x265_opts = [f"pass={pass_num}"]
+                if pass_logfile:
+                    x265_opts.append(f"stats={pass_logfile}")
+                args.extend(["-x265-params", ":".join(x265_opts)])
+            else:
+                args.extend(["-pass", str(pass_num)])
+                if pass_logfile:
+                    args.extend(["-passlogfile", pass_logfile])
             return args
 
         # Single-pass CRF mode
@@ -500,3 +518,30 @@ def list_video_presets() -> list[VideoPreset]:
 def list_audio_presets() -> list[AudioPreset]:
     """Return all registered audio presets in standard order."""
     return list(AUDIO_PRESETS.values())
+
+
+def check_encoder_available(codec_name: str, executable: Optional[str] = None) -> bool:
+    """
+    Detect if the host FFmpeg installation has support for the requested encoder.
+
+    Args:
+        codec_name: Target encoder name (e.g. 'libx265', 'libx264', 'libvpx-vp9').
+        executable: Optional FFmpeg binary path.
+    """
+    ffmpeg_bin = executable or shutil.which("ffmpeg") or "ffmpeg"
+    try:
+        proc = subprocess.run(
+            [ffmpeg_bin, "-hide_banner", "-encoders"],
+            capture_output=True,
+            text=True,
+            timeout=5.0,
+            check=False,
+        )
+        for line in proc.stdout.splitlines():
+            parts = line.strip().split()
+            if len(parts) >= 2 and parts[1] == codec_name:
+                return True
+        return False
+    except Exception:
+        return False
+

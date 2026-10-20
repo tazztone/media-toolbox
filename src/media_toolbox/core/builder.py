@@ -296,9 +296,17 @@ def build_two_pass_commands(
         pass1_cmd.extend([
             "-c:v", options.video_codec,
             "-b:v", f"{int(v_bitrate_kbps)}k",
-            "-pass", "1",
-            "-passlogfile", log_prefix,
         ])
+        if options.video_codec in ("libx265", "x265", "hevc"):
+            x265_opts = ["pass=1"]
+            if log_prefix:
+                x265_opts.append(f"stats={log_prefix}")
+            pass1_cmd.extend(["-x265-params", ":".join(x265_opts)])
+        else:
+            pass1_cmd.extend([
+                "-pass", "1",
+                "-passlogfile", log_prefix,
+            ])
         if speed_preset:
             pass1_cmd.extend(["-preset", speed_preset])
 
@@ -328,9 +336,17 @@ def build_two_pass_commands(
         pass2_cmd.extend([
             "-c:v", options.video_codec,
             "-b:v", f"{int(v_bitrate_kbps)}k",
-            "-pass", "2",
-            "-passlogfile", log_prefix,
         ])
+        if options.video_codec in ("libx265", "x265", "hevc"):
+            x265_opts = ["pass=2"]
+            if log_prefix:
+                x265_opts.append(f"stats={log_prefix}")
+            pass2_cmd.extend(["-x265-params", ":".join(x265_opts)])
+        else:
+            pass2_cmd.extend([
+                "-pass", "2",
+                "-passlogfile", log_prefix,
+            ])
         if speed_preset:
             pass2_cmd.extend(["-preset", speed_preset])
 

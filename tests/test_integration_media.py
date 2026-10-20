@@ -6,6 +6,7 @@ Requires `ffmpeg` and `ffprobe` binaries on PATH; skips gracefully if missing.
 
 from __future__ import annotations
 
+import concurrent.futures
 import shutil
 import subprocess
 from pathlib import Path
@@ -13,6 +14,7 @@ import pytest
 
 from media_toolbox.core.jobs import JobConfig, run_job
 from media_toolbox.core.models import DestinationExistsError, EncodeOptions
+from media_toolbox.core.presets import check_encoder_available
 from media_toolbox.core.probe import probe_media
 
 
@@ -159,3 +161,68 @@ def test_real_job_refuses_overwrite_without_flag(synthetic_av_clip: Path, tmp_pa
     # Destination was NOT modified or replaced
     assert existing_dest.read_text(encoding="utf-8") == "pre-existing content"
     assert existing_dest.stat().st_mtime_ns == original_mtime
+
+
+def test_real_two_pass_h265_target_size(synthetic_av_clip: Path, tmp_path: Path) -> None:
+    """Real H.265 two-pass transcode produces valid HEVC stream with isolated stats."""
+    if not check_encoder_available("libx265"):
+        pytest.skip("libx265 encoder not supported in installed ffmpeg")
+
+    out_file = tmp_path / "h265_sized_output.mp4"
+    target_mb = 0.5
+    opts = EncodeOptions(
+        preset="h265",
+        two_pass=True,
+        target_size_mb=target_mb,
+        audio_bitrate_kbps=64,
+    )
+    config = JobConfig(input_path=synthetic_av_clip, output_path=out_file, options=opts)
+    result = run_job(config)
+
+    assert result.output_path == out_file
+    assert result.file_size_bytes > 0
+    assert out_file.is_file()
+
+    info = probe_media(out_file)
+    assert info.has_video is True
+    assert info.primary_video is not None
+    assert info.primary_video.codec_name == "hevc"
+
+    # Confirm stats files were cleaned up and did not leak into output dir or cwd
+    leaked_stats = list(tmp_path.glob("*pass*")) + list(Path(".").glob("x265_2pass*"))
+    assert len(leaked_stats) == 0
+
+
+def test_real_concurrent_two_pass_h265_isolation(synthetic_av_clip: Path, tmp_path: Path) -> None:
+    """Concurrent H.265 two-pass jobs operate in private temporary directories without colliding."""
+    if not check_encoder_available("libx265"):
+        pytest.skip("libx265 encoder not supported in installed ffmpeg")
+
+    out1 = tmp_path / "worker1_out.mp4"
+    out2 = tmp_path / "worker2_out.mp4"
+
+    cfg1 = JobConfig(
+        input_path=synthetic_av_clip,
+        output_path=out1,
+        options=EncodeOptions(preset="h265", two_pass=True, target_size_mb=0.4, audio_bitrate_kbps=64),
+    )
+    cfg2 = JobConfig(
+        input_path=synthetic_av_clip,
+        output_path=out2,
+        options=EncodeOptions(preset="h265", two_pass=True, target_size_mb=0.6, audio_bitrate_kbps=64),
+    )
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        f1 = executor.submit(run_job, cfg1)
+        f2 = executor.submit(run_job, cfg2)
+        res1 = f1.result(timeout=60)
+        res2 = f2.result(timeout=60)
+
+    assert res1.output_path == out1 and out1.is_file() and out1.stat().st_size > 0
+    assert res2.output_path == out2 and out2.is_file() and out2.stat().st_size > 0
+
+    info1 = probe_media(out1)
+    info2 = probe_media(out2)
+    assert info1.primary_video.codec_name == "hevc"
+    assert info2.primary_video.codec_name == "hevc"
+
