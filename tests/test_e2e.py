@@ -569,13 +569,14 @@ class TestScenario4VerticalSocialMediaCrop:
     def test_vertical_crop_and_fps_filters(self) -> None:
         """9:16 center crop and 60fps filter assemble in strict order crop -> fps."""
         crop_f = build_crop_filter("9:16")
-        assert crop_f == "crop=ih*(9/16):ih:(iw-ow)/2:0"
+        expected_crop = "crop=min(iw\\,ih*(9/16)):min(ih\\,iw*(16/9)):(iw-ow)/2:(ih-oh)/2"
+        assert crop_f == expected_crop
 
         fps_f = build_fps_filter(60)
         assert fps_f == "fps=fps=60"
 
         vf = build_video_filter(crop="9:16", fps=60)
-        assert vf == ["crop=ih*(9/16):ih:(iw-ow)/2:0", "fps=fps=60"]
+        assert vf == [expected_crop, "fps=fps=60"]
 
     def test_vertical_crop_h265_command_assembly(self) -> None:
         """Command builder generates H.265 CRF 28 command with 9:16 crop, 60fps, and hvc1 tag."""
@@ -595,7 +596,7 @@ class TestScenario4VerticalSocialMediaCrop:
         assert len(cmds) == 1
         cmd = cmds[0]
         assert "-vf" in cmd
-        assert cmd[cmd.index("-vf") + 1] == "crop=ih*(9/16):ih:(iw-ow)/2:0,fps=fps=60"
+        assert cmd[cmd.index("-vf") + 1] == "crop=min(iw\\,ih*(9/16)):min(ih\\,iw*(16/9)):(iw-ow)/2:(ih-oh)/2,fps=fps=60"
         assert "-c:v" in cmd and cmd[cmd.index("-c:v") + 1] == "libx265"
         assert "-crf" in cmd and cmd[cmd.index("-crf") + 1] == "28"
         assert "-tag:v" in cmd and cmd[cmd.index("-tag:v") + 1] == "hvc1"

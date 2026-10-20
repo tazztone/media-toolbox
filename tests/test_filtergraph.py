@@ -126,11 +126,16 @@ def test_video_filter_scale_invalid(invalid_scale: tuple[int, int]) -> None:
 
 def test_video_filter_crop_aspect_ratios() -> None:
     """Standard aspect ratio crops use correct center-crop formulas with comma escaping."""
-    assert build_crop_filter("9:16") == "crop=ih*(9/16):ih:(iw-ow)/2:0"
-    assert build_crop_filter("16:9") == "crop=iw:iw*(9/16):0:(ih-oh)/2"
+    assert build_crop_filter("9:16") == "crop=min(iw\\,ih*(9/16)):min(ih\\,iw*(16/9)):(iw-ow)/2:(ih-oh)/2"
+    assert build_crop_filter("16:9") == "crop=min(iw\\,ih*(16/9)):min(ih\\,iw*(9/16)):(iw-ow)/2:(ih-oh)/2"
     assert build_crop_filter("1:1") == "crop=min(iw\\,ih):min(iw\\,ih):(iw-ow)/2:(ih-oh)/2"
-    assert build_crop_filter("4:3") == "crop=ih*(4/3):ih:(iw-ow)/2:0"
-    assert build_crop_filter("21:9") == "crop=iw:iw*(9/21):0:(ih-oh)/2"
+    assert build_crop_filter("4:3") == "crop=min(iw\\,ih*(4/3)):min(ih\\,iw*(3/4)):(iw-ow)/2:(ih-oh)/2"
+    assert build_crop_filter("21:9") == "crop=min(iw\\,ih*(21/9)):min(ih\\,iw*(9/21)):(iw-ow)/2:(ih-oh)/2"
+
+
+def test_video_filter_crop_custom_ratio() -> None:
+    """Arbitrary ratio (e.g. 3:2) dynamically generates orientation-agnostic centering crop."""
+    assert build_crop_filter("3:2") == "crop=min(iw\\,ih*(3/2)):min(ih\\,iw*(2/3)):(iw-ow)/2:(ih-oh)/2"
 
 
 def test_video_filter_crop_custom() -> None:
@@ -145,6 +150,15 @@ def test_video_filter_pad() -> None:
     assert build_pad_filter((1920, 1080)) == "pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black"
     assert build_pad_filter((1921, 1081)) == "pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black"
     assert build_pad_filter("pad=1920:1080:0:0:white") == "pad=1920:1080:0:0:white"
+
+
+def test_video_filter_pad_aspect_ratios() -> None:
+    """Aspect ratio pads generate center-padding filters with correct aspect ratio expressions."""
+    assert build_pad_filter("16:9") == "pad=max(iw\\,ih*(16/9)):max(ih\\,iw*(9/16)):(ow-iw)/2:(oh-ih)/2:black"
+    assert build_pad_filter("9:16") == "pad=max(iw\\,ih*(9/16)):max(ih\\,iw*(16/9)):(ow-iw)/2:(oh-ih)/2:black"
+    assert build_pad_filter("1:1") == "pad=max(iw\\,ih):max(ih\\,iw):(ow-iw)/2:(oh-ih)/2:black"
+    assert build_pad_filter("4:3") == "pad=max(iw\\,ih*(4/3)):max(ih\\,iw*(3/4)):(ow-iw)/2:(oh-ih)/2:black"
+    assert build_pad_filter("21:9") == "pad=max(iw\\,ih*(21/9)):max(ih\\,iw*(9/21)):(ow-iw)/2:(oh-ih)/2:black"
 
 
 def test_video_filter_speed() -> None:

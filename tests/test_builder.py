@@ -47,6 +47,10 @@ def test_crf_default() -> None:
         "-nostdin",
         "-i",
         "in.mp4",
+        "-map",
+        "0:v:0",
+        "-map",
+        "0:a:0?",
         "-c:v",
         "libx264",
         "-crf",
@@ -157,6 +161,8 @@ def test_audio_extract_mp3() -> None:
         "-i",
         "in.mp4",
         "-vn",
+        "-map",
+        "0:a:0?",
         "-c:a",
         "libmp3lame",
         "-b:a",
@@ -646,4 +652,32 @@ def test_preset_prores_selects_pcm_audio() -> None:
     # MOV faststart
     assert "-movflags" in cmd
     assert cmd[cmd.index("-movflags") + 1] == "+faststart"
+
+
+def test_stream_mapping_in_commands(sample_mediainfo_standard_mp4: MediaInfo) -> None:
+    """Single-pass and two-pass commands map 0:v:0 and 0:a:0? by default."""
+    options = EncodeOptions(preset="h264")
+    cmd = build_ffmpeg_commands("in.mp4", "out.mp4", options, media_info=sample_mediainfo_standard_mp4)[0]
+    assert "-map" in cmd
+    assert cmd[cmd.index("-map") + 1] == "0:v:0"
+    v_idx = cmd.index("-map")
+    assert "-map" in cmd[v_idx + 2 :]
+    sub_idx = cmd[v_idx + 2 :].index("-map") + v_idx + 2
+    assert cmd[sub_idx + 1] == "0:a:0?"
+
+    # Two pass
+    options_2p = EncodeOptions(preset="h264", two_pass=True, target_size_mb=25.0)
+    cmds_2p = build_ffmpeg_commands("in.mp4", "out.mp4", options_2p, media_info=sample_mediainfo_standard_mp4)
+    p1, p2 = cmds_2p[0], cmds_2p[1]
+    assert "-map" in p1 and p1[p1.index("-map") + 1] == "0:v:0"
+    assert "-map" in p2 and p2[p2.index("-map") + 1] == "0:v:0"
+
+
+def test_stream_mapping_custom_override() -> None:
+    """User-supplied -map extra args override default 0:v:0 / 0:a:0? mappings."""
+    options = EncodeOptions(preset="h264", extra_args=("-map", "0:v:1", "-map", "0:a:2"))
+    cmd = build_ffmpeg_commands("in.mp4", "out.mp4", options)[0]
+    maps = [cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-map"]
+    assert maps == ["0:v:1", "0:a:2"]
+
 

@@ -14,11 +14,19 @@ import math
 from typing import Optional, Sequence
 
 ASPECT_RATIO_CROPS: dict[str, str] = {
-    "9:16": "crop=ih*(9/16):ih:(iw-ow)/2:0",
-    "16:9": "crop=iw:iw*(9/16):0:(ih-oh)/2",
+    "9:16": "crop=min(iw\\,ih*(9/16)):min(ih\\,iw*(16/9)):(iw-ow)/2:(ih-oh)/2",
+    "16:9": "crop=min(iw\\,ih*(16/9)):min(ih\\,iw*(9/16)):(iw-ow)/2:(ih-oh)/2",
     "1:1": "crop=min(iw\\,ih):min(iw\\,ih):(iw-ow)/2:(ih-oh)/2",
-    "4:3": "crop=ih*(4/3):ih:(iw-ow)/2:0",
-    "21:9": "crop=iw:iw*(9/21):0:(ih-oh)/2",
+    "4:3": "crop=min(iw\\,ih*(4/3)):min(ih\\,iw*(3/4)):(iw-ow)/2:(ih-oh)/2",
+    "21:9": "crop=min(iw\\,ih*(21/9)):min(ih\\,iw*(9/21)):(iw-ow)/2:(ih-oh)/2",
+}
+
+ASPECT_RATIO_PADS: dict[str, str] = {
+    "9:16": "pad=max(iw\\,ih*(9/16)):max(ih\\,iw*(16/9)):(ow-iw)/2:(oh-ih)/2:black",
+    "16:9": "pad=max(iw\\,ih*(16/9)):max(ih\\,iw*(9/16)):(ow-iw)/2:(oh-ih)/2:black",
+    "1:1": "pad=max(iw\\,ih):max(ih\\,iw):(ow-iw)/2:(oh-ih)/2:black",
+    "4:3": "pad=max(iw\\,ih*(4/3)):max(ih\\,iw*(3/4)):(ow-iw)/2:(oh-ih)/2:black",
+    "21:9": "pad=max(iw\\,ih*(21/9)):max(ih\\,iw*(9/21)):(ow-iw)/2:(oh-ih)/2:black",
 }
 
 EBU_R128_LOUDNORM: str = "loudnorm=I=-23:LRA=7:TP=-1.5"
@@ -65,6 +73,18 @@ def build_crop_filter(crop: str) -> str:
         return ASPECT_RATIO_CROPS[crop_clean]
     if crop_clean.startswith("crop="):
         return crop_clean
+    if ":" in crop_clean and crop_clean.count(":") == 1:
+        parts = crop_clean.split(":")
+        try:
+            rw, rh = float(parts[0]), float(parts[1])
+            if rw > 0 and rh > 0 and (rw <= 100 and rh <= 100):
+                w_str = str(int(rw)) if rw.is_integer() else str(rw)
+                h_str = str(int(rh)) if rh.is_integer() else str(rh)
+                if rw == rh:
+                    return "crop=min(iw\\,ih):min(iw\\,ih):(iw-ow)/2:(ih-oh)/2"
+                return f"crop=min(iw\\,ih*({w_str}/{h_str})):min(ih\\,iw*({h_str}/{w_str})):(iw-ow)/2:(ih-oh)/2"
+        except ValueError:
+            pass
     return f"crop={crop_clean}"
 
 
@@ -79,11 +99,27 @@ def build_pad_filter(pad: str | tuple[int, int]) -> str:
         return f"pad={w_even}:{h_even}:(ow-iw)/2:(oh-ih)/2:black"
 
     pad_clean = pad.strip()
+    if pad_clean in ASPECT_RATIO_PADS:
+        return ASPECT_RATIO_PADS[pad_clean]
     if pad_clean.startswith("pad="):
         return pad_clean
     if ":" in pad_clean and pad_clean.count(":") == 1:
-        w_s, h_s = pad_clean.split(":")
-        return f"pad={w_s}:{h_s}:(ow-iw)/2:(oh-ih)/2:black"
+        parts = pad_clean.split(":")
+        try:
+            rw, rh = float(parts[0]), float(parts[1])
+            if rw > 0 and rh > 0 and (rw <= 100 and rh <= 100):
+                w_str = str(int(rw)) if rw.is_integer() else str(rw)
+                h_str = str(int(rh)) if rh.is_integer() else str(rh)
+                if rw == rh:
+                    return "pad=max(iw\\,ih):max(ih\\,iw):(ow-iw)/2:(oh-ih)/2:black"
+                return f"pad=max(iw\\,ih*({w_str}/{h_str})):max(ih\\,iw*({h_str}/{w_str})):(ow-iw)/2:(oh-ih)/2:black"
+            elif rw > 0 and rh > 0:
+                w_int, h_int = int(rw), int(rh)
+                w_even = max(2, w_int - (w_int % 2))
+                h_even = max(2, h_int - (h_int % 2))
+                return f"pad={w_even}:{h_even}:(ow-iw)/2:(oh-ih)/2:black"
+        except ValueError:
+            pass
     return f"pad={pad_clean}"
 
 

@@ -152,7 +152,11 @@ def build_audio_extract_command(
     if include_progress:
         cmd.extend(["-progress", "pipe:1", "-nostats"])
 
-    cmd.extend(["-i", input_path, "-vn"])
+    has_user_map = any(arg == "-map" or arg.startswith("-map") for arg in options.extra_args)
+    if not has_user_map:
+        cmd.extend(["-i", input_path, "-vn", "-map", "0:a:0?"])
+    else:
+        cmd.extend(["-i", input_path, "-vn"])
 
     # Audio filters
     cmd.extend(
@@ -268,12 +272,15 @@ def build_two_pass_commands(
 
     v_preset = resolve_video_preset(options)
     speed_preset = resolve_speed_preset(options)
+    has_user_map = any(arg == "-map" or arg.startswith("-map") for arg in options.extra_args)
 
     # Pass 1 Command
     pass1_cmd: list[str] = ["ffmpeg", "-y", "-nostdin"]
     if include_progress:
         pass1_cmd.extend(["-progress", "pipe:1", "-nostats"])
     pass1_cmd.extend(["-i", input_path])
+    if not has_user_map:
+        pass1_cmd.extend(["-map", "0:v:0"])
     pass1_cmd.extend(vf_args)
 
     if v_preset is not None:
@@ -302,6 +309,10 @@ def build_two_pass_commands(
     if include_progress:
         pass2_cmd.extend(["-progress", "pipe:1", "-nostats"])
     pass2_cmd.extend(["-i", input_path])
+    if not has_user_map:
+        pass2_cmd.extend(["-map", "0:v:0"])
+        if not options.mute_audio and (media_info is None or media_info.has_audio):
+            pass2_cmd.extend(["-map", "0:a:0?"])
     pass2_cmd.extend(vf_args)
 
     if v_preset is not None:
@@ -364,6 +375,11 @@ def build_single_pass_command(
         cmd.extend(["-progress", "pipe:1", "-nostats"])
 
     cmd.extend(["-i", input_path])
+    has_user_map = any(arg == "-map" or arg.startswith("-map") for arg in options.extra_args)
+    if not has_user_map:
+        cmd.extend(["-map", "0:v:0"])
+        if not options.mute_audio and (media_info is None or media_info.has_audio):
+            cmd.extend(["-map", "0:a:0?"])
 
     # Video filters
     cmd.extend(
