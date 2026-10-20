@@ -959,9 +959,12 @@ class TestCliFormattersAndEdgeCases:
         assert cli.format_file_size(None) == "N/A"
         assert cli.format_file_size(-1) == "N/A"
         assert cli.format_file_size(500) == "500 B"
-        assert "KB" in cli.format_file_size(2048)
-        assert "MB" in cli.format_file_size(2048 * 1024)
-        assert "GB" in cli.format_file_size(2048 * 1024 * 1024)
+        assert "KiB" in cli.format_file_size(2048)
+        assert "MiB" in cli.format_file_size(2048 * 1024)
+        assert "GiB" in cli.format_file_size(2048 * 1024 * 1024)
+        # Decimal size
+        assert "KB" in cli.format_decimal_size(2000)
+        assert "MB" in cli.format_decimal_size(2_000_000)
 
     def test_format_bitrate(self) -> None:
         assert cli.format_bitrate(None) == "N/A"

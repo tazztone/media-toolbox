@@ -22,6 +22,7 @@ src/media_toolbox/
 │   ├── bitrate.py            # 2-pass bitrate math, speed-aware output duration, container mux margin, budget floor validation
 │   ├── filtergraph.py        # Video/audio filter chains, orientation-agnostic crop, aspect pad, atempo splitting (>2.0x, <0.5x)
 │   ├── presets.py            # Codec presets (H.264, H.265, AV1, VP9, GIF, ProRes, MP3, AAC, Opus, FLAC) + aliases
+│   ├── formatters.py         # Human-readable formatters (duration, size with KiB/MiB vs decimal MB, bitrate, aspect, fps)
 │   ├── builder.py            # Deterministic FFmpeg CLI argument builder (CRF & 2-pass) with explicit stream mapping
 │   └── runner.py             # Process-isolated runner, bounded watcher thread, -progress pipe:1 parser, SIGTERM/SIGKILL cancellation
 ├── ui/
@@ -119,6 +120,15 @@ tests/
 
 ### `core/bitrate.py`
 - `calculate_target_video_bitrate(target_size_mb: float, duration_seconds: float, audio_bitrate_kbps: int = 128, mux_overhead_margin: float = 0.03, min_video_bitrate_kbps: int = 64) -> int`
+
+### `core/formatters.py`
+- `format_duration(seconds: Optional[float]) -> str`
+- `format_file_size(size_bytes: Optional[int], binary: bool = True) -> str` (IEC KiB/MiB binary vs SI KB/MB decimal)
+- `format_decimal_size(size_bytes: Optional[int]) -> str`
+- `format_bitrate(bps: Optional[int]) -> str`
+- `format_aspect_ratio(width: int, height: int) -> str`
+- `format_fps(fps: Optional[float], is_attached_pic: bool = False) -> str`
+- `format_channels(layout: Optional[str], channels: int) -> str`
 
 ### `core/filtergraph.py`
 - `build_video_filter(scale: Optional[tuple[int, int]], crop: Optional[str], pad: Optional[str], speed: Optional[float], fps: Optional[int]) -> list[str]`

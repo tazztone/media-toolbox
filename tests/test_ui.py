@@ -696,7 +696,7 @@ class TestMetadataCard:
             "AAC | stereo (2 channels) | 48.0 kHz | Bitrate: 128 kbps"
         )
         mock_card.format_row.set_subtitle.assert_called_with(
-            "mov,mp4 | Duration: 00:01:00.00 | Size: 14.31 MB (15,000,000 bytes)"
+            "mov,mp4 | Duration: 00:01:00.00 | Size: 14.31 MiB (15,000,000 bytes)"
         )
 
     def test_metadata_card_silent_video(self, gi_env) -> None:
@@ -725,7 +725,7 @@ class TestMetadataCard:
         )
         mock_card.audio_row.set_subtitle.assert_called_with("No audio stream")
         mock_card.format_row.set_subtitle.assert_called_with(
-            "mp4 | Duration: 00:00:10.00 | Size: 17.88 MB (18,750,000 bytes)"
+            "mp4 | Duration: 00:00:10.00 | Size: 17.88 MiB (18,750,000 bytes)"
         )
 
     def test_metadata_card_audio_only(self, gi_env) -> None:
@@ -754,7 +754,7 @@ class TestMetadataCard:
             "MP3 | stereo (2 channels) | 44.1 kHz | Bitrate: 320 kbps"
         )
         mock_card.format_row.set_subtitle.assert_called_with(
-            "mp3 | Duration: 00:02:00.00 | Size: 4.58 MB (4,800,000 bytes)"
+            "mp3 | Duration: 00:02:00.00 | Size: 4.58 MiB (4,800,000 bytes)"
         )
 
     def test_metadata_card_still_image(self, gi_env) -> None:
@@ -906,7 +906,7 @@ class TestNonBlockingWorkerThread:
         mock_footer.pct_label.set_text.assert_called_with("50.0%")
         mock_footer.speed_label.set_text.assert_called_with("Speed: 2.00x")
         mock_footer.eta_label.set_text.assert_called_with("ETA: 00:05")
-        mock_footer.size_label.set_text.assert_called_with("Size: 1.00 MB (1,048,576 bytes)")
+        mock_footer.size_label.set_text.assert_called_with("Size: 1.00 MiB (1,048,576 bytes)")
 
     def test_worker_dispatches_pipeline_progress_idle(self, gi_env) -> None:
         """Verify multi-pass progress events dispatch to MainWindow._on_pass_progress_idle with pass_info formatted."""
@@ -1455,3 +1455,22 @@ class TestWindowStateAndProgressDecoupling:
             mock_dialog.present.assert_called_once()
             # Worker must NOT start before user confirmation
             mock_win._start_worker.assert_not_called()
+
+    def test_probe_success_sets_effective_rotated_dimensions(self, tmp_path: Path) -> None:
+        """Probe success passes rotation-compensated effective dimensions to resolution widget."""
+        from media_toolbox.ui.window import MainWindow
+        from media_toolbox.core.models import MediaInfo, FormatInfo, VideoStream
+
+        mock_win = MagicMock()
+        mock_win._probe_request_id = 1
+        mock_win.state = None
+
+        target = tmp_path / "portrait.mp4"
+        video = VideoStream(index=0, codec_name="h264", width=1920, height=1080, rotation=90)
+        info = MediaInfo(
+            format=FormatInfo(filename="portrait.mp4", format_name="mp4", duration=10.0),
+            video_streams=(video,),
+        )
+
+        MainWindow._on_probe_success(mock_win, target, 1, info)
+        mock_win.res_widget.set_source_resolution.assert_called_once_with(1080, 1920)

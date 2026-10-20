@@ -320,7 +320,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         self.extract_norm_switch = Adw.SwitchRow(
             title="Normalize Loudness",
-            subtitle="EBU R128 two-pass loudness normalization (loudnorm)",
+            subtitle="EBU R128 loudness normalization (loudnorm)",
             active=False,
         )
         adjust_group.add(self.extract_norm_switch)
@@ -463,7 +463,8 @@ class MainWindow(Adw.ApplicationWindow):
 
         if media_info.primary_video:
             pv = media_info.primary_video
-            self.res_widget.set_source_resolution(pv.width, pv.height)
+            eff_w, eff_h = pv.effective_dimensions
+            self.res_widget.set_source_resolution(eff_w, eff_h)
 
         self.audio_widget.set_has_audio(media_info.has_audio)
         self._update_default_output_paths()

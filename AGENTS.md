@@ -18,7 +18,7 @@ nautilus/           ──> launcher.sh / installer.py (installs entry point, en
 
 ## Key Directories
 
-- `src/media_toolbox/core/` — headless engine: `models.py` (frozen dataclasses, `MediaToolboxError` hierarchy), `jobs.py` (transactional execution and publication), `validation.py` (options/preset verification), `probe.py`, `bitrate.py` (speed-aware decimal MB two-pass math), `filtergraph.py` (orientation-agnostic crop, aspect pad, atempo chaining), `presets.py` (codec registry + aliases), `builder.py`, `runner.py` (subprocess isolation, progress parsing).
+- `src/media_toolbox/core/` — headless engine: `models.py` (frozen dataclasses, `MediaToolboxError` hierarchy), `jobs.py` (transactional execution and publication), `validation.py` (options/preset verification), `probe.py`, `bitrate.py` (speed-aware decimal MB two-pass math), `filtergraph.py` (orientation-agnostic crop, aspect pad, atempo chaining), `presets.py` (codec registry + aliases), `formatters.py`, `builder.py`, `runner.py` (subprocess isolation, progress parsing).
 - `src/media_toolbox/ui/` — `app.py` (`MediaToolboxApp`), `window.py` (async probing), `forms.py` (pure decoupled form logic), `widgets.py` (monotonic progress).
 - `src/media_toolbox/nautilus/` — `installer.py` (stdlib-only, bakes interpreter), `extension.py` (context-menu provider, python-nautilus mock fallbacks), `launcher.sh`.
 - `tests/` — flat dir, one file per module, plus `test_integration_media.py` for real FFmpeg execution.

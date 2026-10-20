@@ -24,6 +24,15 @@ from typing import Any, Callable, Optional, Sequence
 
 from media_toolbox import __version__
 from media_toolbox.core.builder import build_ffmpeg_commands
+from media_toolbox.core.formatters import (
+    format_aspect_ratio,
+    format_bitrate,
+    format_channels,
+    format_decimal_size,
+    format_duration,
+    format_file_size,
+    format_fps,
+)
 from media_toolbox.core.jobs import JobConfig, run_job, validate_job_paths
 from media_toolbox.core.models import (
     DestinationExistsError,
@@ -91,73 +100,6 @@ def parse_scale_arg(scale_str: Optional[str]) -> Optional[tuple[int, int]]:
         if "Scale dimensions" in str(e) or "Invalid scale format" in str(e):
             raise
         raise ValueError(f"Invalid non-integer scale dimensions in '{scale_str}'") from e
-
-
-def format_duration(seconds: Optional[float]) -> str:
-    """Format duration in seconds as HH:MM:SS.ff, or 'N/A' if unknown."""
-    if seconds is None or seconds < 0:
-        return "N/A"
-    hours = int(seconds // 3600)
-    rem = seconds % 3600
-    mins = int(rem // 60)
-    secs = rem % 60
-    return f"{hours:02d}:{mins:02d}:{secs:05.2f}"
-
-
-def format_file_size(size_bytes: Optional[int]) -> str:
-    """Format byte size into scaled units (B, KB, MB, GB, TB) with exact byte count."""
-    if size_bytes is None or size_bytes < 0:
-        return "N/A"
-    units = ["B", "KB", "MB", "GB", "TB"]
-    val = float(size_bytes)
-    idx = 0
-    while val >= 1024.0 and idx < len(units) - 1:
-        val /= 1024.0
-        idx += 1
-    if idx == 0:
-        return f"{int(val)} B"
-    return f"{val:.2f} {units[idx]} ({size_bytes:,} bytes)"
-
-
-def format_bitrate(bps: Optional[int]) -> str:
-    """Format bitrate in bps to kbps (and Mbps if >= 1,000,000 bps)."""
-    if bps is None or bps <= 0:
-        return "N/A"
-    kbps = round(bps / 1000)
-    if bps >= 1_000_000:
-        return f"{kbps:,} kbps ({bps / 1_000_000:.2f} Mbps)"
-    return f"{kbps:,} kbps"
-
-
-def format_aspect_ratio(width: int, height: int) -> str:
-    """Calculate and format aspect ratio (e.g. '16:9 (1.78:1)')."""
-    if width <= 0 or height <= 0:
-        return "N/A"
-    g = math.gcd(width, height)
-    rw, rh = width // g, height // g
-    ratio = width / height
-    if rw <= 32 and rh <= 32:
-        return f"{rw}:{rh} ({ratio:.2f}:1)"
-    return f"{ratio:.2f}:1"
-
-
-def format_fps(fps: Optional[float], is_attached_pic: bool = False) -> str:
-    """Format frame rate in fps, handling still pictures and fractional fps."""
-    if is_attached_pic:
-        return "N/A (still picture)"
-    if fps is None or fps <= 0:
-        return "N/A"
-    if fps.is_integer():
-        return f"{int(fps)} fps"
-    return f"{fps:.2f} fps"
-
-
-def format_channels(layout: Optional[str], channels: int) -> str:
-    """Format channel count and layout with proper pluralization."""
-    ch_word = "channel" if channels == 1 else "channels"
-    if layout:
-        return f"{layout} ({channels} {ch_word})"
-    return f"{channels} {ch_word}"
 
 
 def should_colorize(stream: Any = sys.stdout) -> bool:

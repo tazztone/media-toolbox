@@ -28,7 +28,7 @@ from media_toolbox.core.presets import (
     is_audio_preset,
     is_video_preset,
 )
-from media_toolbox.cli import (
+from media_toolbox.core.formatters import (
     format_bitrate,
     format_channels,
     format_duration,
@@ -270,7 +270,7 @@ class AudioOptionsWidget(Adw.PreferencesGroup):
 
         self.norm_switch = Adw.SwitchRow(
             title="Normalize Loudness",
-            subtitle="EBU R128 two-pass loudness normalization (loudnorm)",
+            subtitle="EBU R128 loudness normalization (loudnorm)",
             active=False,
         )
         box.append(self.norm_switch)

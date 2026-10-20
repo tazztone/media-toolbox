@@ -22,7 +22,11 @@
 
 ## Test Architecture
 - Test runner: `.venv/bin/pytest tests/`
-- Pass/fail semantics: 100% exit code 0, 0 failures, 0 regressions against existing suite (524 tests passing)
+- Marker filtering:
+  - Headless unit & CLI suite: `.venv/bin/pytest -m "not desktop and not integration"`
+  - Desktop GUI & Nautilus suite: `.venv/bin/pytest -m "desktop"`
+  - Real FFmpeg integration suite: `.venv/bin/pytest -m "integration"`
+- Pass/fail semantics: 100% exit code 0, 0 failures, 0 regressions across entire suite (553+ tests passing)
 - Test directory: `tests/`
 - Real-media integration: `tests/test_integration_media.py` (real FFmpeg execution)
 - AST headless import verification in `tests/test_headless_ast.py`
