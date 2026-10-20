@@ -25,20 +25,15 @@ from typing import Any, Callable, Optional, Sequence
 from media_toolbox import __version__
 from media_toolbox.core.builder import build_ffmpeg_commands
 from media_toolbox.core.models import (
-    AudioStream,
     EncodeOptions,
-    FormatInfo,
     MediaInfo,
-    MediaToolboxError,
     ProbeError,
     ProgressEvent,
-    VideoStream,
 )
 from media_toolbox.core.probe import probe_media
 from media_toolbox.core.runner import (
     RunnerCancelledError,
     RunnerError,
-    run_ffmpeg,
     run_ffmpeg_pipeline,
 )
 
@@ -381,6 +376,11 @@ def handle_inspect(args: argparse.Namespace) -> int:
 
 def handle_transcode(args: argparse.Namespace) -> int:
     """Handle 'transcode' subcommand."""
+    output_path = args.output or args.output_opt
+    if not output_path:
+        sys.stderr.write("Error: Output path is required (pass positional argument or via -o/--output)\n")
+        return 2
+
     if args.speed is not None and args.speed <= 0:
         sys.stderr.write(f"Error: Speed multiplier must be positive, got {args.speed}\n")
         return 2
@@ -419,7 +419,7 @@ def handle_transcode(args: argparse.Namespace) -> int:
     try:
         cmds = build_ffmpeg_commands(
             str(args.input),
-            str(args.output),
+            str(output_path),
             options,
             media_info=media_info,
             pass_logfile=args.pass_logfile,
@@ -451,7 +451,7 @@ def handle_transcode(args: argparse.Namespace) -> int:
             cancel_event=cancel_event,
         )
         if not args.quiet:
-            sys.stdout.write(f"✓ Transcoding complete: {args.output}\n")
+            sys.stdout.write(f"✓ Transcoding complete: {output_path}\n")
         return 0
     except RunnerCancelledError:
         sys.stderr.write("Operation cancelled by user.\n")
@@ -469,6 +469,11 @@ def handle_transcode(args: argparse.Namespace) -> int:
 
 def handle_extract_audio(args: argparse.Namespace) -> int:
     """Handle 'extract-audio' subcommand."""
+    output_path = args.output or args.output_opt
+    if not output_path:
+        sys.stderr.write("Error: Output path is required (pass positional argument or via -o/--output)\n")
+        return 2
+
     if args.speed is not None and args.speed <= 0:
         sys.stderr.write(f"Error: Speed multiplier must be positive, got {args.speed}\n")
         return 2
@@ -493,7 +498,7 @@ def handle_extract_audio(args: argparse.Namespace) -> int:
     try:
         cmds = build_ffmpeg_commands(
             str(args.input),
-            str(args.output),
+            str(output_path),
             options,
             media_info=media_info,
             include_progress=True,
@@ -524,7 +529,7 @@ def handle_extract_audio(args: argparse.Namespace) -> int:
             cancel_event=cancel_event,
         )
         if not args.quiet:
-            sys.stdout.write(f"✓ Audio extraction complete: {args.output}\n")
+            sys.stdout.write(f"✓ Audio extraction complete: {output_path}\n")
         return 0
     except RunnerCancelledError:
         sys.stderr.write("Operation cancelled by user.\n")
@@ -690,10 +695,18 @@ def build_parser() -> argparse.ArgumentParser:
     # Subcommand: transcode
     trans_parser = subparsers.add_parser("transcode", help="Transcode video using presets or custom parameters")
     trans_parser.add_argument("input", help="Source media file")
-    trans_parser.add_argument("output", help="Destination file")
+    trans_parser.add_argument("output", nargs="?", default=None, help="Destination file (or specify via -o/--output)")
+    trans_parser.add_argument("-o", "--output", dest="output_opt", default=None, help="Destination file")
     trans_parser.add_argument("--preset", default=None, help="Codec preset (h264, h265, av1, vp9, gif, prores)")
     trans_parser.add_argument("--crf", type=int, default=None, help="Constant Rate Factor quality (0-51)")
-    trans_parser.add_argument("--target-size-mb", type=float, default=None, help="Target file size in MB for two-pass encoding")
+    trans_parser.add_argument(
+        "--target-size-mb",
+        "--target-mb",
+        type=float,
+        default=None,
+        dest="target_size_mb",
+        help="Target file size in MB for two-pass encoding",
+    )
     trans_parser.add_argument("--two-pass", action="store_true", help="Force two-pass bitrate targeting mode")
     trans_parser.add_argument("--speed", type=float, default=None, help="Playback speed multiplier (e.g. 0.5, 1.5, 2.0)")
     trans_parser.add_argument("--scale", default=None, help="Output resolution (e.g. 1920x1080, 1280:-2, -2:720)")
@@ -709,7 +722,8 @@ def build_parser() -> argparse.ArgumentParser:
     # Subcommand: extract-audio
     audio_parser = subparsers.add_parser("extract-audio", help="Extract audio track to standalone file")
     audio_parser.add_argument("input", help="Source media file")
-    audio_parser.add_argument("output", help="Destination audio file")
+    audio_parser.add_argument("output", nargs="?", default=None, help="Destination audio file (or specify via -o/--output)")
+    audio_parser.add_argument("-o", "--output", dest="output_opt", default=None, help="Destination audio file")
     audio_parser.add_argument("--codec", default=None, help="Audio codec (e.g. mp3, aac, opus, flac)")
     audio_parser.add_argument("--bitrate", type=int, default=192, help="Audio bitrate in kbps (default: 192)")
     audio_parser.add_argument("--speed", type=float, default=None, help="Audio playback speed multiplier")
@@ -793,8 +807,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.subcommand == "inspect":
         return handle_inspect(args)
     elif args.subcommand == "transcode":
+        if not (args.output or args.output_opt):
+            parser.error("the following arguments are required: output (positional or -o/--output)")
         return handle_transcode(args)
     elif args.subcommand == "extract-audio":
+        if not (args.output or args.output_opt):
+            parser.error("the following arguments are required: output (positional or -o/--output)")
         return handle_extract_audio(args)
     elif args.subcommand == "install-nautilus":
         return handle_install_nautilus(args)

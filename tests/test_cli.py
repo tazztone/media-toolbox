@@ -642,6 +642,36 @@ class TestCliTranscodeCommand:
         exit_code = cli.main(["transcode", "in.mp4", "out.mp4", "--speed", "-1.5"])
         assert exit_code != 0
 
+    @patch("media_toolbox.cli.run_ffmpeg_pipeline")
+    @patch("media_toolbox.cli.build_ffmpeg_commands")
+    @patch("media_toolbox.cli.probe_media")
+    def test_transcode_output_flag_and_target_mb_alias(
+        self,
+        mock_probe: MagicMock,
+        mock_builder: MagicMock,
+        mock_runner: MagicMock,
+        mock_standard_video_info: MediaInfo,
+    ) -> None:
+        """Verify -o output flag, --target-mb alias, and discord-h264 preset."""
+        mock_probe.return_value = mock_standard_video_info
+        mock_builder.return_value = [["ffmpeg", "-i", "in.mp4", "out.mp4"]]
+
+        exit_code = cli.main([
+            "transcode",
+            "in.mp4",
+            "-o",
+            "flag_out.mp4",
+            "--target-mb",
+            "25.0",
+            "--preset",
+            "discord-h264",
+        ])
+        assert exit_code == 0
+        assert mock_builder.call_args[0][1] == "flag_out.mp4"
+        opts: EncodeOptions = mock_builder.call_args[0][2]
+        assert opts.target_size_mb == 25.0
+        assert opts.preset == "discord-h264"
+
 
 # ---------------------------------------------------------------------------
 # Test Suite 4: Mock Execution Tests for `extract-audio`
@@ -705,6 +735,24 @@ class TestCliExtractAudioCommand:
         assert opts.audio_bitrate_kbps == 160
         assert opts.speed == 1.25
         assert opts.normalize_audio is True
+
+    @patch("media_toolbox.cli.run_ffmpeg_pipeline")
+    @patch("media_toolbox.cli.build_ffmpeg_commands")
+    @patch("media_toolbox.cli.probe_media")
+    def test_extract_audio_output_flag(
+        self,
+        mock_probe: MagicMock,
+        mock_builder: MagicMock,
+        mock_runner: MagicMock,
+        mock_standard_video_info: MediaInfo,
+    ) -> None:
+        """extract-audio supports -o / --output flag."""
+        mock_probe.return_value = mock_standard_video_info
+        mock_builder.return_value = [["ffmpeg", "-i", "in.mp4", "-vn", "flag_out.mp3"]]
+
+        exit_code = cli.main(["extract-audio", "in.mp4", "-o", "flag_out.mp3"])
+        assert exit_code == 0
+        assert mock_builder.call_args[0][1] == "flag_out.mp3"
 
     @patch("media_toolbox.cli.probe_media")
     def test_extract_audio_missing_input_file(

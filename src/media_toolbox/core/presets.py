@@ -13,13 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Sequence
-
-
-class PresetCategory(str, Enum):
-    """Categorizes codec presets into video or audio."""
-    VIDEO = "video"
-    AUDIO = "audio"
+from typing import Optional
 
 
 class PresetName(str, Enum):
@@ -434,6 +428,8 @@ _PRESET_ALIASES: dict[str, str] = {
     "prores": "prores",
     "prores_ks": "prores",
     "apple_prores": "prores",
+    "discord": "h264",
+    "discord-h264": "h264",
     # Audio aliases
     "mp3": "mp3",
     "libmp3lame": "mp3",
