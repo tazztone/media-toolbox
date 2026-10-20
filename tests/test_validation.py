@@ -8,8 +8,17 @@ from pathlib import Path
 import pytest
 
 from media_toolbox.core.builder import build_ffmpeg_commands
-from media_toolbox.core.models import EncodeOptions, MediaInfo
-from media_toolbox.core.validation import validate_encode_options
+from media_toolbox.core.models import (
+    AudioStream,
+    EncodeOptions,
+    FormatInfo,
+    MediaInfo,
+    VideoStream,
+)
+from media_toolbox.core.validation import (
+    resolve_job_spec,
+    validate_encode_options,
+)
 
 
 class TestValidationAndPresetNormalization:
@@ -122,3 +131,48 @@ class TestValidationAndPresetNormalization:
         opts_gif = EncodeOptions(preset="gif")
         with pytest.raises(ValueError, match="[Ii]ncompatible.*extension"):
             validate_encode_options(opts_gif, output_path="output.mp4")
+
+    def test_audio_extraction_from_silent_media_rejected(self) -> None:
+        """Extracting audio from silent media fails before execution."""
+        silent_info = MediaInfo(
+            format=FormatInfo(filename="silent.mp4", format_name="mp4", duration=10.0),
+            video_streams=(VideoStream(index=0, codec_name="h264", width=1280, height=720),),
+            audio_streams=(),
+        )
+        opts = EncodeOptions(extract_audio=True)
+        with pytest.raises(ValueError, match="no audio streams"):
+            validate_encode_options(opts, media_info=silent_info)
+
+    def test_video_transcode_from_audio_only_media_rejected(self) -> None:
+        """Transcoding video from audio-only media fails before execution."""
+        audio_info = MediaInfo(
+            format=FormatInfo(filename="audio.mp3", format_name="mp3", duration=60.0),
+            video_streams=(),
+            audio_streams=(AudioStream(index=0, codec_name="mp3", channels=2, sample_rate=44100),),
+        )
+        opts = EncodeOptions(preset="h264")
+        with pytest.raises(ValueError, match="no video stream"):
+            validate_encode_options(opts, media_info=audio_info)
+
+    def test_crf_checked_on_default_codec_and_codec_flag(self) -> None:
+        """CRF bounds check applies even when preset flag is not explicitly passed."""
+        # Default codec is libx264 (range 0-51)
+        opts_default = EncodeOptions(crf=55)
+        with pytest.raises(ValueError, match="CRF.*range"):
+            validate_encode_options(opts_default)
+
+        # Explicit video_codec='libx265'
+        opts_hevc = EncodeOptions(video_codec="libx265", crf=60)
+        with pytest.raises(ValueError, match="CRF.*range"):
+            validate_encode_options(opts_hevc)
+
+    def test_audio_extraction_rejects_target_size_and_two_pass(self) -> None:
+        """Audio extraction rejects target size or two-pass video settings."""
+        opts_target = EncodeOptions(extract_audio=True, target_size_mb=10.0)
+        with pytest.raises(ValueError, match="Target size.*not supported.*audio"):
+            validate_encode_options(opts_target)
+
+        opts_2pass = EncodeOptions(extract_audio=True, two_pass=True)
+        with pytest.raises(ValueError, match="Two-pass.*not supported.*audio"):
+            validate_encode_options(opts_2pass)
+

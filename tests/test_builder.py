@@ -681,3 +681,58 @@ def test_stream_mapping_custom_override() -> None:
     assert maps == ["0:v:1", "0:a:2"]
 
 
+def test_cover_art_fixture_selects_main_video_stream() -> None:
+    """Cover art (attached picture at stream 0) does not get mapped as the primary video."""
+    cover_art = VideoStream(index=0, codec_name="mjpeg", width=500, height=500, is_attached_pic=True)
+    real_video = VideoStream(index=1, codec_name="h264", width=1920, height=1080, duration=30.0, is_attached_pic=False)
+    audio = AudioStream(index=2, codec_name="aac", channels=2, sample_rate=48000, duration=30.0)
+    info = MediaInfo(
+        format=FormatInfo(filename="album.mp4", format_name="mp4", duration=30.0),
+        video_streams=(cover_art, real_video),
+        audio_streams=(audio,),
+    )
+
+    options = EncodeOptions(preset="h264")
+    cmd = build_ffmpeg_commands("in.mp4", "out.mp4", options, media_info=info)[0]
+    assert "-map" in cmd
+    assert cmd[cmd.index("-map") + 1] == "0:1"
+
+    # GIF palettegen should also reference [0:1] instead of [0:v]
+    gif_options = EncodeOptions(preset="gif")
+    gif_cmd = build_ffmpeg_commands("in.mp4", "out.gif", gif_options, media_info=info)[0]
+    fc_idx = gif_cmd.index("-filter_complex")
+    assert "[0:1]" in gif_cmd[fc_idx + 1]
+
+
+def test_custom_stream_maps_forwarded_to_pass_one() -> None:
+    """Custom -map arguments are forwarded into two-pass Pass 1."""
+    options = EncodeOptions(
+        preset="h264",
+        two_pass=True,
+        target_size_mb=25.0,
+        extra_args=("-map", "0:v:2"),
+    )
+    cmds = build_ffmpeg_commands(
+        "in.mp4",
+        "out.mp4",
+        options,
+        media_info=MediaInfo(
+            format=FormatInfo(filename="in.mp4", format_name="mp4", duration=60.0),
+            video_streams=(VideoStream(index=0, codec_name="h264", width=1920, height=1080),),
+        ),
+    )
+    pass1, pass2 = cmds[0], cmds[1]
+    assert "-map" in pass1 and pass1[pass1.index("-map") + 1] == "0:v:2"
+    assert "-map" in pass2 and pass2[pass2.index("-map") + 1] == "0:v:2"
+
+
+def test_map_metadata_does_not_disable_default_stream_mapping() -> None:
+    """Option -map_metadata 0 does not suppress default stream selection."""
+    options = EncodeOptions(preset="h264", extra_args=("-map_metadata", "0"))
+    cmd = build_ffmpeg_commands("in.mp4", "out.mp4", options)[0]
+    assert "-map" in cmd
+    assert cmd[cmd.index("-map") + 1] == "0:v:0"
+    assert "-map_metadata" in cmd
+
+
+

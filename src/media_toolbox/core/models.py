@@ -286,3 +286,25 @@ class EncodeOptions:
     def __post_init__(self) -> None:
         if not isinstance(self.extra_args, tuple):
             object.__setattr__(self, "extra_args", tuple(self.extra_args))
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedJobSpec:
+    """
+    Effective encoding specification resolved from user options, codec presets,
+    and probed media stream layout.
+    """
+
+    operation: str  # 'transcode' | 'extract_audio'
+    rate_mode: str  # 'crf' | 'target_size' | 'prores' | 'gif' | 'extract_audio'
+    video_codec: Optional[str] = None
+    audio_codec: Optional[str] = None
+    video_preset_name: Optional[str] = None
+    audio_preset_name: Optional[str] = None
+    video_stream_index: Optional[int] = None
+    audio_stream_index: Optional[int] = None
+    container_extension: Optional[str] = None
+    crf: Optional[int] = None
+    target_size_mb: Optional[float] = None
+    two_pass: bool = False
+

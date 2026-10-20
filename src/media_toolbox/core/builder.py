@@ -139,10 +139,62 @@ def resolve_audio_codec(
     return "aac"
 
 
+def has_stream_map(extra_args: tuple[str, ...]) -> bool:
+    """Return True if extra_args contains stream mapping arguments (-map)."""
+    i = 0
+    while i < len(extra_args):
+        arg = extra_args[i]
+        if arg == "-map":
+            return True
+        if arg.startswith("-map:") or (
+            arg.startswith("-map")
+            and not arg.startswith(("-map_metadata", "-map_chapters"))
+        ):
+            return True
+        i += 1
+    return False
+
+
+def extract_user_stream_maps(extra_args: tuple[str, ...]) -> list[str]:
+    """Extract stream mapping arguments from extra_args for forwarding to pass 1."""
+    maps: list[str] = []
+    i = 0
+    while i < len(extra_args):
+        arg = extra_args[i]
+        if arg == "-map":
+            if i + 1 < len(extra_args):
+                maps.extend(["-map", extra_args[i + 1]])
+                i += 2
+                continue
+        elif arg.startswith("-map:") or (
+            arg.startswith("-map")
+            and not arg.startswith(("-map_metadata", "-map_chapters"))
+        ):
+            maps.append(arg)
+        i += 1
+    return maps
+
+
+def resolve_stream_mappings(
+    media_info: Optional[MediaInfo],
+) -> tuple[str, str]:
+    """
+    Resolve deterministic video and audio stream mapping identifiers.
+    Prioritizes primary non-attached-picture video when cover art is present.
+    """
+    if media_info and media_info.attached_pics and media_info.primary_video:
+        v_map = f"0:{media_info.primary_video.index}"
+    else:
+        v_map = "0:v:0"
+    a_map = "0:a:0?"
+    return v_map, a_map
+
+
 def build_audio_extract_command(
     input_path: str,
     output_path: str,
     options: EncodeOptions,
+    media_info: Optional[MediaInfo] = None,
     include_progress: bool = False,
 ) -> list[str]:
     """
@@ -152,9 +204,10 @@ def build_audio_extract_command(
     if include_progress:
         cmd.extend(["-progress", "pipe:1", "-nostats"])
 
-    has_user_map = any(arg == "-map" or arg.startswith("-map") for arg in options.extra_args)
+    has_user_map = has_stream_map(options.extra_args)
     if not has_user_map:
-        cmd.extend(["-i", input_path, "-vn", "-map", "0:a:0?"])
+        _, a_map = resolve_stream_mappings(media_info)
+        cmd.extend(["-i", input_path, "-vn", "-map", a_map])
     else:
         cmd.extend(["-i", input_path, "-vn"])
 
@@ -189,6 +242,7 @@ def build_gif_command(
     input_path: str,
     output_path: str,
     options: EncodeOptions,
+    media_info: Optional[MediaInfo] = None,
     include_progress: bool = False,
 ) -> list[str]:
     """
@@ -208,10 +262,16 @@ def build_gif_command(
         fps=options.fps,
     )
 
+    v_label = (
+        f"0:{media_info.primary_video.index}"
+        if (media_info and media_info.attached_pics and media_info.primary_video)
+        else "0:v"
+    )
+
     if vf:
-        filter_spec = f"[0:v]{','.join(vf)},split[a][b];[a]palettegen[p];[b][p]paletteuse"
+        filter_spec = f"[{v_label}]{','.join(vf)},split[a][b];[a]palettegen[p];[b][p]paletteuse"
     else:
-        filter_spec = "[0:v]split[a][b];[a]palettegen[p];[b][p]paletteuse"
+        filter_spec = f"[{v_label}]split[a][b];[a]palettegen[p];[b][p]paletteuse"
 
     cmd.extend(["-filter_complex", filter_spec, "-an"])
 
@@ -272,7 +332,8 @@ def build_two_pass_commands(
 
     v_preset = resolve_video_preset(options)
     speed_preset = resolve_speed_preset(options)
-    has_user_map = any(arg == "-map" or arg.startswith("-map") for arg in options.extra_args)
+    v_map, a_map = resolve_stream_mappings(media_info)
+    has_user_map = has_stream_map(options.extra_args)
 
     # Pass 1 Command
     pass1_cmd: list[str] = ["ffmpeg", "-y", "-nostdin"]
@@ -280,7 +341,9 @@ def build_two_pass_commands(
         pass1_cmd.extend(["-progress", "pipe:1", "-nostats"])
     pass1_cmd.extend(["-i", input_path])
     if not has_user_map:
-        pass1_cmd.extend(["-map", "0:v:0"])
+        pass1_cmd.extend(["-map", v_map])
+    else:
+        pass1_cmd.extend(extract_user_stream_maps(options.extra_args))
     pass1_cmd.extend(vf_args)
 
     if v_preset is not None:
@@ -318,9 +381,9 @@ def build_two_pass_commands(
         pass2_cmd.extend(["-progress", "pipe:1", "-nostats"])
     pass2_cmd.extend(["-i", input_path])
     if not has_user_map:
-        pass2_cmd.extend(["-map", "0:v:0"])
+        pass2_cmd.extend(["-map", v_map])
         if not options.mute_audio and (media_info is None or media_info.has_audio):
-            pass2_cmd.extend(["-map", "0:a:0?"])
+            pass2_cmd.extend(["-map", a_map])
     pass2_cmd.extend(vf_args)
 
     if v_preset is not None:
@@ -391,11 +454,12 @@ def build_single_pass_command(
         cmd.extend(["-progress", "pipe:1", "-nostats"])
 
     cmd.extend(["-i", input_path])
-    has_user_map = any(arg == "-map" or arg.startswith("-map") for arg in options.extra_args)
+    has_user_map = has_stream_map(options.extra_args)
     if not has_user_map:
-        cmd.extend(["-map", "0:v:0"])
+        v_map, a_map = resolve_stream_mappings(media_info)
+        cmd.extend(["-map", v_map])
         if not options.mute_audio and (media_info is None or media_info.has_audio):
-            cmd.extend(["-map", "0:a:0?"])
+            cmd.extend(["-map", a_map])
 
     # Video filters
     cmd.extend(
@@ -481,11 +545,27 @@ def build_ffmpeg_commands(
         or is_audio_preset(preset_lower)
         or (not is_video_preset(preset_lower) and is_audio_preset(codec_lower))
     ):
-        return [build_audio_extract_command(input_str, output_str, options, include_progress=include_progress)]
+        return [
+            build_audio_extract_command(
+                input_str,
+                output_str,
+                options,
+                media_info=media_info,
+                include_progress=include_progress,
+            )
+        ]
 
     # Mode 2: Animated GIF
     if preset_lower == "gif" or (not is_video_preset(preset_lower) and codec_lower == "gif"):
-        return [build_gif_command(input_str, output_str, options, include_progress=include_progress)]
+        return [
+            build_gif_command(
+                input_str,
+                output_str,
+                options,
+                media_info=media_info,
+                include_progress=include_progress,
+            )
+        ]
 
     # Mode 3: Two-Pass Bitrate Targeting
     if options.two_pass or options.target_size_mb is not None:
