@@ -14,7 +14,6 @@ INVARIANT: Strict zero GUI imports (gi, Gtk, Adw, Nautilus, tkinter, PyQt, PySid
 
 from __future__ import annotations
 
-import collections
 import errno
 import math
 import os

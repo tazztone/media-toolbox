@@ -52,7 +52,7 @@ class VideoStream:
     def effective_dimensions(self) -> tuple[int, int]:
         """Dimensions after compensating for 90 or 270 degree rotation."""
         normalized_rot = (self.rotation % 360 + 360) % 360
-        if normalized_rot in (90, 270) or abs(self.rotation) in (90, 270):
+        if normalized_rot in (90, 270):
             return (self.height, self.width)
         return (self.width, self.height)
 

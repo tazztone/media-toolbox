@@ -40,14 +40,8 @@ def main() -> int:
                 f"Graphical display detected, but desktop UI could not be loaded ({err}).\n"
                 "Falling back to CLI interface.\n\n"
             )
-            from media_toolbox.cli import main as cli_main
 
-            try:
-                return cli_main(["--help"])
-            except SystemExit as exc:
-                return exc.code if isinstance(exc.code, int) else 0
-
-    # Path 3: Headless environment with no arguments -> display CLI help
+    # Path 3: Fallback / headless environment with no arguments -> display CLI help
     from media_toolbox.cli import main as cli_main
 
     try:

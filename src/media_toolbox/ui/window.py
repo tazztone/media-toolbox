@@ -14,7 +14,6 @@ Features:
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 import threading
 from typing import Any, Optional
@@ -27,6 +26,7 @@ from gi.repository import Adw, Gio, GLib, Gtk
 
 from media_toolbox.core.builder import build_ffmpeg_commands
 from media_toolbox.core.models import EncodeOptions, MediaInfo, ProgressEvent
+from media_toolbox.core.presets import list_audio_presets, list_video_presets
 from media_toolbox.core.probe import probe_media
 from media_toolbox.core.runner import (
     RunnerCancelledError,
@@ -49,21 +49,8 @@ class MainWindow(Adw.ApplicationWindow):
     Main Libadwaita application window.
     """
 
-    VIDEO_PRESETS = [
-        ("H.264 (Universal / Web)", "h264"),
-        ("H.265 (High Efficiency)", "h265"),
-        ("AV1 (Next-Gen Open)", "av1"),
-        ("VP9 (WebM)", "vp9"),
-        ("Apple ProRes (Editing)", "prores"),
-        ("Animated GIF", "gif"),
-    ]
-
-    AUDIO_PRESETS = [
-        ("MP3 (Universal)", "mp3"),
-        ("AAC (High Quality)", "aac"),
-        ("Opus (Low Bitrate Speech/Music)", "opus"),
-        ("FLAC (Lossless)", "flac"),
-    ]
+    VIDEO_PRESETS = [(p.display_name, p.name) for p in list_video_presets()]
+    AUDIO_PRESETS = [(p.display_name, p.name) for p in list_audio_presets()]
 
     CROP_PRESETS = [
         ("None (Original)", None),

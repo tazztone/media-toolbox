@@ -21,7 +21,9 @@ from typing import Optional
 from media_toolbox.core.bitrate import calculate_target_video_bitrate
 from media_toolbox.core.filtergraph import (
     build_audio_filter,
+    build_audio_filter_args,
     build_video_filter,
+    build_video_filter_args,
 )
 from media_toolbox.core.models import EncodeOptions, MediaInfo
 from media_toolbox.core.presets import (
@@ -152,13 +154,13 @@ def build_audio_extract_command(
     cmd.extend(["-i", input_path, "-vn"])
 
     # Audio filters
-    af = build_audio_filter(
-        speed=options.speed,
-        normalize_loudness=options.normalize_audio,
-        volume_boost_db=options.volume_boost_db,
+    cmd.extend(
+        build_audio_filter_args(
+            speed=options.speed,
+            normalize_loudness=options.normalize_audio,
+            volume_boost_db=options.volume_boost_db,
+        )
     )
-    if af:
-        cmd.extend(["-af", ",".join(af)])
 
     # Resolve audio preset / codec
     audio_preset = resolve_audio_preset(options)
@@ -254,7 +256,7 @@ def build_two_pass_commands(
 
     log_prefix = pass_logfile or os.path.join(tempfile.gettempdir(), f"ffmpeg2pass_{os.getpid()}")
 
-    vf = build_video_filter(
+    vf_args = build_video_filter_args(
         scale=options.scale,
         crop=options.crop,
         pad=options.pad,
@@ -270,9 +272,7 @@ def build_two_pass_commands(
     if include_progress:
         pass1_cmd.extend(["-progress", "pipe:1", "-nostats"])
     pass1_cmd.extend(["-i", input_path])
-
-    if vf:
-        pass1_cmd.extend(["-vf", ",".join(vf)])
+    pass1_cmd.extend(vf_args)
 
     if v_preset is not None:
         pass1_cmd.extend(
@@ -300,9 +300,7 @@ def build_two_pass_commands(
     if include_progress:
         pass2_cmd.extend(["-progress", "pipe:1", "-nostats"])
     pass2_cmd.extend(["-i", input_path])
-
-    if vf:
-        pass2_cmd.extend(["-vf", ",".join(vf)])
+    pass2_cmd.extend(vf_args)
 
     if v_preset is not None:
         pass2_cmd.extend(
@@ -327,19 +325,22 @@ def build_two_pass_commands(
     if options.mute_audio or not media_info.has_audio:
         pass2_cmd.append("-an")
     else:
-        af = build_audio_filter(
-            speed=options.speed,
-            normalize_loudness=options.normalize_audio,
-            volume_boost_db=options.volume_boost_db,
+        pass2_cmd.extend(
+            build_audio_filter_args(
+                speed=options.speed,
+                normalize_loudness=options.normalize_audio,
+                volume_boost_db=options.volume_boost_db,
+            )
         )
-        if af:
-            pass2_cmd.extend(["-af", ",".join(af)])
         a_codec = resolve_audio_codec(options, v_preset, output_path)
         pass2_cmd.extend(["-c:a", a_codec])
         if not a_codec.startswith("pcm_"):
             pass2_cmd.extend(["-b:a", f"{options.audio_bitrate_kbps}k"])
 
-    pass2_cmd.extend(get_container_faststart_args(output_path))
+    if v_preset is not None:
+        pass2_cmd.extend(v_preset.build_container_args(output_path))
+    else:
+        pass2_cmd.extend(get_container_faststart_args(output_path))
     pass2_cmd.extend(options.extra_args)
     pass2_cmd.append(output_path)
 
@@ -363,15 +364,15 @@ def build_single_pass_command(
     cmd.extend(["-i", input_path])
 
     # Video filters
-    vf = build_video_filter(
-        scale=options.scale,
-        crop=options.crop,
-        pad=options.pad,
-        speed=options.speed,
-        fps=options.fps,
+    cmd.extend(
+        build_video_filter_args(
+            scale=options.scale,
+            crop=options.crop,
+            pad=options.pad,
+            speed=options.speed,
+            fps=options.fps,
+        )
     )
-    if vf:
-        cmd.extend(["-vf", ",".join(vf)])
 
     # Video codec & quality
     v_preset = resolve_video_preset(options)
@@ -390,19 +391,22 @@ def build_single_pass_command(
     if options.mute_audio or (media_info is not None and not media_info.has_audio):
         cmd.append("-an")
     else:
-        af = build_audio_filter(
-            speed=options.speed,
-            normalize_loudness=options.normalize_audio,
-            volume_boost_db=options.volume_boost_db,
+        cmd.extend(
+            build_audio_filter_args(
+                speed=options.speed,
+                normalize_loudness=options.normalize_audio,
+                volume_boost_db=options.volume_boost_db,
+            )
         )
-        if af:
-            cmd.extend(["-af", ",".join(af)])
         a_codec = resolve_audio_codec(options, v_preset, output_path)
         cmd.extend(["-c:a", a_codec])
         if not a_codec.startswith("pcm_"):
             cmd.extend(["-b:a", f"{options.audio_bitrate_kbps}k"])
 
-    cmd.extend(get_container_faststart_args(output_path))
+    if v_preset is not None:
+        cmd.extend(v_preset.build_container_args(output_path))
+    else:
+        cmd.extend(get_container_faststart_args(output_path))
     cmd.extend(options.extra_args)
     cmd.append(output_path)
 

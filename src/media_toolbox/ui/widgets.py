@@ -12,15 +12,14 @@ Features:
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
-from typing import Any, Callable, Optional, Sequence
+from typing import Any, Callable, Optional
 
 import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, GLib, Gtk
+from gi.repository import Adw, Gtk
 
 from media_toolbox.core.models import EncodeOptions, MediaInfo, ProgressEvent
 from media_toolbox.core.presets import (
