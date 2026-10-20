@@ -61,6 +61,8 @@ def resolve_job_spec(
         if canon_acodec and canon_acodec in AUDIO_PRESETS:
             a_preset = AUDIO_PRESETS[canon_acodec]
 
+    ext = Path(output_path).suffix.lower().lstrip(".") if output_path else None
+
     # Effective codecs
     effective_vcodec = (
         v_preset.codec_name
@@ -78,7 +80,11 @@ def resolve_job_spec(
         else:
             effective_acodec = "mp3"
     else:
-        if options.audio_codec:
+        req_audio = options.audio_codec.strip().lower() if options.audio_codec else None
+        is_webm = ext == "webm" or (v_preset is not None and v_preset.name == "vp9")
+        if is_webm:
+            effective_acodec = "libvorbis" if req_audio in ("vorbis", "libvorbis") else "libopus"
+        elif options.audio_codec:
             effective_acodec = options.audio_codec
         elif v_preset and v_preset.default_audio_codec:
             effective_acodec = v_preset.default_audio_codec
@@ -100,8 +106,6 @@ def resolve_job_spec(
     # Stream indices
     video_idx = media_info.primary_video.index if (media_info and media_info.primary_video) else None
     audio_idx = media_info.primary_audio.index if (media_info and media_info.primary_audio) else None
-
-    ext = Path(output_path).suffix.lower().lstrip(".") if output_path else None
 
     return ResolvedJobSpec(
         operation=operation,

@@ -25,118 +25,26 @@ from media_toolbox.core.filtergraph import (
     build_video_filter,
     build_video_filter_args,
 )
-from media_toolbox.core.models import EncodeOptions, MediaInfo
+from media_toolbox.core.models import EncodeOptions, MediaInfo, ResolvedJobSpec
 from media_toolbox.core.presets import (
-    AudioPreset,
-    VideoPreset,
+    AUDIO_PRESETS,
+    VIDEO_PRESETS,
     get_audio_preset,
     get_container_faststart_args,
-    get_video_preset,
     is_audio_preset,
     is_speed_preset,
-    is_video_preset,
 )
 from media_toolbox.core.probe import probe_media
-from media_toolbox.core.validation import normalize_preset_name, validate_encode_options
-
-
-def resolve_video_preset(options: EncodeOptions) -> Optional[VideoPreset]:
-    """
-    Resolve target VideoPreset from EncodeOptions.
-
-    Prioritizes options.preset when it matches a known video preset over
-    options.video_codec (which defaults to 'libx264').
-    """
-    preset_lower = options.preset.strip().lower() if options.preset else ""
-    if is_video_preset(preset_lower):
-        return get_video_preset(preset_lower)
-
-    codec_lower = options.video_codec.strip().lower() if options.video_codec else ""
-    if is_video_preset(codec_lower):
-        return get_video_preset(codec_lower)
-
-    return None
-
-
-def resolve_audio_preset(options: EncodeOptions) -> Optional[AudioPreset]:
-    """
-    Resolve target AudioPreset from EncodeOptions.
-
-    Prioritizes options.preset when it matches a known audio preset over
-    options.video_codec and options.audio_codec.
-    """
-    preset_lower = options.preset.strip().lower() if options.preset else ""
-    if is_audio_preset(preset_lower):
-        return get_audio_preset(preset_lower)
-
-    if not is_video_preset(preset_lower):
-        codec_lower = options.video_codec.strip().lower() if options.video_codec else ""
-        if is_audio_preset(codec_lower):
-            return get_audio_preset(codec_lower)
-
-    if options.audio_codec and is_audio_preset(options.audio_codec):
-        return get_audio_preset(options.audio_codec)
-
-    return None
+from media_toolbox.core.validation import resolve_job_spec, validate_encode_options
 
 
 def resolve_speed_preset(options: EncodeOptions) -> Optional[str]:
     """
     Resolve valid FFmpeg encoder speed preset from EncodeOptions.
-
-    Distinguishes format preset names ('h264', 'h265', etc.) from encoder speed
-    presets ('ultrafast', 'fast', 'medium', 'slow', etc.).
     Only returns recognized speed presets, or None.
     """
-    speed_opt = getattr(options, "speed_preset", None)
-    if speed_opt and is_speed_preset(speed_opt):
-        return speed_opt.strip().lower()
-
-    if options.preset and is_speed_preset(options.preset):
-        return options.preset.strip().lower()
-
-    return None
-
-
-def resolve_audio_codec(
-    options: EncodeOptions,
-    v_preset: Optional[VideoPreset],
-    output_path: str,
-) -> str:
-    """
-    Dynamically resolve the appropriate FFmpeg audio encoder codec.
-
-    Resolution rules:
-    1. If the output container is .webm or the video preset is VP9/WebM:
-       - Only Vorbis and Opus are valid in WebM.
-       - If user explicitly requested Vorbis ('vorbis', 'libvorbis'), resolves to 'libvorbis'.
-       - If user explicitly requested Opus ('opus', 'libopus'), resolves to 'libopus'.
-       - Otherwise (including None, default, or incompatible codecs like 'aac'),
-         resolves to 'libopus'.
-    2. If options.audio_codec was explicitly provided by the caller:
-       - Returns options.audio_codec as requested.
-    3. If options.audio_codec is None:
-       - Defers to v_preset.default_audio_codec if available
-         ('pcm_s16le' for ProRes, 'libopus' for AV1, 'aac' for H.264/H.265).
-    4. Ultimate fallback: 'aac'.
-    """
-    out_ext = Path(output_path).suffix.lower()
-    is_webm_container = out_ext == ".webm" or (v_preset is not None and v_preset.name == "vp9")
-
-    req_audio = options.audio_codec.strip().lower() if options.audio_codec else None
-
-    if is_webm_container:
-        if req_audio in ("vorbis", "libvorbis"):
-            return "libvorbis"
-        return "libopus"
-
-    if req_audio is not None:
-        return options.audio_codec
-
-    if v_preset is not None and v_preset.default_audio_codec:
-        return v_preset.default_audio_codec
-
-    return "aac"
+    sp = getattr(options, "speed_preset", None) or options.preset
+    return sp.strip().lower() if sp and is_speed_preset(sp) else None
 
 
 def has_stream_map(extra_args: tuple[str, ...]) -> bool:
@@ -196,10 +104,14 @@ def build_audio_extract_command(
     options: EncodeOptions,
     media_info: Optional[MediaInfo] = None,
     include_progress: bool = False,
+    spec: Optional[ResolvedJobSpec] = None,
 ) -> list[str]:
     """
     Construct FFmpeg command for audio extraction / transcoding.
     """
+    if spec is None:
+        spec = resolve_job_spec(options, media_info=media_info, output_path=output_path)
+
     cmd: list[str] = ["ffmpeg", "-y", "-nostdin"]
     if include_progress:
         cmd.extend(["-progress", "pipe:1", "-nostats"])
@@ -221,7 +133,7 @@ def build_audio_extract_command(
     )
 
     # Resolve audio preset / codec
-    audio_preset = resolve_audio_preset(options)
+    audio_preset = AUDIO_PRESETS.get(spec.audio_preset_name) if spec.audio_preset_name else None
     if audio_preset is None:
         out_ext = Path(output_path).suffix.lstrip(".").lower()
         if is_audio_preset(out_ext):
@@ -230,7 +142,7 @@ def build_audio_extract_command(
     if audio_preset is not None:
         cmd.extend(audio_preset.build_audio_args(bitrate_kbps=options.audio_bitrate_kbps, extract_audio=False))
     else:
-        codec = options.audio_codec or "aac"
+        codec = spec.audio_codec or options.audio_codec or "aac"
         cmd.extend(["-c:a", codec, "-b:a", f"{options.audio_bitrate_kbps}k"])
 
     cmd.extend(options.extra_args)
@@ -290,12 +202,16 @@ def build_two_pass_commands(
     media_info: Optional[MediaInfo] = None,
     pass_logfile: Optional[str] = None,
     include_progress: bool = False,
+    spec: Optional[ResolvedJobSpec] = None,
 ) -> list[list[str]]:
     """
     Construct two FFmpeg commands for two-pass bitrate targeting.
     Pass 1 writes statistics to null sink with audio disabled.
     Pass 2 encodes final output file with identical video filters.
     """
+    if spec is None:
+        spec = resolve_job_spec(options, media_info=media_info, output_path=output_path)
+
     if media_info is None:
         if os.path.exists(input_path):
             media_info = probe_media(input_path)
@@ -330,7 +246,7 @@ def build_two_pass_commands(
         fps=options.fps,
     )
 
-    v_preset = resolve_video_preset(options)
+    v_preset = VIDEO_PRESETS.get(spec.video_preset_name) if spec.video_preset_name else None
     speed_preset = resolve_speed_preset(options)
     v_map, a_map = resolve_stream_mappings(media_info)
     has_user_map = has_stream_map(options.extra_args)
@@ -356,11 +272,12 @@ def build_two_pass_commands(
             )
         )
     else:
+        v_codec = spec.video_codec or options.video_codec or "libx264"
         pass1_cmd.extend([
-            "-c:v", options.video_codec,
+            "-c:v", v_codec,
             "-b:v", f"{int(v_bitrate_kbps)}k",
         ])
-        if options.video_codec in ("libx265", "x265", "hevc"):
+        if v_codec in ("libx265", "x265", "hevc"):
             x265_opts = ["pass=1"]
             if log_prefix:
                 x265_opts.append(f"stats={log_prefix}")
@@ -396,11 +313,12 @@ def build_two_pass_commands(
             )
         )
     else:
+        v_codec = spec.video_codec or options.video_codec or "libx264"
         pass2_cmd.extend([
-            "-c:v", options.video_codec,
+            "-c:v", v_codec,
             "-b:v", f"{int(v_bitrate_kbps)}k",
         ])
-        if options.video_codec in ("libx265", "x265", "hevc"):
+        if v_codec in ("libx265", "x265", "hevc"):
             x265_opts = ["pass=2"]
             if log_prefix:
                 x265_opts.append(f"stats={log_prefix}")
@@ -424,7 +342,7 @@ def build_two_pass_commands(
                 volume_boost_db=options.volume_boost_db,
             )
         )
-        a_codec = resolve_audio_codec(options, v_preset, output_path)
+        a_codec = spec.audio_codec or "aac"
         pass2_cmd.extend(["-c:a", a_codec])
         if not a_codec.startswith("pcm_"):
             pass2_cmd.extend(["-b:a", f"{options.audio_bitrate_kbps}k"])
@@ -445,10 +363,14 @@ def build_single_pass_command(
     options: EncodeOptions,
     media_info: Optional[MediaInfo] = None,
     include_progress: bool = False,
+    spec: Optional[ResolvedJobSpec] = None,
 ) -> list[str]:
     """
     Construct FFmpeg command for single-pass CRF or fixed-bitrate video encoding.
     """
+    if spec is None:
+        spec = resolve_job_spec(options, media_info=media_info, output_path=output_path)
+
     cmd: list[str] = ["ffmpeg", "-y", "-nostdin"]
     if include_progress:
         cmd.extend(["-progress", "pipe:1", "-nostats"])
@@ -473,13 +395,14 @@ def build_single_pass_command(
     )
 
     # Video codec & quality
-    v_preset = resolve_video_preset(options)
+    v_preset = VIDEO_PRESETS.get(spec.video_preset_name) if spec.video_preset_name else None
     speed_preset = resolve_speed_preset(options)
 
     if v_preset is not None:
         cmd.extend(v_preset.build_video_args(crf=options.crf, speed_preset=speed_preset))
     else:
-        cmd.extend(["-c:v", options.video_codec])
+        v_codec = spec.video_codec or options.video_codec or "libx264"
+        cmd.extend(["-c:v", v_codec])
         if options.crf is not None:
             cmd.extend(["-crf", str(options.crf)])
         if speed_preset:
@@ -496,7 +419,7 @@ def build_single_pass_command(
                 volume_boost_db=options.volume_boost_db,
             )
         )
-        a_codec = resolve_audio_codec(options, v_preset, output_path)
+        a_codec = spec.audio_codec or "aac"
         cmd.extend(["-c:a", a_codec])
         if not a_codec.startswith("pcm_"):
             cmd.extend(["-b:a", f"{options.audio_bitrate_kbps}k"])
@@ -533,18 +456,10 @@ def build_ffmpeg_commands(
     output_str = str(output_path)
 
     # Centralized validation upfront
-    validate_encode_options(options, media_info=media_info, output_path=output_str)
-
-    canon_preset = normalize_preset_name(options.preset)
-    preset_lower = canon_preset if canon_preset else ""
-    codec_lower = options.video_codec.strip().lower() if options.video_codec else ""
+    spec = validate_encode_options(options, media_info=media_info, output_path=output_str)
 
     # Mode 1: Audio Extraction / Audio-Only Presets
-    if (
-        options.extract_audio
-        or is_audio_preset(preset_lower)
-        or (not is_video_preset(preset_lower) and is_audio_preset(codec_lower))
-    ):
+    if spec.rate_mode == "extract_audio":
         return [
             build_audio_extract_command(
                 input_str,
@@ -552,11 +467,12 @@ def build_ffmpeg_commands(
                 options,
                 media_info=media_info,
                 include_progress=include_progress,
+                spec=spec,
             )
         ]
 
     # Mode 2: Animated GIF
-    if preset_lower == "gif" or (not is_video_preset(preset_lower) and codec_lower == "gif"):
+    if spec.rate_mode == "gif":
         return [
             build_gif_command(
                 input_str,
@@ -568,7 +484,7 @@ def build_ffmpeg_commands(
         ]
 
     # Mode 3: Two-Pass Bitrate Targeting
-    if options.two_pass or options.target_size_mb is not None:
+    if spec.rate_mode == "target_size":
         return build_two_pass_commands(
             input_path=input_str,
             output_path=output_str,
@@ -576,9 +492,10 @@ def build_ffmpeg_commands(
             media_info=media_info,
             pass_logfile=pass_logfile,
             include_progress=include_progress,
+            spec=spec,
         )
 
-    # Mode 4: Single-Pass Video (CRF)
+    # Mode 4: Single-Pass Video (CRF / ProRes)
     return [
         build_single_pass_command(
             input_path=input_str,
@@ -586,5 +503,6 @@ def build_ffmpeg_commands(
             options=options,
             media_info=media_info,
             include_progress=include_progress,
+            spec=spec,
         )
     ]
