@@ -1,51 +1,61 @@
 # Project: media_toolbox
 
 ## Architecture
-Modern Python media toolbox package in `python/media_toolbox` replacing legacy Bash/Zenity scripts.
+Modern Python media toolbox package in `src/media_toolbox` replacing legacy Bash/Zenity scripts.
 Architected in three isolated layers:
-1. **Core Headless Engine (`core/`)**: Zero GUI dependencies (`gi`, `Gtk`, `Adw`, `Nautilus`). Frozen dataclass models, mockable `ffprobe -print_format json` probing, deterministic filtergraph and CLI builder, container muxing math engine, and async/threaded subprocess runner with `-progress pipe:1 -nostats` streaming.
-2. **Desktop UI Layer (`ui/`)**: Libadwaita / GTK4 desktop interface (`Gtk` 4.0, `Adw` 1) using dynamic forms with revealers (revealing target size vs CRF, custom resolutions), non-blocking progress tracking, speed/ETA display, and graceful cancellation.
-3. **Desktop Integrations (`nautilus/`)**: Dual Nautilus file manager integration consisting of a zero-privilege user script in `~/.local/share/nautilus/scripts/Media-Toolbox` and a native `python-nautilus` extension in `~/.local/share/nautilus-python/extensions/` with MIME-type contextual menus.
+1. **Core Headless Engine (`core/`)**: Zero GUI dependencies (`gi`, `Gtk`, `Adw`, `Nautilus`). Frozen dataclass models, transactional output staging and collision protection (`jobs.py`), centralized option/preset validation (`validation.py`), mockable `ffprobe -print_format json` probing (`probe.py`), deterministic filtergraph and CLI builder with explicit stream mappings (`builder.py`, `filtergraph.py`), container muxing math engine (`bitrate.py`), and async/threaded subprocess runner with `-progress pipe:1 -nostats` streaming and bounded cancellation reaping (`runner.py`).
+2. **Desktop UI Layer (`ui/`)**: Libadwaita / GTK4 desktop interface (`Gtk` 4.0, `Adw` 1) using decoupled pure form state extraction (`forms.py`), dynamic preferences groups with revealers, non-blocking asynchronous probing, monotonic progress tracking, speed/ETA display, and graceful cancellation.
+3. **Desktop Integrations (`nautilus/`)**: Dual Nautilus file manager integration consisting of a zero-privilege user script in `~/.local/share/nautilus/scripts/Media-Toolbox` with baked interpreter tracking, and a native `python-nautilus` extension in `~/.local/share/nautilus-python/extensions/` with MIME-type contextual menus.
 
 ## Code Layout
 ```
-python/media_toolbox/
+src/media_toolbox/
 ├── __init__.py
 ├── __main__.py               # CLI/UI package execution router
 ├── cli.py                    # Standalone CLI entrypoint for inspection & batch commands
 ├── core/
 │   ├── __init__.py
-│   ├── models.py             # Frozen dataclasses (VideoStream, AudioStream, FormatInfo, MediaInfo, ProgressEvent)
+│   ├── models.py             # Frozen dataclasses (VideoStream, AudioStream, FormatInfo, MediaInfo, ProgressEvent, exceptions)
+│   ├── jobs.py               # Transactional execution, same-filesystem staging (.tmp_<token>/), safe atomic publication
+│   ├── validation.py         # Centralized option, preset, rate-mode, and extension validation
 │   ├── probe.py              # ffprobe JSON deserializer, N/A duration fallback, fractional fps
-│   ├── bitrate.py            # 2-pass bitrate math, 3-5% container mux margin, 64 kbps clamp
-│   ├── filtergraph.py        # Video/audio filter chains, crop/scale/pad, atempo splitting (>2.0x, <0.5x)
-│   ├── presets.py            # Codec presets (H.264, H.265, AV1, VP9, GIF, ProRes, MP3, AAC, Opus, FLAC)
-│   ├── builder.py            # Deterministic FFmpeg CLI argument builder (CRF & 2-pass)
-│   └── runner.py             # Process-isolated runner, -progress pipe:1 parser, SIGTERM/SIGKILL cancellation
+│   ├── bitrate.py            # 2-pass bitrate math, speed-aware output duration, container mux margin, budget floor validation
+│   ├── filtergraph.py        # Video/audio filter chains, orientation-agnostic crop, aspect pad, atempo splitting (>2.0x, <0.5x)
+│   ├── presets.py            # Codec presets (H.264, H.265, AV1, VP9, GIF, ProRes, MP3, AAC, Opus, FLAC) + aliases
+│   ├── builder.py            # Deterministic FFmpeg CLI argument builder (CRF & 2-pass) with explicit stream mapping
+│   └── runner.py             # Process-isolated runner, bounded watcher thread, -progress pipe:1 parser, SIGTERM/SIGKILL cancellation
 ├── ui/
 │   ├── __init__.py
 │   ├── app.py                # Adw.Application, display detection, lifecycle
-│   ├── window.py             # Main Libadwaita application window with dynamic preferences groups
-│   └── widgets.py            # Custom reactive widgets (progress bar, speed/ETA labels, revealers)
+│   ├── window.py             # Main Libadwaita application window with async probing and worker lifecycle
+│   ├── forms.py              # Pure form-state extraction and path resolution decoupled from GTK
+│   └── widgets.py            # Custom reactive widgets (monotonic progress bar, speed/ETA labels, revealers)
 ├── nautilus/
 │   ├── __init__.py
 │   ├── launcher.sh           # User script for ~/.local/share/nautilus/scripts/Media-Toolbox
 │   ├── extension.py          # python-nautilus MenuProvider for ~/.local/share/nautilus-python/extensions/
-│   └── installer.py          # CLI installer/uninstaller for dual Nautilus integration
-└── tests/
-    ├── __init__.py
-    ├── conftest.py           # Synthetic ffprobe JSON fixtures, mock progress streams, sys.path
-    ├── test_headless_ast.py  # Static AST import verification (asserts ZERO GUI imports in core/)
-    ├── test_models.py        # Immutability and defaults tests
-    ├── test_probe.py         # Valid videos, silent media, audio-only, images, N/A durations, 0/0 fps
-    ├── test_bitrate.py       # Bitrate calculations, container overhead margins, 64kbps floor
-    ├── test_filtergraph.py   # Filter chains, atempo splitting, crop/scale/pad
-    ├── test_presets.py       # Codec preset CLI flag generations
-    ├── test_builder.py       # Complete FFmpeg command line assembly (CRF and 2-pass)
-    ├── test_runner.py        # Subprocess runner, progress parsing, ETA, cancellation
-    ├── test_cli.py           # CLI invocation and formatted metadata output
-    ├── test_ui.py            # UI logic, state transitions, headless mocking
-    └── test_nautilus.py      # Extension MIME matching, launcher script generation, installer tests
+│   ├── installer.py          # CLI installer/uninstaller for dual Nautilus integration (bakes python interpreter)
+│   └── io.github.tazztone.MediaToolbox.desktop # XDG desktop entry
+tests/
+├── conftest.py               # Synthetic ffprobe JSON fixtures, mock progress streams, sys.path
+├── test_adversarial.py       # Fuzzing and adversarial error handling
+├── test_bitrate.py           # Bitrate calculations, container overhead margins, speed scaling, floor validation
+├── test_builder.py           # Complete FFmpeg command line assembly (CRF and 2-pass) and stream mapping
+├── test_cli.py               # CLI invocation and formatted metadata output
+├── test_e2e.py               # End-to-end multi-step workflow verification
+├── test_filtergraph.py       # Filter chains, atempo splitting, orientation-agnostic crop, aspect pad
+├── test_forms.py             # Pure headless form-state and collision-avoidance resolution
+├── test_headless_ast.py      # Static AST import verification (asserts ZERO GUI imports in core/)
+├── test_integration_media.py # Real FFmpeg/FFprobe execution on synthesized test media
+├── test_jobs.py              # Transactional staging, atomic publication, collision rejection, cleanup
+├── test_models.py            # Immutability and defaults tests
+├── test_nautilus.py          # Extension MIME matching, launcher script generation, installer tests
+├── test_presets.py           # Codec preset CLI flag generations
+├── test_probe.py             # Valid videos, silent media, audio-only, images, N/A durations, 0/0 fps
+├── test_runner.py            # Subprocess runner, progress parsing, ETA, cancellation
+├── test_runner_lifecycle.py  # Subprocess shutdown semantics, EOF handling, bounded thread reaping
+├── test_ui.py                # UI logic, state transitions, headless mocking, monotonic progress
+└── test_validation.py        # Centralized encode options and preset validation
 ```
 
 ## Feature Inventory

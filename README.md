@@ -9,60 +9,79 @@ Modern Python media inspection, transcoding, and audio extraction package replac
 
 - **Decoupled Headless Core (`core/`)**:
   - Strongly typed `ffprobe` JSON parsing (`probe.py`) into frozen dataclasses (`models.py`).
-  - Container-aware bitrate calculator (`bitrate.py`) reserving muxing margins and clamping to min 64 kbps.
-  - Deterministic FFmpeg CLI builder (`builder.py`) supporting 10 codec presets (H.264, H.265, AV1, VP9, GIF, ProRes, MP3, AAC, Opus, FLAC).
-  - Video & audio filter chaining (`filtergraph.py`) with automatic `atempo` multiplier splitting (>2.0x, <0.5x).
-  - Real-time `-progress pipe:1` subprocess runner (`runner.py`) with process group isolation and cancellation.
+  - Transactional output execution and staging (`jobs.py`) with overwrite protection and collision detection.
+  - Centralized options and preset validation (`validation.py`) rejecting invalid configurations before FFmpeg starts.
+  - Decimal MB bitrate calculator (`bitrate.py`) accounting for playback speed and audio budget floors.
+  - Deterministic FFmpeg CLI builder (`builder.py`) supporting 10 codec presets (H.264, H.265, AV1, VP9, GIF, ProRes, MP3, AAC, Opus, FLAC) with explicit stream mapping.
+  - Video & audio filter chaining (`filtergraph.py`) with orientation-agnostic centering crop and automatic `atempo` splitting.
+  - Real-time `-progress pipe:1` subprocess runner (`runner.py`) with process group isolation, graceful SIGTERM->SIGKILL escalation, and cancellation cleanup.
   - Zero GUI dependencies in `core/` for reliable headless CI/server execution.
 
 - **Dynamic Libadwaita Desktop GUI (`ui/`)**:
+  - Pure form-state extraction decoupled from toolkit widgets (`ui/forms.py`).
+  - Asynchronous media probing with request sequence tracking to prevent UI freezes and race conditions.
+  - Monotonic progress bar with smooth, non-regressing updates across encoding passes.
   - Dynamic forms with revealers (conditionally showing CRF quality slider vs 2-pass target size, custom resolutions).
-  - Non-blocking background worker thread streaming progress to `Gtk.ProgressBar` via `GLib.idle_add`.
-  - Graceful cancellation support (`SIGTERM` / `SIGKILL`).
+  - Graceful cancellation and process reaping on window close/quit.
 
 - **Dual Nautilus Integration (`nautilus/`)**:
-  - Zero-privilege user script: `~/.local/share/nautilus/scripts/Media-Toolbox`.
-  - Native python-nautilus extension: `~/.local/share/nautilus-python/extensions/media_toolbox.py` with MIME-type filtering.
+  - Zero-privilege user script: `~/.local/share/nautilus/scripts/Media-Toolbox` with baked interpreter tracking.
+  - Native python-nautilus extension: `~/.local/share/nautilus-python/extensions/media_toolbox_nautilus.py` with MIME-type filtering.
+  - XDG desktop entry pointing to `media-toolbox-gui %F`.
   - One-click installer and status checker CLI.
 
 ## Quick Start
+
+### Installation
+
+```bash
+# Headless CLI only (no GTK/PyGObject required)
+pip install .
+
+# Full installation with Libadwaita/GTK4 desktop GUI
+pip install ".[desktop]"
+
+# Development installation with test suite
+pip install ".[all]"
+```
 
 ### CLI
 
 ```bash
 # Inspect media metadata
-python3 -m media_toolbox.cli inspect video.mp4
+media-toolbox inspect video.mp4
 
 # Transcode using preset
-python3 -m media_toolbox.cli transcode video.mp4 --preset discord-h264 -o output.mp4
+media-toolbox transcode video.mp4 output.mp4 --preset h264
 
-# 2-Pass target size transcode
-python3 -m media_toolbox.cli transcode video.mp4 --target-mb 25 -o output.mp4
+# 2-Pass target size transcode (in decimal MB)
+media-toolbox transcode video.mp4 output.mp4 --target-mb 25
 
 # Overwrite existing destination safely
-python3 -m media_toolbox.cli transcode video.mp4 output.mp4 --overwrite
+media-toolbox transcode video.mp4 output.mp4 --overwrite
 
 # Extract audio
-python3 -m media_toolbox.cli extract-audio video.mp4 -o audio.mp3
+media-toolbox extract-audio video.mp4 audio.mp3
 ```
 
 ### Desktop GUI
 
 ```bash
-python3 -m media_toolbox.ui video.mp4
+# Launch GUI directly or with a file
+media-toolbox-gui video.mp4
 ```
 
 ### Nautilus Integration
 
 ```bash
 # Install Nautilus script, python-nautilus extension, and desktop entry
-python3 -m media_toolbox.cli install-nautilus
+media-toolbox install-nautilus
 
 # Check installation status
-python3 -m media_toolbox.cli status-nautilus
+media-toolbox status-nautilus
 
 # Uninstall integration
-python3 -m media_toolbox.cli uninstall-nautilus
+media-toolbox uninstall-nautilus
 ```
 
 ## Running Tests & Git Hooks

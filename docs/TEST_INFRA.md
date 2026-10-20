@@ -21,9 +21,10 @@
 | 11 | Dual Nautilus Launcher & Extension | R5 | 5 cases | 5 cases | ✓ |
 
 ## Test Architecture
-- Test runner: `.venv/bin/pytest python/media_toolbox/tests/` (and root `.venv/bin/pytest python/`)
-- Pass/fail semantics: 100% exit code 0, 0 failures, 0 regressions against existing 115 tests
-- Test directory: `python/media_toolbox/tests/`
+- Test runner: `.venv/bin/pytest tests/`
+- Pass/fail semantics: 100% exit code 0, 0 failures, 0 regressions against existing suite (524 tests passing)
+- Test directory: `tests/`
+- Real-media integration: `tests/test_integration_media.py` (real FFmpeg execution)
 - AST headless import verification in `tests/test_headless_ast.py`
 - Synthetic fixtures in `tests/conftest.py`
 

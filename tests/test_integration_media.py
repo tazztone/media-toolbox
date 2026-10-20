@@ -1,0 +1,161 @@
+"""
+Integration test suite verifying real FFmpeg and FFprobe execution on synthesized media.
+
+Requires `ffmpeg` and `ffprobe` binaries on PATH; skips gracefully if missing.
+"""
+
+from __future__ import annotations
+
+import shutil
+import subprocess
+from pathlib import Path
+import pytest
+
+from media_toolbox.core.jobs import JobConfig, run_job
+from media_toolbox.core.models import DestinationExistsError, EncodeOptions
+from media_toolbox.core.probe import probe_media
+
+
+has_ffmpeg = bool(shutil.which("ffmpeg"))
+has_ffprobe = bool(shutil.which("ffprobe"))
+pytestmark = pytest.mark.skipif(not (has_ffmpeg and has_ffprobe), reason="ffmpeg and ffprobe required")
+
+
+@pytest.fixture
+def synthetic_av_clip(tmp_path: Path) -> Path:
+    """Generate a valid 3-second 640x360 test video with stereo sine wave audio."""
+    clip_path = tmp_path / "synthetic_input.mp4"
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc=duration=3:size=640x360:rate=30",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=1000:duration=3",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "64k",
+        "-movflags",
+        "+faststart",
+        str(clip_path),
+    ]
+    subprocess.run(cmd, capture_output=True, check=True)
+    return clip_path
+
+
+def test_real_probe_media(synthetic_av_clip: Path) -> None:
+    """Real ffprobe inspects synthesized clip and extracts accurate stream metadata."""
+    info = probe_media(synthetic_av_clip)
+    assert info.duration >= 2.9
+    assert info.has_video is True
+    assert info.has_audio is True
+
+    pv = info.primary_video
+    assert pv is not None
+    assert pv.width == 640
+    assert pv.height == 360
+    assert pv.codec_name == "h264"
+    assert round(pv.fps) == 30
+
+    pa = info.primary_audio
+    assert pa is not None
+    assert pa.codec_name == "aac"
+    assert pa.channels in (1, 2)
+
+
+def test_real_single_pass_transcode(synthetic_av_clip: Path, tmp_path: Path) -> None:
+    """Real single-pass transcode scales resolution, adjusts speed, and produces valid output."""
+    out_file = tmp_path / "transcoded_output.mp4"
+    opts = EncodeOptions(
+        preset="h264",
+        crf=28,
+        scale=(320, 180),
+        speed=1.5,
+        audio_bitrate_kbps=64,
+    )
+    config = JobConfig(input_path=synthetic_av_clip, output_path=out_file, options=opts)
+    result = run_job(config)
+
+    assert result.output_path == out_file
+    assert result.file_size_bytes > 0
+    assert out_file.is_file()
+    assert out_file.stat().st_size > 0
+
+    # Probe resulting transcode
+    info = probe_media(out_file)
+    assert info.has_video is True
+    assert info.has_audio is True
+    assert info.primary_video.width == 320
+    assert info.primary_video.height == 180
+    # 3.0s input at 1.5x speed should be approximately 2.0s
+    assert abs(info.duration - 2.0) < 0.5
+
+
+def test_real_audio_extraction(synthetic_av_clip: Path, tmp_path: Path) -> None:
+    """Real audio extraction isolates audio track into MP3 format without video."""
+    out_file = tmp_path / "extracted_audio.mp3"
+    opts = EncodeOptions(
+        extract_audio=True,
+        video_codec="mp3",
+        audio_bitrate_kbps=96,
+    )
+    config = JobConfig(input_path=synthetic_av_clip, output_path=out_file, options=opts)
+    result = run_job(config)
+
+    assert result.output_path == out_file
+    assert result.file_size_bytes > 0
+    assert out_file.is_file()
+
+    info = probe_media(out_file)
+    assert info.has_video is False
+    assert info.has_audio is True
+    assert info.primary_audio.codec_name == "mp3"
+
+
+def test_real_two_pass_target_size(synthetic_av_clip: Path, tmp_path: Path) -> None:
+    """Real two-pass targeting stays within bounded tolerance of target size budget."""
+    out_file = tmp_path / "sized_output.mp4"
+    # Target size: 0.5 MB budget
+    target_mb = 0.5
+    opts = EncodeOptions(
+        preset="h264",
+        two_pass=True,
+        target_size_mb=target_mb,
+        audio_bitrate_kbps=64,
+    )
+    config = JobConfig(input_path=synthetic_av_clip, output_path=out_file, options=opts)
+    result = run_job(config)
+
+    assert result.output_path == out_file
+    assert result.file_size_bytes > 0
+    assert out_file.is_file()
+
+    actual_mb = out_file.stat().st_size / 1_000_000.0
+    # Allow 10% ceiling margin for short container overhead
+    assert actual_mb <= target_mb * 1.10
+
+
+def test_real_job_refuses_overwrite_without_flag(synthetic_av_clip: Path, tmp_path: Path) -> None:
+    """Real job refuses to overwrite existing destination when overwrite=False."""
+    existing_dest = tmp_path / "already_exists.mp4"
+    existing_dest.write_text("pre-existing content", encoding="utf-8")
+    original_mtime = existing_dest.stat().st_mtime_ns
+
+    opts = EncodeOptions(preset="h264", crf=28)
+    config = JobConfig(input_path=synthetic_av_clip, output_path=existing_dest, options=opts, overwrite=False)
+
+    with pytest.raises(DestinationExistsError):
+        run_job(config)
+
+    # Destination was NOT modified or replaced
+    assert existing_dest.read_text(encoding="utf-8") == "pre-existing content"
+    assert existing_dest.stat().st_mtime_ns == original_mtime
