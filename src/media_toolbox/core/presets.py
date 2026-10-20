@@ -416,8 +416,7 @@ def is_speed_preset(name: str | Enum | None) -> bool:
     """Return True if name is a recognized FFmpeg encoder speed preset."""
     if not name:
         return False
-    key = name.value if isinstance(name, Enum) else str(name).strip().lower()
-    return key in VALID_SPEED_PRESETS
+    return getattr(name, "value", str(name)).strip().lower() in VALID_SPEED_PRESETS
 
 
 _PRESET_ALIASES: dict[str, str] = {
@@ -462,10 +461,14 @@ _PRESET_ALIASES: dict[str, str] = {
 }
 
 
+def _normalize_preset_key(name: Any) -> str:
+    key = getattr(name, "value", str(name)).strip().lower()
+    return _PRESET_ALIASES.get(key, key)
+
+
 def get_video_preset(name: str | PresetName) -> VideoPreset:
     """Retrieve video preset by canonical name, enum, or alias."""
-    key = name.value if isinstance(name, Enum) else str(name).strip().lower()
-    resolved = _PRESET_ALIASES.get(key, key)
+    resolved = _normalize_preset_key(name)
     if resolved in VIDEO_PRESETS:
         return VIDEO_PRESETS[resolved]
     raise KeyError(f"Unknown video preset '{name}'. Available: {list(VIDEO_PRESETS.keys())}")
@@ -473,8 +476,7 @@ def get_video_preset(name: str | PresetName) -> VideoPreset:
 
 def get_audio_preset(name: str | PresetName) -> AudioPreset:
     """Retrieve audio preset by canonical name, enum, or alias."""
-    key = name.value if isinstance(name, Enum) else str(name).strip().lower()
-    resolved = _PRESET_ALIASES.get(key, key)
+    resolved = _normalize_preset_key(name)
     if resolved in AUDIO_PRESETS:
         return AUDIO_PRESETS[resolved]
     raise KeyError(f"Unknown audio preset '{name}'. Available: {list(AUDIO_PRESETS.keys())}")
@@ -482,8 +484,7 @@ def get_audio_preset(name: str | PresetName) -> AudioPreset:
 
 def get_preset(name: str | PresetName) -> VideoPreset | AudioPreset:
     """Retrieve either video or audio preset by name or alias."""
-    key = name.value if isinstance(name, Enum) else str(name).strip().lower()
-    resolved = _PRESET_ALIASES.get(key, key)
+    resolved = _normalize_preset_key(name)
     if resolved in VIDEO_PRESETS:
         return VIDEO_PRESETS[resolved]
     if resolved in AUDIO_PRESETS:
@@ -496,18 +497,14 @@ def is_audio_preset(name: str | PresetName | None) -> bool:
     """Return True if name or alias corresponds to an audio preset."""
     if not name:
         return False
-    key = name.value if isinstance(name, Enum) else str(name).strip().lower()
-    resolved = _PRESET_ALIASES.get(key, key)
-    return resolved in AUDIO_PRESETS
+    return _normalize_preset_key(name) in AUDIO_PRESETS
 
 
 def is_video_preset(name: str | PresetName | None) -> bool:
     """Return True if name or alias corresponds to a video preset."""
     if not name:
         return False
-    key = name.value if isinstance(name, Enum) else str(name).strip().lower()
-    resolved = _PRESET_ALIASES.get(key, key)
-    return resolved in VIDEO_PRESETS
+    return _normalize_preset_key(name) in VIDEO_PRESETS
 
 
 def list_video_presets() -> list[VideoPreset]:

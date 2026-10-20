@@ -34,50 +34,17 @@ try:
 except (ImportError, ValueError, AttributeError):
     _NAUTILUS_AVAILABLE = False
 
-    class _MockGObject:
-        class GObject:
-            def __init__(self, *args: Any, **kwargs: Any) -> None:
-                pass
+    class _Stub:
+        pass
 
-    class _MockNautilus:
-        class MenuProvider:
-            pass
+    class GObject:  # type: ignore
+        GObject = _Stub
 
-        class MenuItem:
-            def __init__(self, name: str = "", label: str = "", tip: str = "", icon: str = "") -> None:
-                self.name = name
-                self.label = label
-                self.tip = tip
-                self.icon = icon
-                self.submenu: Any = None
-                self._callbacks: list[tuple[str, Any, tuple[Any, ...]]] = []
-
-            def set_submenu(self, menu: Any) -> None:
-                self.submenu = menu
-
-            def connect(self, signal: str, callback: Any, *args: Any) -> None:
-                self._callbacks.append((signal, callback, args))
-
-            def activate(self) -> None:
-                for sig, cb, args in self._callbacks:
-                    if sig == "activate":
-                        cb(self, *args)
-
-        class Menu:
-            def __init__(self) -> None:
-                self.items: list[Any] = []
-
-            def append_item(self, item: Any) -> None:
-                self.items.append(item)
-
-            def get_items(self) -> list[Any]:
-                return self.items
-
-        class FileInfo:
-            pass
-
-    GObject = _MockGObject  # type: ignore
-    Nautilus = _MockNautilus  # type: ignore
+    class Nautilus:  # type: ignore
+        MenuProvider = _Stub
+        MenuItem = _Stub
+        Menu = _Stub
+        FileInfo = _Stub
 
 INSTALLED_PYTHON: str = ""
 
