@@ -14,6 +14,8 @@ INVARIANT: Strict zero GUI imports (gi, Gtk, Adw, Nautilus, tkinter, PyQt, PySid
 
 from __future__ import annotations
 
+from collections import deque
+import dataclasses
 import errno
 import math
 import os
@@ -115,6 +117,30 @@ class RunnerCancelledError(RunnerError):
             msg = str(message_or_cmd) if message_or_cmd else "Execution was cancelled"
 
         super().__init__(
+            message_or_cmd=msg,
+            cmd=the_cmd,
+            returncode=returncode,
+            stderr=stderr,
+            stdout=stdout,
+        )
+
+
+class RunnerFileNotFoundError(FileNotFoundError, RunnerError):
+    """Raised when the FFmpeg/FFprobe binary executable is not found."""
+
+    def __init__(
+        self,
+        message_or_cmd: Union[str, list[str]] = "FFmpeg executable not found",
+        cmd: Optional[list[str]] = None,
+        returncode: int = 127,
+        stderr: str = "",
+        stdout: str = "",
+        **kwargs: Any,
+    ) -> None:
+        the_cmd = list(cmd) if cmd is not None else []
+        msg = str(message_or_cmd) if message_or_cmd else "FFmpeg executable not found"
+        RunnerError.__init__(
+            self,
             message_or_cmd=msg,
             cmd=the_cmd,
             returncode=returncode,
@@ -317,9 +343,9 @@ class ProgressParser:
 
         return None
 
-    def finish(self) -> Optional[ProgressEvent]:
-        """Emit completion event if process finished without emitting progress=end."""
-        if not self._completed_emitted:
+    def finish(self, force: bool = False) -> Optional[ProgressEvent]:
+        """Emit completion event if process finished without emitting progress=end or when force=True."""
+        if force or not self._completed_emitted:
             self._completed_emitted = True
             effective_duration = (
                 self.total_duration
@@ -446,21 +472,34 @@ def run_ffmpeg(
     if "ffmpeg" in base_name and "-progress" not in effective_cmd:
         effective_cmd = [effective_cmd[0], "-nostats", "-progress", "pipe:1"] + effective_cmd[1:]
 
-    proc = subprocess.Popen(
-        effective_cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        bufsize=1,
-        start_new_session=True,  # Process group leader (pgid == proc.pid)
-    )
+    try:
+        proc = subprocess.Popen(
+            effective_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+            start_new_session=True,  # Process group leader (pgid == proc.pid)
+        )
+    except FileNotFoundError as e:
+        raise RunnerFileNotFoundError(
+            f"FFmpeg binary not found: '{effective_cmd[0]}'",
+            cmd=effective_cmd,
+            returncode=127,
+        ) from e
+    except PermissionError as e:
+        raise RunnerError(
+            f"Permission denied executing FFmpeg binary: '{effective_cmd[0]}'",
+            cmd=effective_cmd,
+            returncode=126,
+        ) from e
 
     pgid = proc.pid  # Cache process group ID immediately
 
-    # Dedicated daemon thread draining proc.stderr to prevent 64KB kernel buffer deadlocks
-    stderr_lines: list[str] = []
+    # Dedicated thread draining proc.stderr to prevent 64KB kernel buffer deadlocks (bounded tail)
+    stderr_lines: deque[str] = deque(maxlen=500)
 
     def _drain_stderr() -> None:
         try:
@@ -480,18 +519,23 @@ def run_ffmpeg(
     stderr_thread.start()
 
     done_event = threading.Event()
+    watcher_thread: Optional[threading.Thread] = None
 
-    # Asynchronous cancellation watcher thread
+    # Asynchronous cancellation watcher thread with bounded wait loop
     if cancel_event is not None:
         def _cancel_watcher() -> None:
-            cancel_event.wait()
-            if not done_event.is_set() and proc.poll() is None:
-                terminate_process_group(pgid, proc, graceful_timeout=sigterm_timeout)
+            while not done_event.is_set():
+                if cancel_event.is_set():
+                    if proc.poll() is None:
+                        terminate_process_group(pgid, proc, graceful_timeout=sigterm_timeout)
+                    break
+                done_event.wait(timeout=0.05)
 
         watcher_thread = threading.Thread(target=_cancel_watcher, daemon=True, name="ffmpeg-cancel-watch")
         watcher_thread.start()
 
     parser = ProgressParser(total_duration=dur)
+    pending_end_event: Optional[ProgressEvent] = None
 
     try:
         if proc.stdout is not None:
@@ -502,9 +546,16 @@ def run_ffmpeg(
 
                 event = parser.feed_line(line)
                 if event is not None and progress_callback is not None:
-                    progress_callback(event)
+                    # Do not emit is_completed=True during active stdout streaming before returncode verification
+                    if event.is_completed:
+                        pending_end_event = event
+                    else:
+                        progress_callback(event)
     finally:
         done_event.set()
+        if watcher_thread is not None:
+            watcher_thread.join(timeout=1.0)
+
         if proc.stdout is not None:
             try:
                 proc.stdout.close()
@@ -514,10 +565,11 @@ def run_ffmpeg(
         if cancel_event is not None and cancel_event.is_set():
             terminate_process_group(pgid, proc, graceful_timeout=sigterm_timeout)
         else:
-            if proc.poll() is None:
+            try:
+                # Allow normal termination after stdout EOF (e.g. flushing container)
+                proc.wait(timeout=5.0)
+            except subprocess.TimeoutExpired:
                 terminate_process_group(pgid, proc, graceful_timeout=sigterm_timeout)
-            else:
-                proc.wait()
 
         stderr_thread.join(timeout=1.0)
 
@@ -535,9 +587,12 @@ def run_ffmpeg(
         )
 
     if progress_callback is not None:
-        final_evt = parser.finish()
-        if final_evt is not None:
-            progress_callback(final_evt)
+        if pending_end_event is not None:
+            progress_callback(pending_end_event)
+        else:
+            final_evt = parser.finish()
+            if final_evt is not None:
+                progress_callback(final_evt)
 
 
 def run_command(

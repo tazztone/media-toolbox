@@ -618,6 +618,7 @@ class MainWindow(Adw.ApplicationWindow):
             daemon=True,
             name="MediaToolboxWorker",
         )
+        self._active_worker = worker_thread
         worker_thread.start()
 
     # Backwards compatibility alias
@@ -712,4 +713,6 @@ class MainWindow(Adw.ApplicationWindow):
     def _on_close_request(self, *args: Any) -> bool:
         if self.is_transcoding and self.cancel_event:
             self.cancel_event.set()
+            if hasattr(self, "_active_worker") and self._active_worker is not None and self._active_worker.is_alive():
+                self._active_worker.join(timeout=2.0)
         return False

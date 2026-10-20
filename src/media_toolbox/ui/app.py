@@ -89,6 +89,9 @@ class MediaToolboxApp(Adw.Application):
             self.window.present()
 
     def _on_action_quit(self, _action: Gio.SimpleAction, _param: Any) -> None:
+        win = self.window or self.get_active_window()
+        if win and hasattr(win, "_on_close_request"):
+            win._on_close_request()
         self.quit()
 
     def _on_action_open(self, _action: Gio.SimpleAction, _param: Any) -> None:
