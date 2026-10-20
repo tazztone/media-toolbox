@@ -489,12 +489,17 @@ class ProgressFooterWidget(Gtk.Box):
         self.revealer.set_reveal_child(True)
 
     def update_progress(self, event: ProgressEvent, pass_info: Optional[str] = None) -> None:
-        if pass_info != self._last_pass_info:
-            self._last_pass_info = pass_info
-            self._current_fraction = 0.0
+        if pass_info:
+            self.status_label.set_text(pass_info)
+            if event.speed_str:
+                self.speed_label.set_text(f"Speed: {event.speed_str}")
+            if event.eta_str:
+                self.eta_label.set_text(f"ETA: {event.eta_str}")
+            return
 
         raw_fraction = max(0.0, min(1.0, event.percentage / 100.0))
-        fraction = max(self._current_fraction, raw_fraction)
+        curr_frac = self._current_fraction if isinstance(getattr(self, "_current_fraction", None), (int, float)) else 0.0
+        fraction = max(curr_frac, raw_fraction)
         self._current_fraction = fraction
         self.progress_bar.set_fraction(fraction)
         self.pct_label.set_text(f"{fraction * 100.0:.1f}%")
@@ -504,8 +509,6 @@ class ProgressFooterWidget(Gtk.Box):
             self.eta_label.set_text(f"ETA: {event.eta_str}")
         if event.total_size_bytes > 0:
             self.size_label.set_text(f"Size: {format_file_size(event.total_size_bytes)}")
-        if pass_info:
-            self.status_label.set_text(pass_info)
 
     def set_cancelling(self) -> None:
         self.cancel_button.set_sensitive(False)

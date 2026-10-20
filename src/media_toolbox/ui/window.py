@@ -14,6 +14,8 @@ Features:
 
 from __future__ import annotations
 
+import dataclasses
+import enum
 from pathlib import Path
 import threading
 from typing import Any, Optional
@@ -43,6 +45,15 @@ from media_toolbox.ui.widgets import (
     build_encode_options_from_state,
     resolve_default_output_path,
 )
+
+
+class WindowState(enum.Enum):
+    EMPTY = "empty"
+    PROBING = "probing"
+    READY = "ready"
+    RUNNING = "running"
+    CANCELLING = "cancelling"
+    CLOSED = "closed"
 
 
 class MainWindow(Adw.ApplicationWindow):
@@ -77,10 +88,13 @@ class MainWindow(Adw.ApplicationWindow):
         self.set_default_size(920, 740)
         self.set_size_request(640, 500)
 
+        self.state: WindowState = WindowState.EMPTY
         self.input_file: Optional[Path] = None
         self.media_info: Optional[MediaInfo] = None
         self.video_output_path: Optional[Path] = None
         self.audio_output_path: Optional[Path] = None
+        self._video_output_custom: bool = False
+        self._audio_output_custom: bool = False
         self.cancel_event: Optional[threading.Event] = None
         self.is_transcoding: bool = False
         self.open_btn: Optional[Gtk.Button] = None
@@ -386,20 +400,22 @@ class MainWindow(Adw.ApplicationWindow):
     def _on_dest_dialog_finish(self, dialog: Gtk.FileDialog, result: Gio.AsyncResult, is_audio: bool) -> None:
         try:
             gfile = dialog.save_finish(result)
-            if gfile:
+            if gfile and gfile.get_path():
                 p = Path(gfile.get_path())
                 if is_audio:
                     self.audio_output_path = p
+                    self._audio_output_custom = True
                     self.audio_dest_row.set_subtitle(str(p))
                 else:
                     self.video_output_path = p
+                    self._video_output_custom = True
                     self.video_dest_row.set_subtitle(str(p))
         except Exception:
             pass  # User cancelled
 
     def load_media_file(self, path: str | Path, sync: bool = False) -> None:
         """Inspect media file and configure widgets asynchronously."""
-        if self.is_transcoding:
+        if self.state in (WindowState.RUNNING, WindowState.CANCELLING, WindowState.CLOSED) or self.is_transcoding:
             self.toast_overlay.add_toast(Adw.Toast(title="Cannot load file while transcoding is in progress."))
             return
         p = Path(path).resolve()
@@ -409,6 +425,12 @@ class MainWindow(Adw.ApplicationWindow):
 
         self._probe_request_id += 1
         req_id = self._probe_request_id
+        self.state = WindowState.PROBING
+        # Invalidate active loaded media during probing
+        self.input_file = None
+        self.media_info = None
+        self.transcode_btn.set_sensitive(False)
+        self.extract_btn.set_sensitive(False)
         self.window_title.set_subtitle(f"Probing {p.name}...")
 
         if sync:
@@ -428,11 +450,14 @@ class MainWindow(Adw.ApplicationWindow):
             GLib.idle_add(self._on_probe_error, p, req_id, str(exc))
 
     def _on_probe_success(self, p: Path, req_id: int, media_info: MediaInfo) -> bool:
-        if req_id != self._probe_request_id:
+        if self.state == WindowState.CLOSED or req_id != self._probe_request_id:
             return False  # Discard stale completion
 
         self.input_file = p
         self.media_info = media_info
+        self.state = WindowState.READY
+        self._video_output_custom = False
+        self._audio_output_custom = False
         self.window_title.set_subtitle(p.name)
         self.metadata_card.set_media_info(media_info)
 
@@ -443,13 +468,19 @@ class MainWindow(Adw.ApplicationWindow):
         self.audio_widget.set_has_audio(media_info.has_audio)
         self._update_default_output_paths()
         self.main_stack.set_visible_child_name("loaded")
+        self._set_ui_controls_sensitive(True)
         return False
 
     def _on_probe_error(self, p: Path, req_id: int, error_msg: str) -> bool:
-        if req_id != self._probe_request_id:
+        if self.state == WindowState.CLOSED or req_id != self._probe_request_id:
             return False
 
+        self.state = WindowState.EMPTY
         self.window_title.set_subtitle("No media selected")
+        self.main_stack.set_visible_child_name("empty")
+        self._set_ui_controls_sensitive(True)
+        self.transcode_btn.set_sensitive(False)
+        self.extract_btn.set_sensitive(False)
         self.toast_overlay.add_toast(Adw.Toast(title=f"Failed to probe media: {error_msg}"))
         return False
 
@@ -480,24 +511,26 @@ class MainWindow(Adw.ApplicationWindow):
             return
 
         # Video path
-        video_preset = self.get_current_video_preset()
-        is_target_size = (self.rate_widget.get_mode() == "target_size") and video_preset not in ("gif", "prores")
-        self.video_output_path = resolve_default_output_path(
-            self.input_file,
-            video_preset,
-            is_extract_audio=False,
-            is_target_size=is_target_size,
-        )
-        self.video_dest_row.set_subtitle(str(self.video_output_path))
+        if not getattr(self, "_video_output_custom", False):
+            video_preset = self.get_current_video_preset()
+            is_target_size = (self.rate_widget.get_mode() == "target_size") and video_preset not in ("gif", "prores")
+            self.video_output_path = resolve_default_output_path(
+                self.input_file,
+                video_preset,
+                is_extract_audio=False,
+                is_target_size=is_target_size,
+            )
+            self.video_dest_row.set_subtitle(str(self.video_output_path))
 
         # Audio path
-        audio_preset = self.get_current_audio_preset()
-        self.audio_output_path = resolve_default_output_path(
-            self.input_file,
-            audio_preset,
-            is_extract_audio=True,
-        )
-        self.audio_dest_row.set_subtitle(str(self.audio_output_path))
+        if not getattr(self, "_audio_output_custom", False):
+            audio_preset = self.get_current_audio_preset()
+            self.audio_output_path = resolve_default_output_path(
+                self.input_file,
+                audio_preset,
+                is_extract_audio=True,
+            )
+            self.audio_dest_row.set_subtitle(str(self.audio_output_path))
 
     # -----------------------------------------------------------------------
     # Form Extraction
@@ -571,7 +604,7 @@ class MainWindow(Adw.ApplicationWindow):
             self.open_btn.set_sensitive(sensitive)
 
     def _start_transcode(self) -> None:
-        if not self.input_file or not self.media_info:
+        if self.state != WindowState.READY or not self.input_file or not self.media_info:
             self.toast_overlay.add_toast(Adw.Toast(title="Please open a media file first."))
             return
 
@@ -588,13 +621,13 @@ class MainWindow(Adw.ApplicationWindow):
             output_path=out_path,
             options=options,
             media_info=self.media_info,
-            overwrite=True,
+            overwrite=False,
         )
 
-        self._start_worker(config, "Transcoding video...")
+        self._confirm_overwrite_and_start(config, "Transcoding video...")
 
     def _start_extract_audio(self) -> None:
-        if not self.input_file or not self.media_info:
+        if self.state != WindowState.READY or not self.input_file or not self.media_info:
             self.toast_overlay.add_toast(Adw.Toast(title="Please open a media file first."))
             return
 
@@ -611,16 +644,41 @@ class MainWindow(Adw.ApplicationWindow):
             output_path=out_path,
             options=options,
             media_info=self.media_info,
-            overwrite=True,
+            overwrite=False,
         )
 
-        self._start_worker(config, "Extracting audio...")
+        self._confirm_overwrite_and_start(config, "Extracting audio...")
+
+    def _confirm_overwrite_and_start(self, config: JobConfig, title: str) -> None:
+        out_p = Path(config.output_path)
+        if out_p.exists():
+            dialog = Adw.MessageDialog(
+                transient_for=self,
+                heading="Replace File?",
+                body=f"'{out_p.name}' already exists. Overwriting will replace its contents.",
+            )
+            dialog.add_response("cancel", "Cancel")
+            dialog.add_response("replace", "Replace")
+            dialog.set_response_appearance("replace", Adw.ResponseAppearance.DESTRUCTIVE)
+            dialog.set_default_response("cancel")
+            dialog.set_close_response("cancel")
+
+            def _on_response(d: Any, response_id: str) -> None:
+                if response_id == "replace":
+                    confirmed_config = dataclasses.replace(config, overwrite=True)
+                    self._start_worker(confirmed_config, title)
+
+            dialog.connect("response", _on_response)
+            dialog.present()
+        else:
+            self._start_worker(config, title)
 
     def _start_worker(
         self,
         target_or_cmds: Any,
         *args: Any,
     ) -> None:
+        self.state = WindowState.RUNNING
         self.cancel_event = threading.Event()
         self.is_transcoding = True
         self._set_ui_controls_sensitive(False)
@@ -707,6 +765,9 @@ class MainWindow(Adw.ApplicationWindow):
         return GLib.SOURCE_REMOVE
 
     def _on_success_idle(self, output_path: Path) -> bool:
+        if self.state == WindowState.CLOSED:
+            return GLib.SOURCE_REMOVE
+        self.state = WindowState.READY
         self.is_transcoding = False
         self._set_ui_controls_sensitive(True)
         if hasattr(self, "open_btn") and self.open_btn is not None:
@@ -716,6 +777,9 @@ class MainWindow(Adw.ApplicationWindow):
         return GLib.SOURCE_REMOVE
 
     def _on_cancelled_idle(self, output_path: Path) -> bool:
+        if self.state == WindowState.CLOSED:
+            return GLib.SOURCE_REMOVE
+        self.state = WindowState.READY
         self.is_transcoding = False
         self._set_ui_controls_sensitive(True)
         if hasattr(self, "open_btn") and self.open_btn is not None:
@@ -725,6 +789,9 @@ class MainWindow(Adw.ApplicationWindow):
         return GLib.SOURCE_REMOVE
 
     def _on_error_idle(self, error_message: str) -> bool:
+        if self.state == WindowState.CLOSED:
+            return GLib.SOURCE_REMOVE
+        self.state = WindowState.READY
         self.is_transcoding = False
         self._set_ui_controls_sensitive(True)
         if hasattr(self, "open_btn") and self.open_btn is not None:
@@ -734,11 +801,13 @@ class MainWindow(Adw.ApplicationWindow):
         return GLib.SOURCE_REMOVE
 
     def _on_cancel_clicked(self) -> None:
+        self.state = WindowState.CANCELLING
         if self.cancel_event:
             self.cancel_event.set()
         self.progress_footer.set_cancelling()
 
     def _on_close_request(self, *args: Any) -> bool:
+        self.state = WindowState.CLOSED
         if self.is_transcoding and self.cancel_event:
             self.cancel_event.set()
             if hasattr(self, "_active_worker") and self._active_worker is not None and self._active_worker.is_alive():

@@ -1262,11 +1262,14 @@ class TestPerformanceAndTiming:
         mock_footer.pct_label.set_text.assert_called_with("75.0%")
         assert mock_footer._current_fraction == 0.75
 
-        # Step 4: pass change allows reset for pass 2
+        # Step 4: pass change updates status label without regressing progress
         ProgressFooterWidget.update_progress(mock_footer, ProgressEvent(percentage=10.0), pass_info="Pass 2/2")
-        mock_footer.progress_bar.set_fraction.assert_called_with(0.1)
-        mock_footer.pct_label.set_text.assert_called_with("10.0%")
-        assert mock_footer._current_fraction == 0.1
+        mock_footer.status_label.set_text.assert_called_with("Pass 2/2")
+        assert mock_footer._current_fraction == 0.75
+
+        # Step 5: new job start resets baseline
+        ProgressFooterWidget.start(mock_footer, "Transcoding...")
+        assert mock_footer._current_fraction == 0.0
 
     def test_async_probe_sequence_counter_discards_stale_completion(self, gi_env, tmp_path: Path) -> None:
         """Verify stale probe completion from earlier request ID is discarded."""
@@ -1291,3 +1294,140 @@ class TestPerformanceAndTiming:
         ret2 = MainWindow._on_probe_success(mock_win, file2, 2, info2)
         assert ret2 is False
         mock_win.window_title.set_subtitle.assert_called_with(file2.name)
+
+
+class TestWindowStateAndProgressDecoupling:
+    """Verifies MainWindow state machine, probing lockout, overwrite confirmation, and progress decoupling."""
+
+    def test_probing_lockout_prevents_stale_job_submission(self, tmp_path: Path) -> None:
+        """Loading file B while file A was ready invalidates A and prevents starting jobs during probing."""
+        from media_toolbox.ui.window import MainWindow, WindowState
+        from media_toolbox.core.models import MediaInfo, FormatInfo
+
+        mock_win = MagicMock()
+        mock_win.state = WindowState.READY
+        mock_win.is_transcoding = False
+        mock_win._probe_request_id = 1
+        mock_win.input_file = tmp_path / "file_a.mp4"
+        mock_win.media_info = MediaInfo(format=FormatInfo(filename="file_a.mp4", format_name="mp4", duration=10.0))
+
+        target_b = tmp_path / "file_b.mp4"
+        target_b.touch()
+
+        with patch("threading.Thread") as mock_thread:
+            MainWindow.load_media_file(mock_win, target_b, sync=False)
+
+        assert mock_win.state == WindowState.PROBING
+        assert mock_win.input_file is None
+        assert mock_win.media_info is None
+        mock_win.transcode_btn.set_sensitive.assert_called_with(False)
+        mock_win.extract_btn.set_sensitive.assert_called_with(False)
+
+        # Attempting transcode during PROBING is rejected
+        mock_win._start_worker = MagicMock()
+        MainWindow._start_transcode(mock_win)
+        mock_win._start_worker.assert_not_called()
+
+    def test_interleaved_pass_and_aggregate_progress_monotonic(self) -> None:
+        """Progress bar is driven exclusively by aggregate events and never regresses."""
+        from media_toolbox.ui.widgets import ProgressFooterWidget
+        from media_toolbox.core.models import ProgressEvent
+
+        mock_footer = MagicMock()
+        mock_footer._current_fraction = 0.0
+        mock_footer._last_pass_info = None
+
+        # 1. Pass 1 progress at 80% should update label only, not bar
+        ProgressFooterWidget.update_progress(
+            mock_footer,
+            ProgressEvent(percentage=80.0, speed=1.5, eta_seconds=10.0),
+            pass_info="Pass 1 of 2 (80.0%)",
+        )
+        mock_footer.status_label.set_text.assert_called_with("Pass 1 of 2 (80.0%)")
+        mock_footer.progress_bar.set_fraction.assert_not_called()
+        assert mock_footer._current_fraction == 0.0
+
+        # 2. Aggregate progress at 40% updates bar
+        ProgressFooterWidget.update_progress(
+            mock_footer,
+            ProgressEvent(percentage=40.0, speed=1.5, eta_seconds=20.0),
+            pass_info=None,
+        )
+        mock_footer.progress_bar.set_fraction.assert_called_with(0.40)
+        assert mock_footer._current_fraction == 0.40
+
+        # 3. Pass 1 completes (100%), but bar must NOT jump to 100%
+        ProgressFooterWidget.update_progress(
+            mock_footer,
+            ProgressEvent(percentage=100.0),
+            pass_info="Pass 1 of 2 (100.0%)",
+        )
+        assert mock_footer._current_fraction == 0.40
+
+        # 4. Pass 2 starts at 5% - bar must NOT decrease
+        ProgressFooterWidget.update_progress(
+            mock_footer,
+            ProgressEvent(percentage=5.0),
+            pass_info="Pass 2 of 2 (5.0%)",
+        )
+        assert mock_footer._current_fraction == 0.40
+
+        # 5. Aggregate progress advances to 55%
+        ProgressFooterWidget.update_progress(
+            mock_footer,
+            ProgressEvent(percentage=55.0),
+            pass_info=None,
+        )
+        mock_footer.progress_bar.set_fraction.assert_called_with(0.55)
+        assert mock_footer._current_fraction == 0.55
+
+    def test_custom_output_path_persists_across_preset_changes(self, tmp_path: Path) -> None:
+        """Custom user output path is retained when changing presets."""
+        from media_toolbox.ui.window import MainWindow
+
+        mock_win = MagicMock()
+        mock_win.input_file = tmp_path / "sample.mp4"
+        custom_out = tmp_path / "my_custom_destination.mp4"
+        mock_win.video_output_path = custom_out
+        mock_win._video_output_custom = True
+        mock_win._audio_output_custom = False
+
+        mock_win.get_current_video_preset.return_value = "h265"
+        mock_win.get_current_audio_preset.return_value = "aac"
+        mock_win.rate_widget.get_mode.return_value = "crf"
+
+        MainWindow._update_default_output_paths(mock_win)
+
+        # Video path was custom, so it must not have been overwritten
+        assert mock_win.video_output_path == custom_out
+
+    def test_overwrite_confirmation_behavior(self, tmp_path: Path) -> None:
+        """Non-existing file starts directly; existing file triggers Adw.MessageDialog."""
+        from media_toolbox.ui.window import MainWindow
+        from media_toolbox.core.jobs import JobConfig
+        from media_toolbox.core.models import EncodeOptions
+
+        mock_win = MagicMock()
+        mock_win._start_worker = MagicMock()
+
+        # Case 1: non-existing destination
+        non_existing = tmp_path / "new_file.mp4"
+        cfg1 = JobConfig(input_path="in.mp4", output_path=non_existing, options=EncodeOptions())
+        MainWindow._confirm_overwrite_and_start(mock_win, cfg1, "Encoding...")
+        mock_win._start_worker.assert_called_once_with(cfg1, "Encoding...")
+
+        # Case 2: existing destination triggers message dialog
+        mock_win._start_worker.reset_mock()
+        existing = tmp_path / "already_exists.mp4"
+        existing.touch()
+        cfg2 = JobConfig(input_path="in.mp4", output_path=existing, options=EncodeOptions())
+
+        with patch("gi.repository.Adw.MessageDialog") as mock_dialog_cls:
+            mock_dialog = MagicMock()
+            mock_dialog_cls.return_value = mock_dialog
+
+            MainWindow._confirm_overwrite_and_start(mock_win, cfg2, "Encoding...")
+            mock_dialog_cls.assert_called_once()
+            mock_dialog.present.assert_called_once()
+            # Worker must NOT start before user confirmation
+            mock_win._start_worker.assert_not_called()
