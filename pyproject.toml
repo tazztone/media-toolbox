@@ -28,3 +28,6 @@ media_toolbox_gui = "media_toolbox.ui.app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"media_toolbox.nautilus" = ["*.sh", "*.desktop"]

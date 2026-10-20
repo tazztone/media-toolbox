@@ -51,10 +51,9 @@ fi
 # (d) Well-known virtualenv paths
 if [[ -z "$PYTHON" ]]; then
     for candidate in \
-        "/home/tazztone/_coding/media-toolbox/.venv/bin/python3" \
-        "/home/tazztone/_coding/scripts/.venv/bin/python3" \
         "$HOME/.local/share/media_toolbox/venv/bin/python3" \
-        "$HOME/.venv/bin/python3"; do
+        "$HOME/.venv/bin/python3" \
+        "$HOME/.local/venv/bin/python3"; do
         if [[ -x "$candidate" ]]; then
             PYTHON="$candidate"
             break
@@ -79,17 +78,12 @@ if [[ -z "$PYTHON" ]]; then
     exit 1
 fi
 
-# 3. Ensure media_toolbox module is in PYTHONPATH
+# 3. Ensure media_toolbox module is in PYTHONPATH if running from source checkout
 SCRIPT_PATH="$(readlink -f -- "$0" 2>/dev/null || realpath -- "$0" 2>/dev/null || echo "$0")"
 SCRIPT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" >/dev/null 2>&1 && pwd)"
 REPO_SRC="$(cd -- "$SCRIPT_DIR/../../.." >/dev/null 2>&1 && pwd)/src"
 if [[ -f "$REPO_SRC/media_toolbox/__init__.py" ]]; then
     export PYTHONPATH="$REPO_SRC${PYTHONPATH:+:$PYTHONPATH}"
-else
-    WELL_KNOWN_SRC="/home/tazztone/_coding/media-toolbox/src"
-    if [[ -f "$WELL_KNOWN_SRC/media_toolbox/__init__.py" ]]; then
-        export PYTHONPATH="$WELL_KNOWN_SRC${PYTHONPATH:+:$PYTHONPATH}"
-    fi
 fi
 
 # 4. Dispatch execution

@@ -167,10 +167,9 @@ def find_python_interpreter() -> str:
             return str(cand)
 
     for known in (
-        Path("/home/tazztone/_coding/media-toolbox/.venv/bin/python3"),
-        Path("/home/tazztone/_coding/scripts/.venv/bin/python3"),
         Path.home() / ".local/share/media_toolbox/venv/bin/python3",
         Path.home() / ".venv/bin/python3",
+        Path.home() / ".local/venv/bin/python3",
     ):
         if known.is_file() and os.access(known, os.X_OK):
             return str(known)
@@ -190,15 +189,6 @@ def get_toolbox_env() -> dict[str, str]:
             return env
     except Exception:
         pass
-
-    for candidate_src in (
-        Path("/home/tazztone/_coding/media-toolbox/src"),
-        Path("/home/tazztone/_coding/scripts/python"),
-    ):
-        if (candidate_src / "media_toolbox" / "__init__.py").is_file():
-            pp = env.get("PYTHONPATH", "")
-            env["PYTHONPATH"] = f"{candidate_src}:{pp}" if pp else str(candidate_src)
-            break
 
     return env
 

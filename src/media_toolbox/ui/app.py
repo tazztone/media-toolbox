@@ -5,7 +5,6 @@ Libadwaita / GTK4 Application entrypoint and lifecycle manager for media_toolbox
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import sys
 from typing import Any, Optional, Sequence
 
@@ -107,9 +106,9 @@ class MediaToolboxApp(Adw.Application):
             developer_name="tazztone",
             version=__version__,
             comments="Modern video & audio transcoding and media inspection toolbox.",
-            website="https://github.com/tazztone/scripts",
-            issue_url="https://github.com/tazztone/scripts/issues",
-            license_type=Gtk.License.MIT_X11,
+            website="https://github.com/tazztone/media-toolbox",
+            issue_url="https://github.com/tazztone/media-toolbox/issues",
+            license_type=Gtk.License.APACHE_2_0,
         )
         if win:
             about.present(win)
