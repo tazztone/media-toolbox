@@ -591,23 +591,22 @@ def normalize_argv(argv: Sequence[str]) -> list[str]:
     return args_list
 
 
-def _get_nautilus_installer() -> Any:
-    """Dynamically load installer module without triggering static AST GUI checks."""
-    import importlib
-
-    mod_name = "media_toolbox." + "nautilus.installer"
-    return importlib.import_module(mod_name)
+from media_toolbox.nautilus.installer import (
+    get_nautilus_paths,
+    install_nautilus,
+    status_nautilus,
+    uninstall_nautilus,
+)
 
 
 def handle_install_nautilus(args: argparse.Namespace) -> int:
     """Handle install-nautilus CLI subcommand."""
-    installer = _get_nautilus_installer()
     try:
         dest_dir = getattr(args, "dest_dir", None)
         dry_run = getattr(args, "dry_run", False)
         quiet = getattr(args, "quiet", False)
 
-        installed = installer.install_nautilus(dest_dir=dest_dir, dry_run=dry_run)
+        installed = install_nautilus(dest_dir=dest_dir, dry_run=dry_run)
         if not quiet:
             label = "Would install" if dry_run else "Successfully installed"
             sys.stdout.write(f"{label} {len(installed)} Nautilus component(s):\n")
@@ -621,13 +620,12 @@ def handle_install_nautilus(args: argparse.Namespace) -> int:
 
 def handle_uninstall_nautilus(args: argparse.Namespace) -> int:
     """Handle uninstall-nautilus CLI subcommand."""
-    installer = _get_nautilus_installer()
     try:
         dest_dir = getattr(args, "dest_dir", None)
         dry_run = getattr(args, "dry_run", False)
         quiet = getattr(args, "quiet", False)
 
-        removed = installer.uninstall_nautilus(dest_dir=dest_dir, dry_run=dry_run)
+        removed = uninstall_nautilus(dest_dir=dest_dir, dry_run=dry_run)
         if not quiet:
             if not removed:
                 label = "Dry-run: no files found to remove." if dry_run else "No installed Nautilus components were found to remove."
@@ -645,14 +643,13 @@ def handle_uninstall_nautilus(args: argparse.Namespace) -> int:
 
 def handle_status_nautilus(args: argparse.Namespace) -> int:
     """Handle status-nautilus CLI subcommand."""
-    installer = _get_nautilus_installer()
     try:
         dest_dir = getattr(args, "dest_dir", None)
         as_json = getattr(args, "json", False)
         check_mode = getattr(args, "check", False)
 
-        status = installer.status_nautilus(dest_dir=dest_dir)
-        paths = installer.get_nautilus_paths(dest_dir=dest_dir)
+        status = status_nautilus(dest_dir=dest_dir)
+        paths = get_nautilus_paths(dest_dir=dest_dir)
 
         if as_json:
             sys.stdout.write(json.dumps(status, indent=2) + "\n")
