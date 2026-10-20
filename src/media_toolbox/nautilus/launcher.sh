@@ -94,7 +94,7 @@ fi
 
 # 4. Dispatch execution
 if [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]]; then
-    if command -v media-toolbox-gui >/dev/null 2>&1; then
+    if [[ -z "${MEDIA_TOOLBOX_PYTHON:-}" ]] && command -v media-toolbox-gui >/dev/null 2>&1; then
         nohup media-toolbox-gui "${FILES[@]}" >/dev/null 2>&1 &
         exit 0
     fi
@@ -102,7 +102,7 @@ if [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]]; then
     nohup "$PYTHON" -m media_toolbox.ui.app "${FILES[@]}" >/dev/null 2>&1 &
     exit 0
 else
-    if command -v media-toolbox >/dev/null 2>&1; then
+    if [[ -z "${MEDIA_TOOLBOX_PYTHON:-}" ]] && command -v media-toolbox >/dev/null 2>&1; then
         exec media-toolbox "${FILES[@]}"
     fi
     # Terminal / headless fallback: run CLI

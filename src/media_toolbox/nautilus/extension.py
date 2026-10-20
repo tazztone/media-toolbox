@@ -360,6 +360,8 @@ class MediaToolboxExtension(GObject.GObject, Nautilus.MenuProvider):
                 f"notify-send 'Media Metadata' \"$OUT\""
             )
             launch_detached(["bash", "-c", shutil_notify, "bash", *paths])
+        else:
+            launch_detached(["bash", "-c", script, "bash", *paths])
 
     def _on_quick_transcode(self, _item: Any, paths: list[str]) -> None:
         """Launch batch H.264 video transcode."""
