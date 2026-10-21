@@ -14,8 +14,6 @@ Features:
 
 from __future__ import annotations
 
-import dataclasses
-import enum
 from pathlib import Path
 import threading
 from typing import Any, Optional
@@ -24,63 +22,54 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gio, GLib, Gtk
+from gi.repository import Adw, Gtk
 
-from media_toolbox.core.builder import build_ffmpeg_commands
-from media_toolbox.core.jobs import JobConfig, run_job
-from media_toolbox.core.models import EncodeOptions, MediaInfo, ProgressEvent
-from media_toolbox.core.presets import list_audio_presets, list_video_presets
-from media_toolbox.core.probe import probe_media
-from media_toolbox.core.runner import (
-    RunnerCancelledError,
-    RunnerError,
-    run_ffmpeg_pipeline,
+from media_toolbox.core.jobs import JobConfig
+from media_toolbox.core.models import EncodeOptions, MediaInfo
+from media_toolbox.core.runner import run_ffmpeg_pipeline
+from media_toolbox.ui.constants import (
+    AUDIO_PRESETS,
+    CROP_PRESETS,
+    SPEED_PRESETS,
+    VIDEO_PRESETS,
+    WindowState,
 )
 from media_toolbox.ui.widgets import (
-    AudioOptionsWidget,
-    MetadataCard,
-    ProgressFooterWidget,
-    RateControlWidget,
-    ResolutionWidget,
     build_encode_options_from_state,
     resolve_default_output_path,
 )
+from media_toolbox.ui.window_builder import (
+    build_extract_audio_page,
+    build_transcode_page,
+    build_window_layout,
+)
+from media_toolbox.ui.window_probing import WindowProbingMixin
+from media_toolbox.ui.window_worker import WindowWorkerMixin
+
+__all__ = [
+    "WindowState",
+    "MainWindow",
+    "VIDEO_PRESETS",
+    "AUDIO_PRESETS",
+    "CROP_PRESETS",
+    "SPEED_PRESETS",
+    "run_ffmpeg_pipeline",
+]
 
 
-class WindowState(enum.Enum):
-    EMPTY = "empty"
-    PROBING = "probing"
-    READY = "ready"
-    RUNNING = "running"
-    CANCELLING = "cancelling"
-    CLOSED = "closed"
-
-
-class MainWindow(Adw.ApplicationWindow):
+class MainWindow(Adw.ApplicationWindow, WindowProbingMixin, WindowWorkerMixin):
     """
     Main Libadwaita application window.
     """
 
-    VIDEO_PRESETS = [(p.display_name, p.name) for p in list_video_presets()]
-    AUDIO_PRESETS = [(p.display_name, p.name) for p in list_audio_presets()]
+    VIDEO_PRESETS = VIDEO_PRESETS
+    AUDIO_PRESETS = AUDIO_PRESETS
+    CROP_PRESETS = CROP_PRESETS
+    SPEED_PRESETS = SPEED_PRESETS
 
-    CROP_PRESETS = [
-        ("None (Original)", None),
-        ("16:9 Landscape", "16:9"),
-        ("9:16 Portrait / Shorts", "9:16"),
-        ("1:1 Square", "1:1"),
-        ("4:3 Classic", "4:3"),
-        ("21:9 Ultrawide", "21:9"),
-    ]
-
-    SPEED_PRESETS = [
-        ("1.0x (Normal)", 1.0),
-        ("0.5x (Half Speed)", 0.5),
-        ("0.75x", 0.75),
-        ("1.25x", 1.25),
-        ("1.5x", 1.5),
-        ("2.0x (Double Speed)", 2.0),
-    ]
+    # Backward compatibility delegates for view builders
+    _build_transcode_page = staticmethod(build_transcode_page)
+    _build_extract_audio_page = staticmethod(build_extract_audio_page)
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -100,391 +89,14 @@ class MainWindow(Adw.ApplicationWindow):
         self.open_btn: Optional[Gtk.Button] = None
         self._probe_request_id: int = 0
         self._pending_confirmation: bool = False
+        self._active_worker: Optional[threading.Thread] = None
 
         self._build_ui()
         self.connect("close-request", self._on_close_request)
 
     def _build_ui(self) -> None:
         """Construct the complete Libadwaita window UI layout."""
-        # Top Header Bar
-        self.header_bar = Adw.HeaderBar()
-        self.open_btn = Gtk.Button(
-            icon_name="document-open-symbolic",
-            tooltip_text="Open Media File (<Ctrl>O)",
-        )
-        self.open_btn.connect("clicked", lambda _b: self.open_file_dialog())
-        self.header_bar.pack_start(self.open_btn)
-
-        self.window_title = Adw.WindowTitle(
-            title="Media Toolbox",
-            subtitle="No media selected",
-        )
-        self.header_bar.set_title_widget(self.window_title)
-
-        # Menu button
-        menu_btn = Gtk.MenuButton(icon_name="open-menu-symbolic")
-        menu = Gio.Menu()
-        menu.append("Open File...", "app.open")
-        menu.append("About Media Toolbox", "app.about")
-        menu.append("Quit", "app.quit")
-        menu_btn.set_menu_model(menu)
-        self.header_bar.pack_end(menu_btn)
-
-        # Root box inside ToastOverlay
-        self.toast_overlay = Adw.ToastOverlay()
-        root_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        root_box.append(self.header_bar)
-
-        # Main Stack: empty state vs loaded state
-        self.main_stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE)
-
-        # 1. Empty State Page
-        empty_page = Adw.StatusPage(
-            title="Media Toolbox",
-            description="Open a video or audio file to inspect, transcode, or extract audio.",
-            icon_name="video-x-generic-symbolic",
-        )
-        empty_btn = Gtk.Button(
-            label="Open Media File...",
-            halign=Gtk.Align.CENTER,
-            css_classes=["suggested-action", "pill"],
-        )
-        empty_btn.connect("clicked", lambda _b: self.open_file_dialog())
-        empty_page.set_child(empty_btn)
-        self.main_stack.add_named(empty_page, "empty")
-
-        # 2. Loaded State Page
-        scrolled = Gtk.ScrolledWindow(vexpand=True, hexpand=True)
-        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
-        content_box.set_margin_start(18)
-        content_box.set_margin_end(18)
-        content_box.set_margin_top(14)
-        content_box.set_margin_bottom(14)
-
-        # Metadata summary card
-        self.metadata_card = MetadataCard()
-        content_box.append(self.metadata_card)
-
-        # Tabs for Transcode Video vs Extract Audio
-        self.view_stack = Adw.ViewStack()
-
-        # Tab 1: Transcode Video
-        transcode_page = self._build_transcode_page()
-        self.view_stack.add_titled_with_icon(
-            transcode_page,
-            "transcode",
-            "Transcode Video",
-            "video-x-generic-symbolic",
-        )
-
-        # Tab 2: Extract Audio
-        extract_page = self._build_extract_audio_page()
-        self.view_stack.add_titled_with_icon(
-            extract_page,
-            "extract",
-            "Extract Audio",
-            "audio-x-generic-symbolic",
-        )
-
-        self.view_switcher = Adw.ViewSwitcher(
-            stack=self.view_stack,
-            policy=Adw.ViewSwitcherPolicy.WIDE,
-            halign=Gtk.Align.CENTER,
-        )
-        content_box.append(self.view_switcher)
-        content_box.append(self.view_stack)
-
-        scrolled.set_child(content_box)
-        self.main_stack.add_named(scrolled, "loaded")
-
-        root_box.append(self.main_stack)
-
-        # Progress Footer (anchored at bottom)
-        self.progress_footer = ProgressFooterWidget(on_cancel_callback=self._on_cancel_clicked)
-        root_box.append(self.progress_footer)
-
-        self.toast_overlay.set_child(root_box)
-        self.set_content(self.toast_overlay)
-
-    def _build_transcode_page(self) -> Adw.PreferencesPage:
-        """Construct the Transcode Video preferences page."""
-        page = Adw.PreferencesPage()
-
-        # Codec Preset Group
-        preset_group = Adw.PreferencesGroup(title="Target Codec & Format")
-        preset_strings = [p[0] for p in self.VIDEO_PRESETS]
-        self.video_preset_row = Adw.ComboRow(
-            title="Video Codec Preset",
-            model=Gtk.StringList.new(preset_strings),
-            selected=0,
-        )
-        self.video_preset_row.connect("notify::selected", self._on_video_preset_changed)
-        preset_group.add(self.video_preset_row)
-        page.add(preset_group)
-
-        # Rate Control & Quality
-        self.rate_widget = RateControlWidget()
-        self.rate_widget.mode_row.connect("notify::selected", lambda *_: self._update_default_output_paths())
-        page.add(self.rate_widget)
-
-        # Resolution & Dimensions
-        self.res_widget = ResolutionWidget()
-        page.add(self.res_widget)
-
-        # Video Adjustments Group (Crop & Speed)
-        adjust_group = Adw.PreferencesGroup(title="Video Transformations")
-        crop_strings = [c[0] for c in self.CROP_PRESETS]
-        self.crop_row = Adw.ComboRow(
-            title="Aspect Ratio Crop",
-            model=Gtk.StringList.new(crop_strings),
-            selected=0,
-        )
-        adjust_group.add(self.crop_row)
-
-        speed_strings = [s[0] for s in self.SPEED_PRESETS]
-        self.speed_row = Adw.ComboRow(
-            title="Playback Speed",
-            model=Gtk.StringList.new(speed_strings),
-            selected=0,
-        )
-        adjust_group.add(self.speed_row)
-        page.add(adjust_group)
-
-        # Audio Adjustments
-        self.audio_widget = AudioOptionsWidget()
-        page.add(self.audio_widget)
-
-        # Destination & Action Group
-        action_group = Adw.PreferencesGroup(title="Destination & Action")
-        self.video_dest_row = Adw.ActionRow(
-            title="Output File",
-            subtitle="Not configured",
-        )
-        browse_btn = Gtk.Button(label="Browse...")
-        browse_btn.connect("clicked", lambda _b: self.choose_output_destination(is_audio=False))
-        self.video_dest_row.add_suffix(browse_btn)
-        action_group.add(self.video_dest_row)
-
-        self.transcode_btn = Gtk.Button(
-            label="Start Transcode",
-            halign=Gtk.Align.END,
-            css_classes=["suggested-action"],
-            margin_top=8,
-            margin_bottom=8,
-        )
-        self.transcode_btn.connect("clicked", lambda _b: self._start_transcode())
-        action_group.add(self.transcode_btn)
-
-        page.add(action_group)
-        return page
-
-    def _build_extract_audio_page(self) -> Adw.PreferencesPage:
-        """Construct the standalone Extract Audio preferences page."""
-        page = Adw.PreferencesPage()
-
-        # Audio Format Group
-        format_group = Adw.PreferencesGroup(title="Audio Format & Bitrate")
-        audio_preset_strings = [p[0] for p in self.AUDIO_PRESETS]
-        self.audio_preset_row = Adw.ComboRow(
-            title="Audio Format",
-            model=Gtk.StringList.new(audio_preset_strings),
-            selected=0,
-        )
-        self.audio_preset_row.connect("notify::selected", self._on_audio_preset_changed)
-        format_group.add(self.audio_preset_row)
-
-        self.extract_bitrate_adj = Gtk.Adjustment(
-            value=192,
-            lower=32,
-            upper=320,
-            step_increment=32,
-            page_increment=64,
-        )
-        self.extract_bitrate_row = Adw.SpinRow(
-            title="Audio Bitrate (kbps)",
-            adjustment=self.extract_bitrate_adj,
-            climb_rate=32.0,
-            digits=0,
-        )
-        format_group.add(self.extract_bitrate_row)
-        page.add(format_group)
-
-        # Audio Adjustments Group
-        adjust_group = Adw.PreferencesGroup(title="Audio Processing")
-        speed_strings = [s[0] for s in self.SPEED_PRESETS]
-        self.extract_speed_row = Adw.ComboRow(
-            title="Playback Speed",
-            model=Gtk.StringList.new(speed_strings),
-            selected=0,
-        )
-        adjust_group.add(self.extract_speed_row)
-
-        self.extract_norm_switch = Adw.SwitchRow(
-            title="Normalize Loudness",
-            subtitle="EBU R128 loudness normalization (loudnorm)",
-            active=False,
-        )
-        adjust_group.add(self.extract_norm_switch)
-
-        self.extract_boost_adj = Gtk.Adjustment(
-            value=0.0,
-            lower=-20.0,
-            upper=20.0,
-            step_increment=0.5,
-            page_increment=2.0,
-        )
-        self.extract_boost_row = Adw.SpinRow(
-            title="Volume Boost (dB)",
-            adjustment=self.extract_boost_adj,
-            climb_rate=0.5,
-            digits=1,
-        )
-        adjust_group.add(self.extract_boost_row)
-        page.add(adjust_group)
-
-        # Destination & Action Group
-        action_group = Adw.PreferencesGroup(title="Destination & Action")
-        self.audio_dest_row = Adw.ActionRow(
-            title="Output File",
-            subtitle="Not configured",
-        )
-        browse_btn = Gtk.Button(label="Browse...")
-        browse_btn.connect("clicked", lambda _b: self.choose_output_destination(is_audio=True))
-        self.audio_dest_row.add_suffix(browse_btn)
-        action_group.add(self.audio_dest_row)
-
-        self.extract_btn = Gtk.Button(
-            label="Extract Audio",
-            halign=Gtk.Align.END,
-            css_classes=["suggested-action"],
-            margin_top=8,
-            margin_bottom=8,
-        )
-        self.extract_btn.connect("clicked", lambda _b: self._start_extract_audio())
-        action_group.add(self.extract_btn)
-
-        page.add(action_group)
-        return page
-
-    # -----------------------------------------------------------------------
-    # File Dialogs & Loading
-    # -----------------------------------------------------------------------
-
-    def open_file_dialog(self) -> None:
-        """Present modern async file chooser portal."""
-        if self.is_transcoding:
-            self.toast_overlay.add_toast(Adw.Toast(title="Cannot open file while transcoding is in progress."))
-            return
-        dialog = Gtk.FileDialog(title="Select Media File")
-        dialog.open(self, None, self._on_file_dialog_finish)
-
-    def _on_file_dialog_finish(self, dialog: Gtk.FileDialog, result: Gio.AsyncResult) -> None:
-        try:
-            gfile = dialog.open_finish(result)
-            if gfile:
-                path = gfile.get_path()
-                if path:
-                    self.load_media_file(path)
-        except Exception:
-            pass  # User cancelled dialog
-
-    def choose_output_destination(self, is_audio: bool = False) -> None:
-        """Present save file dialog for destination selection."""
-        dialog = Gtk.FileDialog(title="Select Destination File")
-        current = self.audio_output_path if is_audio else self.video_output_path
-        if current:
-            dialog.set_initial_name(current.name)
-            dialog.set_initial_folder(Gio.File.new_for_path(str(current.parent)))
-
-        dialog.save(self, None, lambda d, res: self._on_dest_dialog_finish(d, res, is_audio))
-
-    def _on_dest_dialog_finish(self, dialog: Gtk.FileDialog, result: Gio.AsyncResult, is_audio: bool) -> None:
-        try:
-            gfile = dialog.save_finish(result)
-            if gfile and gfile.get_path():
-                p = Path(gfile.get_path())
-                if is_audio:
-                    self.audio_output_path = p
-                    self._audio_output_custom = True
-                    self.audio_dest_row.set_subtitle(str(p))
-                else:
-                    self.video_output_path = p
-                    self._video_output_custom = True
-                    self.video_dest_row.set_subtitle(str(p))
-        except Exception:
-            pass  # User cancelled
-
-    def load_media_file(self, path: str | Path, sync: bool = False) -> None:
-        """Inspect media file and configure widgets asynchronously."""
-        if self.state in (WindowState.RUNNING, WindowState.CANCELLING, WindowState.CLOSED) or self.is_transcoding:
-            self.toast_overlay.add_toast(Adw.Toast(title="Cannot load file while transcoding is in progress."))
-            return
-        p = Path(path).resolve()
-        if not p.exists():
-            self.toast_overlay.add_toast(Adw.Toast(title=f"File not found: {p.name}"))
-            return
-
-        self._probe_request_id += 1
-        req_id = self._probe_request_id
-        self.state = WindowState.PROBING
-        # Invalidate active loaded media during probing
-        self.input_file = None
-        self.media_info = None
-        self.transcode_btn.set_sensitive(False)
-        self.extract_btn.set_sensitive(False)
-        self.window_title.set_subtitle(f"Probing {p.name}...")
-
-        if sync:
-            self._probe_worker(p, req_id)
-        else:
-            threading.Thread(
-                target=self._probe_worker,
-                args=(p, req_id),
-                daemon=True,
-            ).start()
-
-    def _probe_worker(self, p: Path, req_id: int) -> None:
-        try:
-            media_info = probe_media(p)
-            GLib.idle_add(self._on_probe_success, p, req_id, media_info)
-        except Exception as exc:
-            GLib.idle_add(self._on_probe_error, p, req_id, str(exc))
-
-    def _on_probe_success(self, p: Path, req_id: int, media_info: MediaInfo) -> bool:
-        if self.state == WindowState.CLOSED or req_id != self._probe_request_id:
-            return False  # Discard stale completion
-
-        self.input_file = p
-        self.media_info = media_info
-        self.state = WindowState.READY
-        self._video_output_custom = False
-        self._audio_output_custom = False
-        self.window_title.set_subtitle(p.name)
-        self.metadata_card.set_media_info(media_info)
-
-        if media_info.primary_video:
-            pv = media_info.primary_video
-            eff_w, eff_h = pv.effective_dimensions
-            self.res_widget.set_source_resolution(eff_w, eff_h)
-
-        self.audio_widget.set_has_audio(media_info.has_audio)
-        self._update_default_output_paths()
-        self.main_stack.set_visible_child_name("loaded")
-        self._set_ui_controls_sensitive(True)
-        return False
-
-    def _on_probe_error(self, p: Path, req_id: int, error_msg: str) -> bool:
-        if self.state == WindowState.CLOSED or req_id != self._probe_request_id:
-            return False
-
-        self.state = WindowState.EMPTY
-        self.window_title.set_subtitle("No media selected")
-        self.main_stack.set_visible_child_name("empty")
-        self._set_ui_controls_sensitive(True)
-        self.transcode_btn.set_sensitive(False)
-        self.extract_btn.set_sensitive(False)
-        self.toast_overlay.add_toast(Adw.Toast(title=f"Failed to probe media: {error_msg}"))
-        return False
+        build_window_layout(self)
 
     # -----------------------------------------------------------------------
     # Preset & Output Path Management
@@ -507,32 +119,6 @@ class MainWindow(Adw.ApplicationWindow):
         preset = self.get_current_audio_preset()
         self.extract_bitrate_row.set_sensitive(preset != "flac")
         self._update_default_output_paths()
-
-    def _update_default_output_paths(self) -> None:
-        if not self.input_file:
-            return
-
-        # Video path
-        if not getattr(self, "_video_output_custom", False):
-            video_preset = self.get_current_video_preset()
-            is_target_size = (self.rate_widget.get_mode() == "target_size") and video_preset not in ("gif", "prores")
-            self.video_output_path = resolve_default_output_path(
-                self.input_file,
-                video_preset,
-                is_extract_audio=False,
-                is_target_size=is_target_size,
-            )
-            self.video_dest_row.set_subtitle(str(self.video_output_path))
-
-        # Audio path
-        if not getattr(self, "_audio_output_custom", False):
-            audio_preset = self.get_current_audio_preset()
-            self.audio_output_path = resolve_default_output_path(
-                self.input_file,
-                audio_preset,
-                is_extract_audio=True,
-            )
-            self.audio_dest_row.set_subtitle(str(self.audio_output_path))
 
     # -----------------------------------------------------------------------
     # Form Extraction
@@ -595,15 +181,8 @@ class MainWindow(Adw.ApplicationWindow):
         )
 
     # -----------------------------------------------------------------------
-    # Non-Blocking Thread Execution
+    # Action Triggers
     # -----------------------------------------------------------------------
-
-    def _set_ui_controls_sensitive(self, sensitive: bool) -> None:
-        self.view_stack.set_sensitive(sensitive)
-        self.transcode_btn.set_sensitive(sensitive)
-        self.extract_btn.set_sensitive(sensitive)
-        if hasattr(self, "open_btn") and self.open_btn is not None:
-            self.open_btn.set_sensitive(sensitive)
 
     def _start_transcode(self) -> None:
         if self.state != WindowState.READY or not self.input_file or not self.media_info:
@@ -646,203 +225,3 @@ class MainWindow(Adw.ApplicationWindow):
         )
 
         self._confirm_overwrite_and_start(config, "Extracting audio...")
-
-    def _confirm_overwrite_and_start(self, config: JobConfig, title: str) -> None:
-        if getattr(self, "_pending_confirmation", False) is True:
-            return
-
-        out_p = Path(config.output_path)
-        if out_p.exists():
-            self._pending_confirmation = True
-            if hasattr(self, "_set_ui_controls_sensitive"):
-                self._set_ui_controls_sensitive(False)
-            if hasattr(self, "open_btn") and self.open_btn is not None and hasattr(self.open_btn, "set_sensitive"):
-                self.open_btn.set_sensitive(False)
-
-            dialog = Adw.MessageDialog(
-                transient_for=self,
-                heading="Replace File?",
-                body=f"'{out_p.name}' already exists. Overwriting will replace its contents.",
-            )
-            dialog.add_response("cancel", "Cancel")
-            dialog.add_response("replace", "Replace")
-            dialog.set_response_appearance("replace", Adw.ResponseAppearance.DESTRUCTIVE)
-            dialog.set_default_response("cancel")
-            dialog.set_close_response("cancel")
-
-            current_input = getattr(self, "input_file", None)
-
-            def _on_response(d: Any, response_id: str) -> None:
-                self._pending_confirmation = False
-                if getattr(self, "state", None) == WindowState.CLOSED:
-                    return
-
-                if response_id == "replace":
-                    if getattr(self, "state", None) != WindowState.READY or getattr(self, "input_file", None) != current_input:
-                        if hasattr(self, "_set_ui_controls_sensitive"):
-                            self._set_ui_controls_sensitive(True)
-                        if hasattr(self, "open_btn") and self.open_btn is not None and hasattr(self.open_btn, "set_sensitive"):
-                            self.open_btn.set_sensitive(True)
-                        return
-                    confirmed_config = dataclasses.replace(config, overwrite=True)
-                    self._start_worker(confirmed_config, title)
-                else:
-                    if hasattr(self, "_set_ui_controls_sensitive"):
-                        self._set_ui_controls_sensitive(True)
-                    if hasattr(self, "open_btn") and self.open_btn is not None and hasattr(self.open_btn, "set_sensitive"):
-                        self.open_btn.set_sensitive(True)
-
-            dialog.connect("response", _on_response)
-            dialog.present()
-        else:
-            self._start_worker(config, title)
-
-    def _start_worker(
-        self,
-        target_or_cmds: Any,
-        *args: Any,
-    ) -> None:
-        if (
-            hasattr(self, "_active_worker")
-            and self._active_worker is not None
-            and hasattr(self._active_worker, "is_alive")
-            and self._active_worker.is_alive() is True
-        ):
-            return
-        if getattr(self, "state", None) == WindowState.CLOSED:
-            return
-        self.state = WindowState.RUNNING
-        self.cancel_event = threading.Event()
-        self.is_transcoding = True
-        self._set_ui_controls_sensitive(False)
-        if hasattr(self, "open_btn") and self.open_btn is not None:
-            self.open_btn.set_sensitive(False)
-
-        if isinstance(target_or_cmds, JobConfig):
-            title = args[0] if args else "Processing media..."
-            self.progress_footer.start(title)
-            worker_args: tuple[Any, ...] = (target_or_cmds, self.cancel_event)
-        else:
-            # Legacy signature: (cmds, duration, output_path, title)
-            cmds = target_or_cmds
-            duration = args[0]
-            output_path = args[1]
-            title = args[2] if len(args) > 2 else "Processing media..."
-            self.progress_footer.start(title)
-            worker_args = (cmds, duration, output_path, self.cancel_event)
-
-        worker_thread = threading.Thread(
-            target=self._worker_thread_entry,
-            args=worker_args,
-            daemon=True,
-            name="MediaToolboxWorker",
-        )
-        self._active_worker = worker_thread
-        worker_thread.start()
-
-    # Backwards compatibility alias
-    _launch_worker_pipeline = _start_worker
-
-    def _worker_thread_entry(
-        self,
-        *args: Any,
-        **kwargs: Any,
-    ) -> None:
-        """Worker thread running FFmpeg job in background without blocking UI thread."""
-        if len(args) == 2 and isinstance(args[0], JobConfig):
-            config = args[0]
-            cancel_event = args[1]
-            try:
-                result = run_job(
-                    config=config,
-                    progress_callback=lambda evt: GLib.idle_add(self._on_progress_idle, evt),
-                    pipeline_progress_callback=lambda p, t, evt: GLib.idle_add(self._on_pass_progress_idle, p, t, evt),
-                    cancel_event=cancel_event,
-                )
-                GLib.idle_add(self._on_success_idle, result.output_path)
-            except RunnerCancelledError:
-                GLib.idle_add(self._on_cancelled_idle, Path(config.output_path))
-            except RunnerError as err:
-                err_msg = err.last_error_line or str(err)
-                GLib.idle_add(self._on_error_idle, err_msg)
-            except Exception as exc:
-                GLib.idle_add(self._on_error_idle, str(exc))
-            return
-
-        # Legacy fallback signature: (cmds, total_duration, output_path, cancel_event)
-        cmds, total_duration, output_path, cancel_event = args[0], args[1], args[2], args[3]
-        try:
-            run_ffmpeg_pipeline(
-                cmds=cmds,
-                total_duration_seconds=total_duration,
-                progress_callback=lambda evt: GLib.idle_add(self._on_progress_idle, evt),
-                pipeline_progress_callback=lambda p, t, evt: GLib.idle_add(self._on_pass_progress_idle, p, t, evt),
-                cancel_event=cancel_event,
-            )
-            GLib.idle_add(self._on_success_idle, output_path)
-        except RunnerCancelledError:
-            GLib.idle_add(self._on_cancelled_idle, output_path)
-        except RunnerError as err:
-            err_msg = err.last_error_line or str(err)
-            GLib.idle_add(self._on_error_idle, err_msg)
-        except Exception as exc:
-            GLib.idle_add(self._on_error_idle, str(exc))
-
-    def _on_progress_idle(self, event: ProgressEvent) -> bool:
-        self.progress_footer.update_progress(event)
-        return GLib.SOURCE_REMOVE
-
-    def _on_pass_progress_idle(self, pass_num: int, total_passes: int, event: ProgressEvent) -> bool:
-        pass_info = f"Pass {pass_num} of {total_passes} ({event.percentage:.1f}%)" if total_passes > 1 else None
-        self.progress_footer.update_progress(event, pass_info=pass_info)
-        return GLib.SOURCE_REMOVE
-
-    def _on_success_idle(self, output_path: Path) -> bool:
-        if self.state == WindowState.CLOSED:
-            return GLib.SOURCE_REMOVE
-        self.state = WindowState.READY
-        self.is_transcoding = False
-        self._set_ui_controls_sensitive(True)
-        if hasattr(self, "open_btn") and self.open_btn is not None:
-            self.open_btn.set_sensitive(True)
-        self.progress_footer.finish(True, f"Saved: {output_path.name}")
-        self.toast_overlay.add_toast(Adw.Toast(title=f"Completed successfully: {output_path.name}"))
-        return GLib.SOURCE_REMOVE
-
-    def _on_cancelled_idle(self, output_path: Path) -> bool:
-        if self.state == WindowState.CLOSED:
-            return GLib.SOURCE_REMOVE
-        self.state = WindowState.READY
-        self.is_transcoding = False
-        self._set_ui_controls_sensitive(True)
-        if hasattr(self, "open_btn") and self.open_btn is not None:
-            self.open_btn.set_sensitive(True)
-        self.progress_footer.finish(False, "Operation cancelled")
-        self.toast_overlay.add_toast(Adw.Toast(title="Operation cancelled by user."))
-        return GLib.SOURCE_REMOVE
-
-    def _on_error_idle(self, error_message: str) -> bool:
-        if self.state == WindowState.CLOSED:
-            return GLib.SOURCE_REMOVE
-        self.state = WindowState.READY
-        self.is_transcoding = False
-        self._set_ui_controls_sensitive(True)
-        if hasattr(self, "open_btn") and self.open_btn is not None:
-            self.open_btn.set_sensitive(True)
-        self.progress_footer.finish(False, f"Failed: {error_message}")
-        self.toast_overlay.add_toast(Adw.Toast(title=f"Encoding failed: {error_message}"))
-        return GLib.SOURCE_REMOVE
-
-    def _on_cancel_clicked(self) -> None:
-        self.state = WindowState.CANCELLING
-        if self.cancel_event:
-            self.cancel_event.set()
-        self.progress_footer.set_cancelling()
-
-    def _on_close_request(self, *args: Any) -> bool:
-        self.state = WindowState.CLOSED
-        if self.is_transcoding and self.cancel_event:
-            self.cancel_event.set()
-            if hasattr(self, "_active_worker") and self._active_worker is not None and self._active_worker.is_alive():
-                self._active_worker.join(timeout=2.0)
-        return False

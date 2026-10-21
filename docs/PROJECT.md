@@ -28,7 +28,11 @@ src/media_toolbox/
 ├── ui/
 │   ├── __init__.py
 │   ├── app.py                # Adw.Application, display detection, lifecycle
-│   ├── window.py             # Main Libadwaita application window with async probing and worker lifecycle
+│   ├── window.py             # Main Libadwaita application window coordinator
+│   ├── window_builder.py     # Libadwaita / GTK4 view layout construction
+│   ├── window_probing.py     # Async file probing and destination picking mixin
+│   ├── window_worker.py      # Background worker thread execution and idle dispatch mixin
+│   ├── constants.py          # UI state enums and preset definitions
 │   ├── forms.py              # Pure form-state extraction and path resolution decoupled from GTK
 │   └── widgets.py            # Custom reactive widgets (monotonic progress bar, speed/ETA labels, revealers)
 ├── nautilus/
@@ -101,7 +105,7 @@ tests/
 | M2 | Filtergraph, Presets & CLI Builder | `core/filtergraph.py`, `core/presets.py`, `core/builder.py`, tests | M1 | DONE |
 | M3 | Non-Blocking Progress Runner | `core/runner.py`, tests | M1 | DONE |
 | M4 | CLI Entrypoint & Headless AST Check | `cli/`, `__main__.py`, `tests/test_headless_ast.py`, tests | M1, M2, M3 | DONE |
-| M5 | Dynamic Libadwaita / GTK4 UI | `ui/app.py`, `ui/window.py`, `ui/widgets.py`, tests | M1, M2, M3 | DONE |
+| M5 | Dynamic Libadwaita / GTK4 UI | `ui/app.py`, `ui/window.py`, `ui/window_builder.py`, `ui/window_probing.py`, `ui/window_worker.py`, `ui/widgets.py`, tests | M1, M2, M3 | DONE |
 | M6 | Dual Nautilus Integration & Installer | `nautilus/launcher.sh`, `nautilus/extension.py`, `nautilus/installer.py`, tests | M4, M5 | DONE |
 | M7 | E2E Test Suite 100% Pass & Hardening | Full suite pass (`.venv/bin/pytest python/`), Tier 1-5 validation | M1-M6 | DONE |
 
