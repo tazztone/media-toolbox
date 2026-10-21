@@ -11,6 +11,7 @@ Tests:
 
 from __future__ import annotations
 
+import importlib
 from typing import Any, Callable
 from unittest.mock import MagicMock, patch
 import pytest
@@ -45,15 +46,17 @@ class SignalMock(MagicMock):
 @pytest.fixture
 def mock_ui_env():
     """Harness providing mocked GTK, Libadwaita, and custom widgets to run window_builder headlessly."""
+    wb = importlib.import_module("media_toolbox.ui.window_builder")
+
     with (
-        patch("media_toolbox.ui.window_builder.Adw") as mock_adw,
-        patch("media_toolbox.ui.window_builder.Gtk") as mock_gtk,
-        patch("media_toolbox.ui.window_builder.Gio") as mock_gio,
-        patch("media_toolbox.ui.window_builder.MetadataCard", side_effect=SignalMock) as mock_meta,
-        patch("media_toolbox.ui.window_builder.ProgressFooterWidget", side_effect=SignalMock) as mock_footer,
-        patch("media_toolbox.ui.window_builder.RateControlWidget", side_effect=SignalMock) as mock_rate,
-        patch("media_toolbox.ui.window_builder.ResolutionWidget", side_effect=SignalMock) as mock_res,
-        patch("media_toolbox.ui.window_builder.AudioOptionsWidget", side_effect=SignalMock) as mock_audio,
+        patch.object(wb, "Adw") as mock_adw,
+        patch.object(wb, "Gtk") as mock_gtk,
+        patch.object(wb, "Gio") as mock_gio,
+        patch.object(wb, "MetadataCard", side_effect=SignalMock) as mock_meta,
+        patch.object(wb, "ProgressFooterWidget", side_effect=SignalMock) as mock_footer,
+        patch.object(wb, "RateControlWidget", side_effect=SignalMock) as mock_rate,
+        patch.object(wb, "ResolutionWidget", side_effect=SignalMock) as mock_res,
+        patch.object(wb, "AudioOptionsWidget", side_effect=SignalMock) as mock_audio,
     ):
         # Configure Adw / Gtk constructors to return SignalMock so .connect works
         mock_adw.HeaderBar.side_effect = SignalMock
@@ -105,10 +108,10 @@ class TestWindowBuilder:
     """Verifies complete declarative UI construction and signal routing."""
 
     def test_build_window_layout_attaches_expected_widgets(self) -> None:
-        from media_toolbox.ui.window_builder import build_window_layout
+        import media_toolbox.ui.window_builder as wb
 
         win = _create_mock_window()
-        build_window_layout(win)
+        wb.build_window_layout(win)
 
         # 1. Verify Top Header Bar
         assert win.header_bar is not None
@@ -154,10 +157,10 @@ class TestWindowBuilder:
         assert win.progress_footer is not None
 
     def test_build_transcode_page_wires_all_controls(self) -> None:
-        from media_toolbox.ui.window_builder import build_transcode_page
+        import media_toolbox.ui.window_builder as wb
 
         win = _create_mock_window()
-        page = build_transcode_page(win)
+        page = wb.build_transcode_page(win)
 
         assert page is not None
 
@@ -178,7 +181,7 @@ class TestWindowBuilder:
 
         # Verify rate widget mode notify triggers win._update_default_output_paths
         win.rate_widget.mode_row = SignalMock()
-        build_transcode_page(win)
+        wb.build_transcode_page(win)
         win.rate_widget.mode_row.trigger("notify::selected")
         win._update_default_output_paths.assert_called_once()
 
@@ -194,10 +197,10 @@ class TestWindowBuilder:
         win.choose_output_destination.assert_called_once_with(is_audio=False)
 
     def test_build_extract_audio_page_wires_all_controls(self) -> None:
-        from media_toolbox.ui.window_builder import build_extract_audio_page
+        import media_toolbox.ui.window_builder as wb
 
         win = _create_mock_window()
-        page = build_extract_audio_page(win)
+        page = wb.build_extract_audio_page(win)
 
         assert page is not None
 

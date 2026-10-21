@@ -28,5 +28,10 @@ def __getattr__(name: str) -> Any:
         from media_toolbox.ui.window import MainWindow
 
         return MainWindow
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    try:
+        import importlib
+
+        return importlib.import_module(f".{name}", __name__)
+    except ModuleNotFoundError:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from None
 
