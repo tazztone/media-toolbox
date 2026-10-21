@@ -276,8 +276,17 @@ class TestValidationAndPresetNormalization:
             validate_encode_options(opts)
 
     def test_extra_args_forbidden_flags_rejected(self) -> None:
-        """Managed execution flags like -y are rejected in extra_args."""
-        opts = EncodeOptions(extra_args=("-y",))
+        """Managed execution flags like -y and input flags like -i are rejected in extra_args."""
+        opts_y = EncodeOptions(extra_args=("-y",))
         with pytest.raises(ValueError, match="Flag '-y' is managed by media-toolbox"):
-            validate_encode_options(opts)
+            validate_encode_options(opts_y)
+
+        opts_i = EncodeOptions(extra_args=("-i", "second_input.mp4"))
+        with pytest.raises(ValueError, match="Flag '-i' is managed by media-toolbox"):
+            validate_encode_options(opts_i)
+
+    def test_extra_args_negative_numeric_values_accepted(self) -> None:
+        """Negative numeric values (e.g. -ss -5.5 or -q:v -1) are treated as values, not flags."""
+        opts = EncodeOptions(extra_args=("-ss", "-5.5", "-threads", "4"))
+        validate_encode_options(opts)
 

@@ -31,12 +31,23 @@ def normalize_preset_name(preset_str: Optional[str]) -> Optional[str]:
     return _PRESET_ALIASES.get(raw, raw)
 
 
+def _is_flag(token: str) -> bool:
+    """Return True if token is an option flag (e.g. -c:v, --preset), False if a value (e.g. path, number like -5)."""
+    if not token.startswith("-") or token == "-":
+        return False
+    try:
+        float(token)
+        return False
+    except ValueError:
+        return True
+
+
 def validate_extra_args(extra_args: tuple[str, ...]) -> None:
     """
     Validate that extra_args contains only valid FFmpeg option flags and parameter pairs.
-    Rejects naked positional file arguments or conflicting output flags.
+    Rejects naked positional file arguments, input flags, or conflicting output flags.
     """
-    forbidden_flags = {"-y", "-n", "-nostdin"}
+    forbidden_flags = {"-y", "-n", "-nostdin", "-i"}
     i = 0
     while i < len(extra_args):
         token = extra_args[i]
@@ -44,12 +55,12 @@ def validate_extra_args(extra_args: tuple[str, ...]) -> None:
             raise ValueError("extra_args cannot contain empty tokens")
         if token in forbidden_flags:
             raise ValueError(f"Flag '{token}' is managed by media-toolbox and cannot be passed in extra_args")
-        if not token.startswith("-"):
+        if not _is_flag(token):
             raise ValueError(
                 f"Positional token '{token}' in extra_args is invalid. "
                 "extra_args must only contain option flags and option values."
             )
-        if i + 1 < len(extra_args) and not extra_args[i + 1].startswith("-"):
+        if i + 1 < len(extra_args) and not _is_flag(extra_args[i + 1]):
             i += 2
         else:
             i += 1
