@@ -152,3 +152,20 @@ jobs:
         run: |
           pip install pytest
           TEST_INSTALLED=1 pytest -o pythonpath="" -m "not desktop and not integration" tests/
+
+  typecheck:
+    name: Type Check (basedpyright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Create venv and install package
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -U pip
+          .venv/bin/pip install .[dev]
+      - uses: astral-sh/setup-uv@v5
+      - name: Run basedpyright
+        run: uvx basedpyright@1.40.2 src tests

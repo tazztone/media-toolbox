@@ -33,6 +33,7 @@ media-toolbox transcode input.mp4 output.mp4 --preset h264
 media-toolbox transcode input.mp4 output.mp4 --target-mb 25   # two-pass
 media-toolbox extract-audio input.mp4 output.mp3
 media-toolbox-gui                # GUI (needs DISPLAY/WAYLAND_DISPLAY)
+uvx basedpyright src tests       # type check (CI gates on this)
 ```
 
 CI configured via GitHub Actions (`.github/workflows/ci.yml`): headless tests, desktop tests with Xvfb, wheel build smoke test. Package build: `python -m build` (setuptools backend, src layout).
