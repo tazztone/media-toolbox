@@ -157,15 +157,19 @@ jobs:
     name: Type Check (basedpyright)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: "pip"
       - name: Create venv and install package
         run: |
           python -m venv .venv
           .venv/bin/pip install -U pip
           .venv/bin/pip install .[dev]
-      - uses: astral-sh/setup-uv@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
       - name: Run basedpyright
         run: uvx basedpyright@1.40.2 src tests

@@ -36,7 +36,7 @@ media-toolbox-gui                # GUI (needs DISPLAY/WAYLAND_DISPLAY)
 uvx basedpyright src tests       # type check (CI gates on this)
 ```
 
-CI configured via GitHub Actions (`.github/workflows/ci.yml`): headless tests, desktop tests with Xvfb, wheel build smoke test. Package build: `python -m build` (setuptools backend, src layout).
+CI configured via GitHub Actions (`.github/workflows/ci.yml`): headless tests, desktop tests with Xvfb, wheel build smoke test, and basedpyright typecheck. Package build: `python -m build` (setuptools backend, src layout).
 
 ## Code Conventions & Common Patterns
 

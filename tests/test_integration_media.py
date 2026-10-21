@@ -228,7 +228,8 @@ def test_real_concurrent_two_pass_h265_isolation(synthetic_av_clip: Path, tmp_pa
 
     info1 = probe_media(out1)
     info2 = probe_media(out2)
-    assert info1.primary_video is not None and info2.primary_video is not None
+    assert info1.primary_video is not None
+    assert info2.primary_video is not None
     assert info1.primary_video.codec_name == "hevc"
     assert info2.primary_video.codec_name == "hevc"
 
