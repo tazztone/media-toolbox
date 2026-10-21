@@ -4,6 +4,7 @@ Tests for media_toolbox.core.jobs: transactional staging, file safety, and clean
 
 from __future__ import annotations
 
+import errno
 import os
 from pathlib import Path
 import threading
@@ -14,6 +15,7 @@ import pytest
 from media_toolbox.core.jobs import (
     JobConfig,
     JobResult,
+    publish_output,
     run_job,
     validate_job_paths,
 )
@@ -88,6 +90,14 @@ class TestPathSafety:
         inp.touch()
         out = tmp_path / "out.mp4"
         out.touch()
+        with pytest.raises(DestinationExistsError, match="already exists"):
+            validate_job_paths(inp, out, overwrite=False)
+
+    def test_broken_symlink_destination_rejected_without_overwrite(self, tmp_path: Path):
+        inp = tmp_path / "in.mp4"
+        inp.touch()
+        out = tmp_path / "broken_link.mp4"
+        out.symlink_to(tmp_path / "nonexistent.mp4")
         with pytest.raises(DestinationExistsError, match="already exists"):
             validate_job_paths(inp, out, overwrite=False)
 
@@ -449,3 +459,52 @@ class TestTransactionalJobExecution:
         result = run_job(config, runner=fake_runner)
         assert result.output_path == out
         assert out.exists()
+
+    def test_hardlink_unsupported_fails_closed_by_default(self, tmp_path: Path):
+        staging = tmp_path / "stage.mp4"
+        staging.write_bytes(b"content")
+        out = tmp_path / "dest.mp4"
+        err = OSError()
+        err.errno = errno.EOPNOTSUPP
+        with patch("os.link", side_effect=err):
+            with pytest.raises(OutputPublishError, match="does not support atomic no-clobber"):
+                publish_output(staging, out, overwrite=False, allow_non_atomic_fallback=False)
+
+    def test_hardlink_unsupported_allowed_with_fallback_flag(self, tmp_path: Path):
+        staging = tmp_path / "stage.mp4"
+        staging.write_bytes(b"content")
+        out = tmp_path / "dest.mp4"
+        err = OSError()
+        err.errno = errno.EOPNOTSUPP
+        with patch("os.link", side_effect=err):
+            publish_output(staging, out, overwrite=False, allow_non_atomic_fallback=True)
+        assert out.exists()
+        assert out.read_bytes() == b"content"
+
+    @patch("media_toolbox.core.jobs.run_ffmpeg_pipeline")
+    def test_run_job_fails_closed_when_hardlinks_unsupported(
+        self,
+        mock_pipeline: MagicMock,
+        tmp_path: Path,
+        dummy_media_info: MediaInfo,
+    ):
+        inp = tmp_path / "in.mp4"
+        inp.touch()
+        out = tmp_path / "out.mp4"
+
+        def fake_runner(cmds, **kwargs):
+            staging_file = Path(cmds[0][-1])
+            staging_file.write_bytes(b"data")
+
+        config = JobConfig(
+            input_path=inp,
+            output_path=out,
+            options=EncodeOptions(),
+            media_info=dummy_media_info,
+            allow_non_atomic_fallback=False,
+        )
+        err = OSError()
+        err.errno = errno.EXDEV
+        with patch("os.link", side_effect=err):
+            with pytest.raises(OutputPublishError, match="does not support atomic no-clobber"):
+                run_job(config, runner=fake_runner)

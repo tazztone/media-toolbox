@@ -51,6 +51,7 @@ class JobConfig:
     overwrite: bool = False
     sigterm_timeout: float = 2.0
     allow_unprobed: bool = False
+    allow_non_atomic_fallback: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,9 +101,9 @@ def validate_job_paths(
         )
 
     # Inode comparison for symlinks and hardlinks
-    if out_raw.exists():
+    if out_raw.exists() or out_raw.is_symlink():
         try:
-            if os.path.samefile(in_raw, out_raw):
+            if out_raw.exists() and os.path.samefile(in_raw, out_raw):
                 raise FileCollisionError(
                     f"Input and output share the same underlying inode: {in_raw} and {out_raw}"
                 )
@@ -118,7 +119,7 @@ def validate_job_paths(
 
 
 def _fallback_noclobber_publish(staging_path: Path, out_path: Path) -> None:
-    """Atomic O_CREAT|O_EXCL fallback for filesystems lacking hard link support."""
+    """Non-atomic O_CREAT|O_EXCL streaming fallback for filesystems lacking hard link support."""
     try:
         fd = os.open(out_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
     except FileExistsError as err:
@@ -148,6 +149,7 @@ def publish_output(
     out_path: Path,
     *,
     overwrite: bool = False,
+    allow_non_atomic_fallback: bool = False,
 ) -> None:
     """
     Publish staging file to destination path atomically and safely.
@@ -158,8 +160,10 @@ def publish_output(
         Atomically creates target using same-filesystem hard link (os.link),
         failing immediately with DestinationExistsError if destination exists.
         Unlinks staging_path upon successful link.
-        Falls back to exclusive creation check (O_CREAT | O_EXCL) if hard links
-        are unsupported by the underlying filesystem.
+        If hard links are unsupported (e.g. FAT, EXDEV, permissions):
+            - If allow_non_atomic_fallback is False (default): raises OutputPublishError.
+            - If allow_non_atomic_fallback is True: falls back to exclusive creation
+              (O_CREAT | O_EXCL) with streaming copy (weaker visibility guarantee).
     """
     if overwrite:
         try:
@@ -180,6 +184,11 @@ def publish_output(
     except OSError as err:
         # Fall back if filesystem does not support hard links (e.g. FAT, EXDEV, permissions)
         if err.errno in (errno.EPERM, errno.ENOSYS, errno.EOPNOTSUPP, errno.EXDEV):
+            if not allow_non_atomic_fallback:
+                raise OutputPublishError(
+                    f"Underlying filesystem for '{out_path}' does not support atomic no-clobber publication "
+                    f"(hard links unsupported, errno={err.errno}). Enable allow_non_atomic_fallback to permit non-atomic copy."
+                ) from err
             _fallback_noclobber_publish(staging_path, out_path)
         else:
             raise OutputPublishError(
@@ -312,7 +321,12 @@ def run_job(
                 f"Encoded output file is empty (0 bytes): {staging_path}"
             )
 
-        publish_output(staging_path, out_path, overwrite=config.overwrite)
+        publish_output(
+            staging_path,
+            out_path,
+            overwrite=config.overwrite,
+            allow_non_atomic_fallback=config.allow_non_atomic_fallback,
+        )
 
         return JobResult(
             input_path=in_path,
