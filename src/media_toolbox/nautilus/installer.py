@@ -273,6 +273,21 @@ def uninstall_nautilus(
         except OSError:
             pass
 
+    # Clean up auxiliary bytecode cache if extension was removed
+    if paths["extension"] in removed:
+        pycache_dir = paths["extension"].parent / "__pycache__"
+        if pycache_dir.is_dir():
+            for pyc in pycache_dir.glob("media_toolbox_nautilus*.pyc"):
+                try:
+                    pyc.unlink()
+                except OSError:
+                    pass
+            try:
+                # Remove __pycache__ if empty
+                pycache_dir.rmdir()
+            except OSError:
+                pass
+
     # Update desktop database if desktop file was removed
     if paths["desktop"] in removed:
         run_update_desktop_database(paths["desktop"].parent)

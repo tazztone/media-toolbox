@@ -654,6 +654,14 @@ class TestNautilusInstaller:
         other_desktop = tmp_path / "applications" / "other.desktop"
         other_desktop.write_text("[Desktop Entry]\n", encoding="utf-8")
 
+        # Create pycache entries (one toolbox pyc, one foreign pyc)
+        pycache_dir = tmp_path / "nautilus-python" / "extensions" / "__pycache__"
+        pycache_dir.mkdir(parents=True, exist_ok=True)
+        toolbox_pyc = pycache_dir / "media_toolbox_nautilus.cpython-310.pyc"
+        toolbox_pyc.write_bytes(b"\x00\x00\x00\x00")
+        other_pyc = pycache_dir / "other_extension.cpython-310.pyc"
+        other_pyc.write_bytes(b"\x00\x00\x00\x00")
+
         # Perform uninstallation
         removed = installer.uninstall_nautilus(dest_dir=tmp_path)
         assert len(removed) == 3
@@ -663,16 +671,32 @@ class TestNautilusInstaller:
         assert not paths["launcher"].exists()
         assert not paths["extension"].exists()
         assert not paths["desktop"].exists()
+        assert not toolbox_pyc.exists()
 
         # Third-party files must STILL exist
         assert other_script.is_file()
         assert other_ext.is_file()
         assert other_desktop.is_file()
+        assert other_pyc.is_file()
 
         # Directories must STILL exist
         assert (tmp_path / "nautilus" / "scripts").is_dir()
         assert (tmp_path / "nautilus-python" / "extensions").is_dir()
         assert (tmp_path / "applications").is_dir()
+        assert pycache_dir.is_dir()
+
+    def test_uninstall_nautilus_removes_pycache_dir_when_empty(self, tmp_path: Path) -> None:
+        """Assert uninstall_nautilus removes __pycache__ directory when only toolbox pyc files existed."""
+        installer.install_nautilus(dest_dir=tmp_path)
+        pycache_dir = tmp_path / "nautilus-python" / "extensions" / "__pycache__"
+        pycache_dir.mkdir(parents=True, exist_ok=True)
+        toolbox_pyc = pycache_dir / "media_toolbox_nautilus.cpython-310.pyc"
+        toolbox_pyc.write_bytes(b"\x00\x00\x00\x00")
+
+        removed = installer.uninstall_nautilus(dest_dir=tmp_path)
+        assert len(removed) == 3
+        assert not toolbox_pyc.exists()
+        assert not pycache_dir.exists()
 
     def test_uninstall_nautilus_dry_run(self, tmp_path: Path) -> None:
         """Assert uninstall with dry_run=True returns removed targets without deleting files."""
