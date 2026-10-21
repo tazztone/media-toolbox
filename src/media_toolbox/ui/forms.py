@@ -51,23 +51,18 @@ def build_encode_options_from_state(
             two_pass = True
 
     # Audio resolution
-    if is_extract_audio:
+    if mute_audio and not is_extract_audio:
+        eff_mute = True
+        eff_extract = False
+        eff_norm = False
+        eff_boost = None
+        eff_audio_br = 128
+    else:
         eff_mute = False
-        eff_extract = True
+        eff_extract = is_extract_audio
         eff_norm = normalize_audio
         eff_boost = volume_boost_db if volume_boost_db and abs(volume_boost_db) > 0.01 else None
         eff_audio_br = audio_bitrate_kbps
-    else:
-        eff_extract = False
-        eff_mute = mute_audio
-        if eff_mute:
-            eff_norm = False
-            eff_boost = None
-            eff_audio_br = 128
-        else:
-            eff_norm = normalize_audio
-            eff_boost = volume_boost_db if volume_boost_db and abs(volume_boost_db) > 0.01 else None
-            eff_audio_br = audio_bitrate_kbps
 
     # Speed resolution
     eff_speed = speed_factor if abs(speed_factor - 1.0) > 0.001 else None

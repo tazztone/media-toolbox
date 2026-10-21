@@ -36,14 +36,16 @@ from media_toolbox.ui.constants import (
     VIDEO_PRESETS,
     WindowState,
 )
+from media_toolbox.ui.forms import (
+    build_encode_options_from_state,
+    resolve_default_output_path,
+)
 from media_toolbox.ui.widgets import (
     AudioOptionsWidget,
     MetadataCard,
     ProgressFooterWidget,
     RateControlWidget,
     ResolutionWidget,
-    build_encode_options_from_state,
-    resolve_default_output_path,
 )
 from media_toolbox.ui.window_builder import (
     build_extract_audio_page,
@@ -56,10 +58,6 @@ from media_toolbox.ui.window_worker import WindowWorkerMixin
 __all__ = [
     "WindowState",
     "MainWindow",
-    "VIDEO_PRESETS",
-    "AUDIO_PRESETS",
-    "CROP_PRESETS",
-    "SPEED_PRESETS",
     "run_ffmpeg_pipeline",
 ]
 
@@ -68,15 +66,6 @@ class MainWindow(Adw.ApplicationWindow, WindowProbingMixin, WindowWorkerMixin):
     """
     Main Libadwaita application window.
     """
-
-    VIDEO_PRESETS = VIDEO_PRESETS
-    AUDIO_PRESETS = AUDIO_PRESETS
-    CROP_PRESETS = CROP_PRESETS
-    SPEED_PRESETS = SPEED_PRESETS
-
-    # Backward compatibility delegates for view builders
-    _build_transcode_page = staticmethod(build_transcode_page)
-    _build_extract_audio_page = staticmethod(build_extract_audio_page)
 
     # Widget attributes attached by window_builder.build_window_layout()
     header_bar: Adw.HeaderBar
@@ -138,11 +127,11 @@ class MainWindow(Adw.ApplicationWindow, WindowProbingMixin, WindowWorkerMixin):
 
     def get_current_video_preset(self) -> str:
         idx = self.video_preset_row.get_selected()
-        return self.VIDEO_PRESETS[idx][1]
+        return VIDEO_PRESETS[idx][1]
 
     def get_current_audio_preset(self) -> str:
         idx = self.audio_preset_row.get_selected()
-        return self.AUDIO_PRESETS[idx][1]
+        return AUDIO_PRESETS[idx][1]
 
     def _on_video_preset_changed(self, combo: Adw.ComboRow, _param: Any) -> None:
         preset = self.get_current_video_preset()
@@ -166,10 +155,10 @@ class MainWindow(Adw.ApplicationWindow, WindowProbingMixin, WindowWorkerMixin):
         scale = self.res_widget.get_scale()
 
         crop_idx = self.crop_row.get_selected()
-        crop = self.CROP_PRESETS[crop_idx][1]
+        crop = CROP_PRESETS[crop_idx][1]
 
         speed_idx = self.speed_row.get_selected()
-        speed_factor = self.SPEED_PRESETS[speed_idx][1]
+        speed_factor = SPEED_PRESETS[speed_idx][1]
 
         mute = self.audio_widget.get_mute()
         norm = self.audio_widget.get_normalize()
@@ -195,7 +184,7 @@ class MainWindow(Adw.ApplicationWindow, WindowProbingMixin, WindowWorkerMixin):
         preset = self.get_current_audio_preset()
         bitrate = int(self.extract_bitrate_row.get_value())
         speed_idx = self.extract_speed_row.get_selected()
-        speed_factor = self.SPEED_PRESETS[speed_idx][1]
+        speed_factor = SPEED_PRESETS[speed_idx][1]
         norm = bool(self.extract_norm_switch.get_active())
         boost_val = float(self.extract_boost_row.get_value())
         boost = boost_val if abs(boost_val) > 0.01 else None

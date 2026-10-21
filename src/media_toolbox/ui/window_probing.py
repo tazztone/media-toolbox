@@ -19,7 +19,7 @@ from gi.repository import Adw, Gio, GLib, Gtk
 from media_toolbox.core.models import MediaInfo
 from media_toolbox.core.probe import probe_media
 from media_toolbox.ui.constants import WindowState
-from media_toolbox.ui.widgets import resolve_default_output_path
+from media_toolbox.ui.forms import resolve_default_output_path
 
 
 class WindowProbingMixin:

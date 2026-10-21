@@ -43,7 +43,7 @@ class TestPerformanceAndTiming:
         """Assert operational logic of the UI suite executes well within 500ms."""
         start = time.perf_counter()
 
-        from media_toolbox.ui.widgets import build_encode_options_from_state, resolve_default_output_path
+        from media_toolbox.ui.forms import build_encode_options_from_state, resolve_default_output_path
 
         p = Path("/tmp/test.mkv")
         for _ in range(100):
