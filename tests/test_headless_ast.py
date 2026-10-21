@@ -50,12 +50,13 @@ def get_toolbox_root() -> Path:
 
 def discover_headless_source_files() -> list[Path]:
     """
-    Dynamically discover all Python source files in core/ and cli.py.
-    Guarantees that new files added to core/ are automatically verified.
+    Dynamically discover all Python source files in core/ and cli package.
+    Guarantees that new files added to core/ and cli/ are automatically verified.
     """
     toolbox_root = get_toolbox_root()
     core_dir = toolbox_root / "core"
     cli_file = toolbox_root / "cli.py"
+    cli_dir = toolbox_root / "cli"
 
     files: list[Path] = []
     if core_dir.is_dir():
@@ -63,6 +64,8 @@ def discover_headless_source_files() -> list[Path]:
 
     if cli_file.is_file():
         files.append(cli_file)
+    elif cli_dir.is_dir():
+        files.extend(sorted(cli_dir.glob("*.py")))
 
     return files
 

@@ -12,7 +12,7 @@ Architected in three isolated layers:
 src/media_toolbox/
 ├── __init__.py
 ├── __main__.py               # CLI/UI package execution router
-├── cli.py                    # Standalone CLI entrypoint for inspection & batch commands
+├── cli/                      # Standalone CLI entrypoint package (parser, formatting, handlers)
 ├── core/
 │   ├── __init__.py
 │   ├── models.py             # Frozen dataclasses (VideoStream, AudioStream, FormatInfo, MediaInfo, ProgressEvent, exceptions)
@@ -100,7 +100,7 @@ tests/
 | M1 | Media Inspection & Math Engine | `core/models.py`, `core/probe.py`, `core/bitrate.py`, tests | none | DONE |
 | M2 | Filtergraph, Presets & CLI Builder | `core/filtergraph.py`, `core/presets.py`, `core/builder.py`, tests | M1 | DONE |
 | M3 | Non-Blocking Progress Runner | `core/runner.py`, tests | M1 | DONE |
-| M4 | CLI Entrypoint & Headless AST Check | `cli.py`, `__main__.py`, `tests/test_headless_ast.py`, tests | M1, M2, M3 | DONE |
+| M4 | CLI Entrypoint & Headless AST Check | `cli/`, `__main__.py`, `tests/test_headless_ast.py`, tests | M1, M2, M3 | DONE |
 | M5 | Dynamic Libadwaita / GTK4 UI | `ui/app.py`, `ui/window.py`, `ui/widgets.py`, tests | M1, M2, M3 | DONE |
 | M6 | Dual Nautilus Integration & Installer | `nautilus/launcher.sh`, `nautilus/extension.py`, `nautilus/installer.py`, tests | M4, M5 | DONE |
 | M7 | E2E Test Suite 100% Pass & Hardening | Full suite pass (`.venv/bin/pytest python/`), Tier 1-5 validation | M1-M6 | DONE |
