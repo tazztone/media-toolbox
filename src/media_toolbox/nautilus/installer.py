@@ -25,7 +25,6 @@ from typing import Optional
 import uuid
 
 __all__ = [
-    "DEFAULT_DESKTOP_ENTRY",
     "get_data_home",
     "get_nautilus_paths",
     "run_update_desktop_database",
@@ -34,26 +33,6 @@ __all__ = [
     "uninstall_nautilus",
     "status_nautilus",
 ]
-
-DEFAULT_DESKTOP_ENTRY = """[Desktop Entry]
-Version=1.0
-Type=Application
-Name=Media Toolbox
-Comment=Modern Python Media Inspection & Transcoding Toolbox
-Exec=media-toolbox-gui %F
-Icon=video-x-generic
-Terminal=false
-Categories=AudioVideo;AudioVideoEditing;Audio;Video;
-MimeType=video/mp4;video/x-matroska;video/quicktime;video/webm;audio/mpeg;audio/x-wav;audio/flac;audio/ogg;
-Keywords=video;audio;media;transcode;ffmpeg;probe;inspect;adwaita;nautilus;
-StartupNotify=true
-StartupWMClass=io.github.tazztone.MediaToolbox
-Actions=Inspect;
-
-[Desktop Action Inspect]
-Name=Inspect Media Metadata
-Exec=x-terminal-emulator -e media-toolbox inspect %f
-"""
 
 
 def get_data_home(dest_dir: Optional[str | Path] = None) -> Path:
@@ -252,7 +231,7 @@ def install_nautilus(
     if src_desktop.is_file():
         desktop_content = src_desktop.read_text(encoding="utf-8")
     else:
-        desktop_content = DEFAULT_DESKTOP_ENTRY
+        raise FileNotFoundError(f"Desktop entry template not found at '{src_desktop}'")
 
     # 2. Write atomically and set permissions
     _atomic_write_file(paths["launcher"], launcher_content, 0o755)
@@ -320,5 +299,4 @@ def status_nautilus(dest_dir: Optional[str | Path] = None) -> dict[str, bool]:
         "extension": extension_ok,
         "desktop": desktop_ok,
         "installed": all_ok,
-        "all_installed": all_ok,
     }
