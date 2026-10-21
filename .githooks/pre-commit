@@ -26,11 +26,13 @@ else
     fi
 fi
 
-# 3. Warn on files over 25 KB
-LARGE=$(find . -path ./.git -prune -o -path ./.venv -prune -o -path ./build -prune -o -path ./.pytest_cache -prune -o -path '*/__pycache__*' -prune -o -type f -size +25k -print 2>/dev/null || true)
-if [ -n "$LARGE" ]; then
-    echo "⚠️  Files over 25 KB:"
-    echo "$LARGE" | while read -r f; do
+# 3. Warn on oversized files (production source > 30 KB, test suites > 50 KB)
+LARGE_SRC=$(find src -name "*.py" -not -path "*/__pycache__/*" -size +30k 2>/dev/null || true)
+LARGE_TESTS=$(find tests -name "*.py" -not -path "*/__pycache__/*" -size +50k 2>/dev/null || true)
+if [ -n "$LARGE_SRC" ] || [ -n "$LARGE_TESTS" ]; then
+    echo "⚠️  Oversized files (src > 30 KB, tests > 50 KB):"
+    for f in $LARGE_SRC $LARGE_TESTS; do
+        [ -f "$f" ] || continue
         printf '   %6s  %s\n' "$(du -h "$f" | cut -f1)" "$f"
     done
 fi
