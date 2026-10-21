@@ -19,6 +19,7 @@ IMPORTANT: Zero top-level `import gi` to prevent polluting sys.modules before
 
 from __future__ import annotations
 
+import inspect
 import os
 from pathlib import Path
 import sys
@@ -61,6 +62,34 @@ def get_gi_modules():
 def gi_env():
     """Fixture supplying PyGObject modules."""
     return get_gi_modules()
+
+
+def _raw_iteration(ctx: Any) -> Callable[..., bool]:
+    """Return GLib's C-level MainContext.iteration, skipping PyGObject's wrapper.
+
+    The wrapper pauses gi.events' asyncio loop; these tests never create an
+    asyncio loop, so it is a no-op — but importing gi.events emits Python 3.14
+    asyncio deprecation warnings. Walk the MRO and pick the first non-Python
+    implementation so this survives PyGObject dropping/keeping the override.
+    """
+    for klass in type(ctx).__mro__[1:]:
+        candidate = klass.__dict__.get("iteration")
+        if candidate is not None and not inspect.isfunction(candidate):
+            return candidate
+    return type(ctx).iteration
+
+
+def iterate_main_context(ctx: Any) -> bool:
+    return _raw_iteration(ctx)(ctx, False)
+
+
+def drain_main_context(ctx: Any, limit: int = 1000) -> None:
+    raw = _raw_iteration(ctx)
+    for _ in range(limit):
+        if not ctx.pending():
+            return
+        raw(ctx, False)
+    raise AssertionError(f"GLib main context still pending after {limit} iterations")
 
 
 @pytest.fixture(autouse=True, scope="module")
@@ -907,8 +936,7 @@ class TestNonBlockingWorkerThread:
         GLib.idle_add(MainWindow._on_progress_idle, mock_win, evt)
 
         ctx = GLib.MainContext.default()
-        while ctx.pending():
-            ctx.iteration(False)
+        drain_main_context(ctx)
 
         mock_win.progress_footer.update_progress.assert_called_once_with(evt)
 
@@ -933,8 +961,7 @@ class TestNonBlockingWorkerThread:
         GLib.idle_add(MainWindow._on_pass_progress_idle, mock_win, 1, 2, evt)
 
         ctx = GLib.MainContext.default()
-        while ctx.pending():
-            ctx.iteration(False)
+        drain_main_context(ctx)
 
         mock_win.progress_footer.update_progress.assert_called_once_with(
             evt, pass_info="Pass 1 of 2 (75.5%)"
@@ -943,8 +970,7 @@ class TestNonBlockingWorkerThread:
         # Single pass: pass_info is None
         mock_win.reset_mock()
         GLib.idle_add(MainWindow._on_pass_progress_idle, mock_win, 1, 1, evt)
-        while ctx.pending():
-            ctx.iteration(False)
+        drain_main_context(ctx)
 
         mock_win.progress_footer.update_progress.assert_called_once_with(
             evt, pass_info=None
@@ -971,7 +997,7 @@ class TestNonBlockingWorkerThread:
         GLib.idle_add(MainWindow._on_progress_idle, mock_win, evt)
         ctx = GLib.MainContext.default()
         assert ctx.pending()
-        ctx.iteration(False)
+        iterate_main_context(ctx)
         assert not ctx.pending()
         assert mock_win.progress_footer.update_progress.call_count == 1
 
@@ -988,8 +1014,7 @@ class TestNonBlockingWorkerThread:
         GLib.idle_add(MainWindow._on_success_idle, mock_win, out_file)
 
         ctx = GLib.MainContext.default()
-        while ctx.pending():
-            ctx.iteration(False)
+        drain_main_context(ctx)
 
         assert mock_win.is_transcoding is False
         mock_win._set_ui_controls_sensitive.assert_called_with(True)
@@ -1017,8 +1042,7 @@ class TestNonBlockingWorkerThread:
         GLib.idle_add(MainWindow._on_error_idle, mock_win, err.last_error_line)
 
         ctx = GLib.MainContext.default()
-        while ctx.pending():
-            ctx.iteration(False)
+        drain_main_context(ctx)
 
         assert mock_win.is_transcoding is False
         mock_win._set_ui_controls_sensitive.assert_called_with(True)
@@ -1188,8 +1212,7 @@ class TestCancellationFlow:
 
         # GLib main context dispatches scheduled _on_cancelled_idle
         ctx = GLib.MainContext.default()
-        while ctx.pending():
-            ctx.iteration(False)
+        drain_main_context(ctx)
 
         mock_win._on_cancelled_idle.assert_called_once_with(pre_existing_file)
 
