@@ -9,11 +9,15 @@ import threading
 from unittest.mock import MagicMock, patch
 import pytest
 
+pytest.importorskip("gi")
+
 from media_toolbox.core.jobs import JobConfig
 from media_toolbox.core.models import EncodeOptions, ProgressEvent
 from media_toolbox.core.runner import RunnerCancelledError
 from media_toolbox.ui.constants import WindowState
 from media_toolbox.ui.window_worker import WindowWorkerMixin
+
+pytestmark = [pytest.mark.desktop]
 
 
 class MockWindow(WindowWorkerMixin):
