@@ -17,10 +17,12 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import sys
 from typing import Optional
+import uuid
 
 __all__ = [
     "DEFAULT_DESKTOP_ENTRY",
@@ -140,6 +142,40 @@ def check_desktop_environment(python_bin: str = sys.executable) -> tuple[bool, s
         return False, str(exc)
 
 
+def _escape_shell_double_quotes(s: str) -> str:
+    r"""Escape special shell characters (\, ", $, `) inside double-quoted string."""
+    return s.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$").replace("`", "\\`")
+
+
+def _escape_python_double_quotes(s: str) -> str:
+    r"""Escape special python characters (\, ") inside double-quoted string literal."""
+    return s.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _is_toolbox_owned(path: Path) -> bool:
+    """Verify that file is owned by media-toolbox before unlinking."""
+    try:
+        content = path.read_text(encoding="utf-8", errors="ignore")
+        return "media_toolbox" in content or "MediaToolbox" in content or "Media-Toolbox" in content
+    except OSError:
+        return False
+
+
+def _atomic_write_file(target: Path, content: str, mode: int) -> None:
+    """Atomically write content to target via sibling temporary file with explicit permissions."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = target.parent / f".tmp_{uuid.uuid4().hex}_{target.name}"
+    try:
+        tmp_path.write_text(content, encoding="utf-8")
+        tmp_path.chmod(mode)
+        os.replace(tmp_path, target)
+    finally:
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 def install_nautilus(
     dest_dir: Optional[str | Path] = None,
     dry_run: bool = False,
@@ -172,19 +208,23 @@ def install_nautilus(
     src_ext = pkg_nautilus_dir / "extension.py"
     src_desktop = pkg_nautilus_dir / "io.github.tazztone.MediaToolbox.desktop"
 
+    python_bin = sys.executable
+    escaped_shell_python = _escape_shell_double_quotes(python_bin)
+    escaped_py_python = _escape_python_double_quotes(python_bin)
+
     # Read launcher content
     if src_launcher.is_file():
         launcher_content = src_launcher.read_text(encoding="utf-8")
         if 'INSTALLED_PYTHON=""' in launcher_content:
             launcher_content = launcher_content.replace(
                 'INSTALLED_PYTHON=""',
-                f'INSTALLED_PYTHON="{sys.executable}"',
+                f'INSTALLED_PYTHON="{escaped_shell_python}"',
             )
     else:
         launcher_content = (
             "#!/usr/bin/env bash\n"
             "# Media-Toolbox launcher fallback\n"
-            f'exec "{sys.executable}" -m media_toolbox.ui.app "$@"\n'
+            f'exec "{escaped_shell_python}" -m media_toolbox.ui.app "$@"\n'
         )
 
     # Read extension content
@@ -193,10 +233,10 @@ def install_nautilus(
         if 'INSTALLED_PYTHON: str = ""' in ext_content or 'INSTALLED_PYTHON = ""' in ext_content:
             ext_content = ext_content.replace(
                 'INSTALLED_PYTHON: str = ""',
-                f'INSTALLED_PYTHON: str = "{sys.executable}"',
+                f'INSTALLED_PYTHON: str = "{escaped_py_python}"',
             ).replace(
                 'INSTALLED_PYTHON = ""',
-                f'INSTALLED_PYTHON = "{sys.executable}"',
+                f'INSTALLED_PYTHON = "{escaped_py_python}"',
             )
     else:
         ext_content = "# python-nautilus extension placeholder\n"
@@ -207,21 +247,10 @@ def install_nautilus(
     else:
         desktop_content = DEFAULT_DESKTOP_ENTRY
 
-    # 2. Write and set permissions
-    # Launcher script: 0o755 (executable)
-    paths["launcher"].parent.mkdir(parents=True, exist_ok=True)
-    paths["launcher"].write_text(launcher_content, encoding="utf-8")
-    paths["launcher"].chmod(0o755)
-
-    # Extension file: 0o644
-    paths["extension"].parent.mkdir(parents=True, exist_ok=True)
-    paths["extension"].write_text(ext_content, encoding="utf-8")
-    paths["extension"].chmod(0o644)
-
-    # Desktop entry file: 0o644
-    paths["desktop"].parent.mkdir(parents=True, exist_ok=True)
-    paths["desktop"].write_text(desktop_content, encoding="utf-8")
-    paths["desktop"].chmod(0o644)
+    # 2. Write atomically and set permissions
+    _atomic_write_file(paths["launcher"], launcher_content, 0o755)
+    _atomic_write_file(paths["extension"], ext_content, 0o644)
+    _atomic_write_file(paths["desktop"], desktop_content, 0o644)
 
     # 3. Update desktop database
     run_update_desktop_database(paths["desktop"].parent)
@@ -235,7 +264,7 @@ def uninstall_nautilus(
 ) -> list[Path]:
     """
     Safely remove installed Nautilus launcher script, extension, and desktop entry.
-    Preserves parent directories.
+    Preserves parent directories and verifies application ownership before deletion.
 
     Args:
         dest_dir: Optional target root path (overriding XDG_DATA_HOME).
@@ -245,7 +274,7 @@ def uninstall_nautilus(
         List of Path objects representing removed files.
     """
     paths = get_nautilus_paths(dest_dir)
-    existing_targets = [p for p in paths.values() if p.is_file()]
+    existing_targets = [p for p in paths.values() if p.is_file() and _is_toolbox_owned(p)]
 
     if dry_run:
         return existing_targets

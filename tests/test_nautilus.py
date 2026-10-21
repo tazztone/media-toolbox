@@ -690,6 +690,46 @@ class TestNautilusInstaller:
         removed = installer.uninstall_nautilus(dest_dir=tmp_path)
         assert removed == []
 
+    def test_installer_escapes_paths_with_spaces_and_special_chars(self, tmp_path: Path) -> None:
+        """Installer quotes paths with spaces, quotes, and dollars safely for bash and python."""
+        weird_python = '/opt/weird "path"/with $dollars/python3'
+        with patch("sys.executable", weird_python):
+            installer.install_nautilus(dest_dir=tmp_path)
+
+        paths = installer.get_nautilus_paths(dest_dir=tmp_path)
+        launcher_text = paths["launcher"].read_text(encoding="utf-8")
+        ext_text = paths["extension"].read_text(encoding="utf-8")
+
+        # Bash syntax check
+        proc = subprocess.run(["bash", "-n", str(paths["launcher"])], capture_output=True, text=True)
+        assert proc.returncode == 0, f"Generated launcher has invalid bash syntax: {proc.stderr}"
+        # Bash expands INSTALLED_PYTHON back to exact unescaped weird_python
+        check_proc = subprocess.run(
+            ["bash", "-c", 'eval "$(grep "^INSTALLED_PYTHON=" "$1")"; echo -n "$INSTALLED_PYTHON"', "_", str(paths["launcher"])],
+            capture_output=True,
+            text=True,
+        )
+        assert check_proc.stdout == weird_python
+
+        # Python syntax check
+        tree = ast.parse(ext_text)
+        assert tree is not None
+        assigned_val = None
+        for node in tree.body:
+            if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", None) == "INSTALLED_PYTHON":
+                assigned_val = node.value.value  # type: ignore[attr-defined]
+        assert assigned_val == weird_python
+
+    def test_uninstall_skips_unmanaged_files(self, tmp_path: Path) -> None:
+        """uninstall_nautilus verifies application ownership and skips unrelated user files."""
+        paths = installer.get_nautilus_paths(dest_dir=tmp_path)
+        paths["launcher"].parent.mkdir(parents=True, exist_ok=True)
+        paths["launcher"].write_text("#!/bin/bash\n# Unrelated custom user script\necho hello\n", encoding="utf-8")
+
+        removed = installer.uninstall_nautilus(dest_dir=tmp_path)
+        assert paths["launcher"] not in removed
+        assert paths["launcher"].is_file()
+
 
 # ---------------------------------------------------------------------------
 # 4. CLI Subcommand Testing
