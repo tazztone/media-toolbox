@@ -89,7 +89,19 @@ def resolve_job_spec(
         req_audio = options.audio_codec.strip().lower() if options.audio_codec else None
         is_webm = ext == "webm" or (v_preset is not None and v_preset.name == "vp9")
         if is_webm:
-            effective_acodec = "libvorbis" if req_audio in ("vorbis", "libvorbis") else "libopus"
+            if req_audio in ("vorbis", "libvorbis"):
+                effective_acodec = "libvorbis"
+            elif req_audio in ("opus", "libopus") or req_audio is None:
+                effective_acodec = "libopus"
+            elif req_audio == "copy":
+                effective_acodec = "copy"
+            else:
+                raise ValueError(
+                    f"Incompatible audio codec '{options.audio_codec}' for WebM/VP9 container. "
+                    "WebM requires libopus or libvorbis (or copy)."
+                )
+        elif a_preset:
+            effective_acodec = a_preset.codec_name
         elif options.audio_codec:
             effective_acodec = options.audio_codec
         elif v_preset and v_preset.default_audio_codec:
@@ -176,6 +188,34 @@ def validate_encode_options(
     if (options.extract_audio or (canon_preset is not None and canon_preset in AUDIO_PRESETS)) and options.mute_audio:
         raise ValueError("Cannot simultaneously extract and mute audio")
 
+    if options.crf is not None and (options.two_pass or options.target_size_mb is not None):
+        raise ValueError("CRF rate control is mutually exclusive with target size and two-pass mode")
+
+    # Stream copy vs filters
+    if spec.audio_codec == "copy":
+        has_af = (
+            (options.speed is not None and options.speed != 1.0)
+            or options.normalize_audio
+            or (options.volume_boost_db is not None and options.volume_boost_db != 0.0)
+        )
+        if has_af:
+            raise ValueError(
+                "Audio filters (speed, normalization, volume boost) cannot be applied when audio codec is 'copy'"
+            )
+
+    if spec.video_codec == "copy":
+        has_vf = (
+            options.crop is not None
+            or options.pad is not None
+            or options.scale is not None
+            or options.fps is not None
+            or (options.speed is not None and options.speed != 1.0)
+        )
+        if has_vf:
+            raise ValueError(
+                "Video filters (scale, crop, pad, fps, speed) cannot be applied when video codec is 'copy'"
+            )
+
     # Duration check for bitrate targeting
     if (options.two_pass or options.target_size_mb is not None) and media_info is not None and media_info.duration <= 0.0:
         raise ValueError("Cannot calculate target bitrate: media duration is zero or unknown")
@@ -231,10 +271,34 @@ def validate_encode_options(
             raise ValueError(f"target_size_mb must be positive, got {options.target_size_mb}")
 
     if options.audio_bitrate_kbps is not None:
-        if options.audio_bitrate_kbps <= 0 or options.audio_bitrate_kbps > 2000:
+        if not (8 <= options.audio_bitrate_kbps <= 2000):
             raise ValueError(
                 f"Audio bitrate must be between 8 and 2000 kbps, got {options.audio_bitrate_kbps}"
             )
+        if a_preset is not None and a_preset.bitrate_range_kbps is not None:
+            min_br, max_br = a_preset.bitrate_range_kbps
+            if not (min_br <= options.audio_bitrate_kbps <= max_br):
+                raise ValueError(
+                    f"Audio bitrate {options.audio_bitrate_kbps} kbps out of valid range "
+                    f"({min_br}-{max_br} kbps) for audio preset '{a_preset.name}'"
+                )
+
+    if options.scale is not None:
+        w, h = options.scale
+        if w <= 0 and h <= 0:
+            raise ValueError(f"Scale dimensions cannot both be non-positive: {options.scale}")
+        if w == 0 or h == 0:
+            raise ValueError(f"Scale dimensions cannot be 0: {options.scale}")
+        if not (
+            (w > 0 and h > 0)
+            or (w > 0 and h in (-1, -2))
+            or (w in (-1, -2) and h > 0)
+        ):
+            raise ValueError(f"Invalid scale dimensions: {options.scale}")
+
+    if options.fps is not None:
+        if not math.isfinite(options.fps) or options.fps <= 0:
+            raise ValueError(f"Frame rate must be positive and finite, got {options.fps}")
 
     if options.volume_boost_db is not None:
         if not math.isfinite(options.volume_boost_db) or not (-60.0 <= options.volume_boost_db <= 60.0):

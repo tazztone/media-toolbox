@@ -379,16 +379,17 @@ def build_two_pass_commands(
     if options.mute_audio or not media_info.has_audio:
         pass2_cmd.append("-an")
     else:
-        pass2_cmd.extend(
-            build_audio_filter_args(
-                speed=options.speed,
-                normalize_loudness=options.normalize_audio,
-                volume_boost_db=options.volume_boost_db,
-            )
-        )
         a_codec = spec.audio_codec or "aac"
+        if a_codec != "copy":
+            pass2_cmd.extend(
+                build_audio_filter_args(
+                    speed=options.speed,
+                    normalize_loudness=options.normalize_audio,
+                    volume_boost_db=options.volume_boost_db,
+                )
+            )
         pass2_cmd.extend(["-c:a", a_codec])
-        if not a_codec.startswith("pcm_"):
+        if not a_codec.startswith("pcm_") and a_codec != "copy":
             pass2_cmd.extend(["-b:a", f"{options.audio_bitrate_kbps}k"])
 
     if v_preset is not None:
@@ -456,16 +457,17 @@ def build_single_pass_command(
     if options.mute_audio or (media_info is not None and not media_info.has_audio):
         cmd.append("-an")
     else:
-        cmd.extend(
-            build_audio_filter_args(
-                speed=options.speed,
-                normalize_loudness=options.normalize_audio,
-                volume_boost_db=options.volume_boost_db,
-            )
-        )
         a_codec = spec.audio_codec or "aac"
+        if a_codec != "copy":
+            cmd.extend(
+                build_audio_filter_args(
+                    speed=options.speed,
+                    normalize_loudness=options.normalize_audio,
+                    volume_boost_db=options.volume_boost_db,
+                )
+            )
         cmd.extend(["-c:a", a_codec])
-        if not a_codec.startswith("pcm_"):
+        if not a_codec.startswith("pcm_") and a_codec != "copy":
             cmd.extend(["-b:a", f"{options.audio_bitrate_kbps}k"])
 
     if v_preset is not None:

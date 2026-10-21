@@ -207,3 +207,65 @@ class TestValidationAndPresetNormalization:
         spec = resolve_job_spec(opts, output_path="output.wav")
         assert spec.audio_codec == "pcm_s16le"
 
+    def test_crf_and_two_pass_or_target_size_mutually_exclusive(self) -> None:
+        """CRF cannot be combined with two-pass or target-size mode."""
+        opts_two_pass = EncodeOptions(crf=23, two_pass=True)
+        with pytest.raises(ValueError, match="CRF rate control is mutually exclusive"):
+            validate_encode_options(opts_two_pass)
+
+        opts_target_size = EncodeOptions(crf=23, target_size_mb=25.0)
+        with pytest.raises(ValueError, match="CRF rate control is mutually exclusive"):
+            validate_encode_options(opts_target_size)
+
+    def test_webm_incompatible_audio_codec_rejected(self) -> None:
+        """Explicitly requesting an incompatible audio codec for WebM raises ValueError."""
+        opts = EncodeOptions(preset="vp9", audio_codec="aac")
+        with pytest.raises(ValueError, match="Incompatible audio codec 'aac' for WebM/VP9"):
+            validate_encode_options(opts, output_path="out.webm")
+
+    def test_stream_copy_with_filters_rejected(self) -> None:
+        """Combining audio/video stream copy with filters is rejected."""
+        # Audio copy with audio filters
+        opts_a_speed = EncodeOptions(audio_codec="copy", speed=1.5)
+        with pytest.raises(ValueError, match="Audio filters .* cannot be applied when audio codec is 'copy'"):
+            validate_encode_options(opts_a_speed)
+
+        opts_a_norm = EncodeOptions(audio_codec="copy", normalize_audio=True)
+        with pytest.raises(ValueError, match="Audio filters .* cannot be applied when audio codec is 'copy'"):
+            validate_encode_options(opts_a_norm)
+
+        # Video copy with video filters
+        opts_v_crop = EncodeOptions(video_codec="copy", crop="16:9")
+        with pytest.raises(ValueError, match="Video filters .* cannot be applied when video codec is 'copy'"):
+            validate_encode_options(opts_v_crop)
+
+        opts_v_scale = EncodeOptions(video_codec="copy", scale=(1280, 720))
+        with pytest.raises(ValueError, match="Video filters .* cannot be applied when video codec is 'copy'"):
+            validate_encode_options(opts_v_scale)
+
+    def test_scale_and_fps_upfront_validation(self) -> None:
+        """Invalid scale dimensions and fps are caught in validate_encode_options."""
+        with pytest.raises(ValueError, match="Scale dimensions cannot both be non-positive"):
+            validate_encode_options(EncodeOptions(scale=(-1, -1)))
+
+        with pytest.raises(ValueError, match="Frame rate must be positive"):
+            validate_encode_options(EncodeOptions(fps=-5))
+
+    def test_audio_bitrate_preset_range_validation(self) -> None:
+        """Audio bitrates outside preset boundaries are rejected."""
+        # Minimum threshold < 8 kbps rejected
+        with pytest.raises(ValueError, match="Audio bitrate must be between 8 and 2000 kbps"):
+            validate_encode_options(EncodeOptions(audio_bitrate_kbps=4))
+
+        # OPUS preset range is 32-256 kbps; 320 kbps should be rejected for opus preset
+        with pytest.raises(ValueError, match="Audio bitrate 320 kbps out of valid range"):
+            validate_encode_options(EncodeOptions(preset="opus", audio_bitrate_kbps=320), output_path="out.opus")
+
+    def test_transcode_resolves_audio_codec_alias_to_encoder(self) -> None:
+        """In video transcoding, audio codec alias 'mp3' resolves to 'libmp3lame'."""
+        from media_toolbox.core.validation import resolve_job_spec
+
+        opts = EncodeOptions(preset="h264", audio_codec="mp3")
+        spec = resolve_job_spec(opts)
+        assert spec.audio_codec == "libmp3lame"
+

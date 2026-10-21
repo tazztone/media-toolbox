@@ -101,7 +101,6 @@ def build_parser() -> argparse.ArgumentParser:
     trans_parser.add_argument("--normalize", action="store_true", help="Normalize audio loudness using EBU R128")
     trans_parser.add_argument("-f", "--overwrite", action="store_true", help="Overwrite destination file if it exists")
     trans_parser.add_argument("--quiet", action="store_true", help="Suppress interactive progress bar")
-    trans_parser.add_argument("--pass-logfile", default=None, help="Custom logfile prefix for two-pass mode")
 
     # Subcommand: extract-audio
     audio_parser = subparsers.add_parser("extract-audio", help="Extract audio track to standalone file")
