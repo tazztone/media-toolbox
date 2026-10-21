@@ -34,14 +34,20 @@ try:
 except (ImportError, ValueError, AttributeError):
     _NAUTILUS_AVAILABLE = False
 
+    class _GObjectStub:
+        pass
+
+    class _MenuProviderStub:
+        pass
+
     class _Stub:
         pass
 
     class GObject:  # type: ignore
-        GObject = _Stub
+        GObject = _GObjectStub
 
     class Nautilus:  # type: ignore
-        MenuProvider = _Stub
+        MenuProvider = _MenuProviderStub
         MenuItem = _Stub
         Menu = _Stub
         FileInfo = _Stub

@@ -825,3 +825,19 @@ class TestNautilusModuleInvariants:
             f"GUI import violations detected in {installer_file.name}:\n"
             + "\n".join(f"  - {v}" for v in violations)
         )
+
+    def test_extension_fallback_imports_without_type_error_when_gi_unavailable(self) -> None:
+        """Assert extension module can be imported without TypeError when gi/Nautilus is unavailable."""
+        import importlib
+
+        with patch.dict(sys.modules, {"gi": None, "gi.repository": None}):
+            if "media_toolbox.nautilus.extension" in sys.modules:
+                del sys.modules["media_toolbox.nautilus.extension"]
+            try:
+                mod = importlib.import_module("media_toolbox.nautilus.extension")
+                assert not mod._NAUTILUS_AVAILABLE
+                assert issubclass(mod.MediaToolboxExtension, mod.GObject.GObject)
+                assert issubclass(mod.MediaToolboxExtension, mod.Nautilus.MenuProvider)
+            finally:
+                if "media_toolbox.nautilus.extension" in sys.modules:
+                    del sys.modules["media_toolbox.nautilus.extension"]

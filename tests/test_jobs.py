@@ -25,6 +25,7 @@ from media_toolbox.core.models import (
     FormatInfo,
     MediaInfo,
     OutputPublishError,
+    ProbeError,
     VideoStream,
 )
 from media_toolbox.core.runner import RunnerCancelledError, RunnerError
@@ -375,3 +376,76 @@ class TestTransactionalJobExecution:
                 run_job(config, runner=fake_runner)
             assert exc_info.value.__cause__ is not None
             assert "Disk failure" in str(exc_info.value.__cause__)
+
+    @patch("media_toolbox.core.jobs.probe_media")
+    def test_probe_failure_raises_probe_error_not_name_error(
+        self,
+        mock_probe: MagicMock,
+        tmp_path: Path,
+    ):
+        mock_probe.side_effect = ProbeError("Failed to parse probe JSON")
+        inp = tmp_path / "corrupt.mp4"
+        inp.write_bytes(b"bad content")
+        out = tmp_path / "output.mp4"
+
+        config = JobConfig(
+            input_path=inp,
+            output_path=out,
+            options=EncodeOptions(),
+            media_info=None,
+            allow_unprobed=False,
+        )
+
+        with pytest.raises(ProbeError, match="Failed to parse probe JSON"):
+            run_job(config)
+
+    @patch("media_toolbox.core.jobs.probe_media")
+    def test_probe_generic_exception_wrapped_in_probe_error(
+        self,
+        mock_probe: MagicMock,
+        tmp_path: Path,
+    ):
+        mock_probe.side_effect = OSError("ffprobe executable not found")
+        inp = tmp_path / "video.mp4"
+        inp.write_bytes(b"content")
+        out = tmp_path / "output.mp4"
+
+        config = JobConfig(
+            input_path=inp,
+            output_path=out,
+            options=EncodeOptions(),
+            media_info=None,
+            allow_unprobed=False,
+        )
+
+        with pytest.raises(ProbeError) as exc_info:
+            run_job(config)
+        assert "Failed to probe" in str(exc_info.value)
+        assert isinstance(exc_info.value.__cause__, OSError)
+
+    @patch("media_toolbox.core.jobs.probe_media")
+    def test_probe_failure_tolerated_when_allow_unprobed_is_true(
+        self,
+        mock_probe: MagicMock,
+        tmp_path: Path,
+    ):
+        mock_probe.side_effect = ProbeError("ffprobe timeout")
+        inp = tmp_path / "stream.mp4"
+        inp.write_bytes(b"stream bytes")
+        out = tmp_path / "stream_out.mp4"
+
+        config = JobConfig(
+            input_path=inp,
+            output_path=out,
+            options=EncodeOptions(),
+            media_info=None,
+            allow_unprobed=True,
+        )
+
+        def fake_runner(cmds, **kwargs):
+            staging_file = Path(cmds[0][-1])
+            staging_file.write_bytes(b"staged stream")
+
+        result = run_job(config, runner=fake_runner)
+        assert result.output_path == out
+        assert out.exists()

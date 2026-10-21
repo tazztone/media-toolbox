@@ -30,6 +30,7 @@ from media_toolbox.core.models import (
     FileCollisionError,
     MediaInfo,
     OutputPublishError,
+    ProbeError,
     ProgressEvent,
 )
 from media_toolbox.core.probe import probe_media
