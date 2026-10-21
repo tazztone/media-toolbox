@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+import signal
 import sys
 import threading
 import time
@@ -588,6 +589,21 @@ class TestRunnerCancellation:
         mock_proc.poll.return_value = 0
         # Should return immediately without exception
         terminate_process_group(999999, mock_proc)
+
+    def test_terminate_process_group_kills_surviving_descendants_when_leader_exited(self) -> None:
+        """Verifies terminate_process_group signals process group even if leader has already exited."""
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = 0  # Leader exited
+
+        alive_calls = [True, True, False]
+
+        def fake_is_pgid_alive(pgid: int) -> bool:
+            return alive_calls.pop(0) if alive_calls else False
+
+        with patch("media_toolbox.core.runner._is_pgid_alive", side_effect=fake_is_pgid_alive), \
+             patch("os.killpg") as mock_killpg:
+            terminate_process_group(12345, mock_proc, graceful_timeout=0.2, kill_timeout=0.2)
+            mock_killpg.assert_any_call(12345, signal.SIGTERM)
 
 
 # ---------------------------------------------------------------------------

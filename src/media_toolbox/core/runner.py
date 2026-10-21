@@ -367,6 +367,20 @@ def parse_progress_stream(
 # ---------------------------------------------------------------------------
 
 
+def _is_pgid_alive(pgid: int) -> bool:
+    """Return True if at least one process in the process group is still alive."""
+    try:
+        os.killpg(pgid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except OSError as e:
+        if e.errno == errno.ESRCH:
+            return False
+        # EPERM means processes exist in group but caller lacks permission to signal
+        return True
+
+
 def terminate_process_group(
     pgid: int,
     proc: subprocess.Popen[str],
@@ -375,6 +389,7 @@ def terminate_process_group(
 ) -> None:
     """
     Terminate an isolated process group with SIGTERM, escalating to SIGKILL.
+    Ensures descendants in the process group are reaped even if the direct leader has exited.
 
     Args:
         pgid: Process group ID to signal.
@@ -382,23 +397,19 @@ def terminate_process_group(
         graceful_timeout: Seconds to wait after SIGTERM before escalating to SIGKILL.
         kill_timeout: Seconds to wait after SIGKILL to reap process.
     """
-    if proc.poll() is not None:
+    if proc.poll() is not None and not _is_pgid_alive(pgid):
         return
 
     # Stage 1: Graceful SIGTERM to process group
     try:
         os.killpg(pgid, signal.SIGTERM)
-    except ProcessLookupError:
-        return
-    except OSError as e:
-        if e.errno == errno.ESRCH:
-            return
-        raise
+    except (ProcessLookupError, OSError):
+        pass
 
-    # Wait for graceful exit
+    # Wait for graceful exit of all processes in group
     start = time.monotonic()
     while time.monotonic() - start < graceful_timeout:
-        if proc.poll() is not None:
+        if proc.poll() is not None and not _is_pgid_alive(pgid):
             return
         time.sleep(0.02)
 
@@ -410,7 +421,7 @@ def terminate_process_group(
 
     start = time.monotonic()
     while time.monotonic() - start < kill_timeout:
-        if proc.poll() is not None:
+        if proc.poll() is not None and not _is_pgid_alive(pgid):
             return
         time.sleep(0.02)
 
@@ -461,6 +472,7 @@ def run_ffmpeg(
     try:
         proc = subprocess.Popen(
             effective_cmd,
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
