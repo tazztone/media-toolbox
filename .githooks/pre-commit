@@ -16,11 +16,12 @@ done
 
 # 2. Run unit tests via local venv
 PYTEST_BIN="$REPO_ROOT/.venv/bin/pytest"
+TEST_MARKER="${PRE_COMMIT_TEST_MARKER:-not integration and not desktop}"
 if [ -x "$PYTEST_BIN" ]; then
-    "$PYTEST_BIN" tests/
+    "$PYTEST_BIN" -m "$TEST_MARKER" tests/
 else
     if command -v pytest &>/dev/null; then
-        pytest tests/
+        pytest -m "$TEST_MARKER" tests/
     else
         echo "⚠️  pytest not found in .venv/bin or PATH; skipping test runner."
     fi

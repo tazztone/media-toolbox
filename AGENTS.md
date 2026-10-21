@@ -52,7 +52,7 @@ CI configured via GitHub Actions (`.github/workflows/ci.yml`): headless tests, d
 - `pyproject.toml` — packaging (setuptools>=61), deps, console scripts (`media-toolbox`, `media_toolbox`, `media-toolbox-gui`, `media_toolbox_gui`).
 - `pytest.ini` — all pytest config (testpaths, pythonpath=src, addopts).
 - `src/media_toolbox/cli/` — modular CLI (`__init__.py`, `parser.py`, `formatting.py`, `handlers.py`, `__main__.py`).
-- `.githooks/pre-commit` — bash `-n` syntax check + pytest; activate: `git config core.hooksPath .githooks`.
+- `.githooks/pre-commit` — bash `-n` syntax check + pytest (fast unit tests via `-m "not integration and not desktop"`, configurable via `PRE_COMMIT_TEST_MARKER`); activate: `git config core.hooksPath .githooks`.
 - `docs/PROJECT.md` — interface contracts, feature inventory. `docs/TEST_INFRA.md` — test philosophy, coverage tiers.
 - `src/media_toolbox/nautilus/launcher.sh` — installed to `~/.local/share/nautilus/scripts/Media-Toolbox`; resolves interpreter, sets `PYTHONPATH=src`.
 
