@@ -534,8 +534,7 @@ def run_ffmpeg(
         def _cancel_watcher() -> None:
             while not done_event.is_set():
                 if cancel_event.is_set():
-                    if proc.poll() is None:
-                        terminate_process_group(pgid, proc, graceful_timeout=sigterm_timeout)
+                    terminate_process_group(pgid, proc, graceful_timeout=sigterm_timeout)
                     break
                 done_event.wait(timeout=0.05)
 

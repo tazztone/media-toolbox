@@ -416,9 +416,9 @@ class TestCancellationFlow:
         mock_win.cancel_event = threading.Event()
         mock_win.is_transcoding = True
 
-        # When transcoding: sets cancel_event, returns False
+        # When transcoding: sets cancel_event and returns True to veto immediate close until cleanup completes
         ret = MainWindow._on_close_request(mock_win)
-        assert ret is False
+        assert ret is True
         assert mock_win.cancel_event.is_set() is True
 
         # When idle: leaves cancel_event unset, returns False
