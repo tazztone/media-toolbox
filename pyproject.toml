@@ -19,11 +19,13 @@ desktop = [
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.0.0",
+    "basedpyright>=1.40.2",
 ]
 all = [
     "PyGObject>=3.42.0",
     "pytest>=8.0.0",
     "pytest-cov>=4.0.0",
+    "basedpyright>=1.40.2",
 ]
 
 [project.scripts]
