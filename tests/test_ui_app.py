@@ -185,3 +185,41 @@ class TestMediaToolboxApp:
         mock_win.load_media_file.assert_called_once_with(str(file1))
         mock_win.toast_overlay.add_toast.assert_called_once()
         mock_win.present.assert_called_once()
+
+    @pytest.mark.usefixtures("gi_env")
+    def test_app_action_about_dialog(self) -> None:
+        """Verify _on_action_about presents AboutDialog with parent window."""
+        from media_toolbox.ui.app import MediaToolboxApp
+        import media_toolbox.ui.app as app_mod
+
+        app = MediaToolboxApp()
+        mock_win = MagicMock()
+        app.window = mock_win
+
+        mock_dialog_instance = MagicMock()
+        mock_dialog_cls = MagicMock(return_value=mock_dialog_instance)
+
+        with patch.object(app_mod.Adw, "AboutDialog", mock_dialog_cls, create=True):
+            app._on_action_about(MagicMock(), None)
+            mock_dialog_instance.present.assert_called_once_with(mock_win)
+
+    @pytest.mark.usefixtures("gi_env")
+    def test_app_action_about_window_fallback(self) -> None:
+        """Verify _on_action_about fallback presents AboutWindow transient for parent."""
+        from media_toolbox.ui.app import MediaToolboxApp
+        import media_toolbox.ui.app as app_mod
+
+        app = MediaToolboxApp()
+        mock_win = MagicMock()
+        app.window = mock_win
+
+        mock_window_instance = MagicMock()
+        mock_window_cls = MagicMock(return_value=mock_window_instance)
+
+        # Ensure AboutDialog is absent to trigger AboutWindow fallback
+        with patch.object(app_mod.Adw, "AboutDialog", None, create=True), \
+             patch.object(app_mod.Adw, "AboutWindow", mock_window_cls, create=True):
+            app._on_action_about(MagicMock(), None)
+            mock_window_instance.set_transient_for.assert_called_once_with(mock_win)
+            mock_window_instance.present.assert_called_once_with()
+

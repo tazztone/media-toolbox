@@ -1,7 +1,5 @@
 """Unit test suite for asynchronous shutdown lifecycle, job generation guarding, and cancellation escalation."""
 
-# pyright: reportMissingImports=false, reportMissingModuleSource=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportGeneralTypeIssues=false, reportInvalidTypeForm=false
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -14,33 +12,39 @@ pytest.importorskip("gi")
 from media_toolbox.core.jobs import JobConfig
 from media_toolbox.core.models import EncodeOptions, ProgressEvent
 from media_toolbox.core.runner import RunnerCancelledError
-from media_toolbox.ui.constants import WindowState
-from media_toolbox.ui.window_worker import WindowWorkerMixin
 
 pytestmark = [pytest.mark.desktop]
 
 
-class MockWindow(WindowWorkerMixin):
-    def __init__(self) -> None:
-        self.state = WindowState.READY
-        self.cancel_event = None
-        self.is_transcoding = False
-        self._pending_confirmation = False
-        self._active_worker = None
-        self._job_generation = 0
-        self._close_after_cleanup = False
-        self.progress_footer = MagicMock()
-        self.toast_overlay = MagicMock()
-        self.open_btn = MagicMock()
-        self.destroyed = False
+def make_mock_window():
+    from media_toolbox.ui.constants import WindowState
+    from media_toolbox.ui.window_worker import WindowWorkerMixin
 
-    def destroy(self) -> None:
-        self.destroyed = True
+    class MockWindow(WindowWorkerMixin):
+        def __init__(self) -> None:
+            self.state = WindowState.READY
+            self.cancel_event = None
+            self.is_transcoding = False
+            self._pending_confirmation = False
+            self._active_worker = None
+            self._job_generation = 0
+            self._close_after_cleanup = False
+            self.progress_footer = MagicMock()
+            self.toast_overlay = MagicMock()
+            self.open_btn = MagicMock()
+            self.destroyed = False
+
+        def destroy(self) -> None:
+            self.destroyed = True
+
+    return MockWindow()
 
 
 def test_close_request_vetoes_when_transcoding() -> None:
     """Close request returns True (veto) while transcoding and sets cancel_event."""
-    win = MockWindow()
+    from media_toolbox.ui.constants import WindowState
+
+    win = make_mock_window()
     win.is_transcoding = True
     win.cancel_event = threading.Event()
 
@@ -54,7 +58,9 @@ def test_close_request_vetoes_when_transcoding() -> None:
 
 def test_cancelled_idle_destroys_window_if_close_requested(tmp_path: Path) -> None:
     """_on_cancelled_idle triggers destroy() when _close_after_cleanup is set."""
-    win = MockWindow()
+    from media_toolbox.ui.constants import WindowState
+
+    win = make_mock_window()
     win.state = WindowState.CANCELLING
     win.is_transcoding = True
     win._job_generation = 1
@@ -69,7 +75,9 @@ def test_cancelled_idle_destroys_window_if_close_requested(tmp_path: Path) -> No
 
 def test_progress_events_discarded_when_closed() -> None:
     """Progress events are discarded if window state is CLOSED."""
-    win = MockWindow()
+    from media_toolbox.ui.constants import WindowState
+
+    win = make_mock_window()
     win.state = WindowState.CLOSED
     win._job_generation = 1
 
@@ -81,7 +89,9 @@ def test_progress_events_discarded_when_closed() -> None:
 
 def test_progress_events_discarded_when_cancelling() -> None:
     """Progress events are discarded if window state is CANCELLING."""
-    win = MockWindow()
+    from media_toolbox.ui.constants import WindowState
+
+    win = make_mock_window()
     win.state = WindowState.CANCELLING
     win._job_generation = 1
 
@@ -93,7 +103,9 @@ def test_progress_events_discarded_when_cancelling() -> None:
 
 def test_worker_generation_guards_stale_callbacks(tmp_path: Path) -> None:
     """Worker thread ignores progress and success callbacks from superseding jobs."""
-    win = MockWindow()
+    from media_toolbox.ui.constants import WindowState
+
+    win = make_mock_window()
     win.state = WindowState.RUNNING
     win._job_generation = 1
 

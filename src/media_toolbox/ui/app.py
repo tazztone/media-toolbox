@@ -145,15 +145,11 @@ class MediaToolboxApp(_AppBase):  # type: ignore[misc,valid-type]
             issue_url="https://github.com/tazztone/media-toolbox/issues",
             license_type=Gtk.License.APACHE_2_0,
         )
-        if hasattr(about, "set_transient_for") and win:
-            try:
-                about.set_transient_for(win)
-            except Exception:
-                pass
-
-        if win and hasattr(Adw, "AboutDialog") and isinstance(about, getattr(Adw, "AboutDialog")):
+        if about_cls is getattr(Adw, "AboutDialog", None):
             about.present(win)
         else:
+            if hasattr(about, "set_transient_for") and win:
+                about.set_transient_for(win)
             about.present()
 
 
