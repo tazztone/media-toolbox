@@ -65,6 +65,11 @@ class MainWindow(Adw.ApplicationWindow, WindowProbingMixin, WindowWorkerMixin):
     Main Libadwaita application window.
     """
 
+    VIDEO_PRESETS = VIDEO_PRESETS
+    AUDIO_PRESETS = AUDIO_PRESETS
+    CROP_PRESETS = CROP_PRESETS
+    SPEED_PRESETS = SPEED_PRESETS
+
     # Widget attributes attached by window_builder.build_window_layout()
     header_bar: Adw.HeaderBar
     window_title: Adw.WindowTitle

@@ -98,8 +98,8 @@ class WindowWorkerMixin:
 
     def _start_worker(
         self,
-        target_or_cmds: Any,
-        *args: Any,
+        config: JobConfig,
+        title: str = "Processing media...",
     ) -> None:
         if (
             hasattr(self, "_active_worker")
@@ -117,18 +117,8 @@ class WindowWorkerMixin:
         if hasattr(self, "open_btn") and self.open_btn is not None:
             self.open_btn.set_sensitive(False)
 
-        if isinstance(target_or_cmds, JobConfig):
-            title = args[0] if args else "Processing media..."
-            self.progress_footer.start(title)
-            worker_args: tuple[Any, ...] = (target_or_cmds, self.cancel_event)
-        else:
-            # Legacy signature: (cmds, duration, output_path, title)
-            cmds = target_or_cmds
-            duration = args[0]
-            output_path = args[1]
-            title = args[2] if len(args) > 2 else "Processing media..."
-            self.progress_footer.start(title)
-            worker_args = (cmds, duration, output_path, self.cancel_event)
+        self.progress_footer.start(title)
+        worker_args: tuple[Any, ...] = (config, self.cancel_event)
 
         worker_thread = threading.Thread(
             target=self._worker_thread_entry,

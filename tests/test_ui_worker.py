@@ -45,13 +45,13 @@ class TestNonBlockingWorkerThread:
         mock_win._worker_thread_entry = MagicMock()
 
         out_file = tmp_path / "output.mp4"
-        cmds = [["ffmpeg", "-i", "in.mp4", "out.mp4"]]
+        config = JobConfig(input_path="in.mp4", output_path=str(out_file), options=EncodeOptions())
 
         with patch("threading.Thread") as mock_thread_cls:
             mock_thread_inst = MagicMock()
             mock_thread_cls.return_value = mock_thread_inst
 
-            MainWindow._launch_worker_pipeline(mock_win, cmds, 120.0, out_file, "Encoding...")
+            MainWindow._launch_worker_pipeline(mock_win, config, "Encoding...")
 
             assert mock_win.is_transcoding is True
             assert isinstance(mock_win.cancel_event, threading.Event)
@@ -61,7 +61,7 @@ class TestNonBlockingWorkerThread:
 
             mock_thread_cls.assert_called_once_with(
                 target=mock_win._worker_thread_entry,
-                args=(cmds, 120.0, out_file, mock_win.cancel_event),
+                args=(config, mock_win.cancel_event),
                 daemon=True,
                 name="MediaToolboxWorker",
             )
@@ -207,9 +207,10 @@ class TestNonBlockingWorkerThread:
         mock_win = MagicMock()
         mock_win.is_transcoding = False
         out_file = tmp_path / "out.mp4"
+        config = JobConfig(input_path="in.mp4", output_path=str(out_file), options=EncodeOptions())
 
         with patch("threading.Thread") as mock_thread_cls:
-            MainWindow._start_worker(mock_win, [["ffmpeg"]], 60.0, out_file, "Transcoding...")
+            MainWindow._start_worker(mock_win, config, "Transcoding...")
 
         assert mock_win.is_transcoding is True
         mock_win._set_ui_controls_sensitive.assert_called_with(False)

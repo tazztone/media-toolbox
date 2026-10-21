@@ -142,7 +142,7 @@ def build_transcode_page(win: MainWindow) -> Adw.PreferencesPage:
 
     # Codec Preset Group
     preset_group = Adw.PreferencesGroup(title="Target Codec & Format")
-    preset_strings = [p[0] for p in win.VIDEO_PRESETS]
+    preset_strings = [p[0] for p in VIDEO_PRESETS]
     win.video_preset_row = Adw.ComboRow(
         title="Video Codec Preset",
         model=Gtk.StringList.new(preset_strings),
@@ -163,7 +163,7 @@ def build_transcode_page(win: MainWindow) -> Adw.PreferencesPage:
 
     # Video Adjustments Group (Crop & Speed)
     adjust_group = Adw.PreferencesGroup(title="Video Transformations")
-    crop_strings = [c[0] for c in win.CROP_PRESETS]
+    crop_strings = [c[0] for c in CROP_PRESETS]
     win.crop_row = Adw.ComboRow(
         title="Aspect Ratio Crop",
         model=Gtk.StringList.new(crop_strings),
@@ -171,7 +171,7 @@ def build_transcode_page(win: MainWindow) -> Adw.PreferencesPage:
     )
     adjust_group.add(win.crop_row)
 
-    speed_strings = [s[0] for s in win.SPEED_PRESETS]
+    speed_strings = [s[0] for s in SPEED_PRESETS]
     win.speed_row = Adw.ComboRow(
         title="Playback Speed",
         model=Gtk.StringList.new(speed_strings),
@@ -215,7 +215,7 @@ def build_extract_audio_page(win: MainWindow) -> Adw.PreferencesPage:
 
     # Audio Format Group
     format_group = Adw.PreferencesGroup(title="Audio Format & Bitrate")
-    audio_preset_strings = [p[0] for p in win.AUDIO_PRESETS]
+    audio_preset_strings = [p[0] for p in AUDIO_PRESETS]
     win.audio_preset_row = Adw.ComboRow(
         title="Audio Format",
         model=Gtk.StringList.new(audio_preset_strings),
@@ -242,7 +242,7 @@ def build_extract_audio_page(win: MainWindow) -> Adw.PreferencesPage:
 
     # Audio Adjustments Group
     adjust_group = Adw.PreferencesGroup(title="Audio Processing")
-    speed_strings = [s[0] for s in win.SPEED_PRESETS]
+    speed_strings = [s[0] for s in SPEED_PRESETS]
     win.extract_speed_row = Adw.ComboRow(
         title="Playback Speed",
         model=Gtk.StringList.new(speed_strings),

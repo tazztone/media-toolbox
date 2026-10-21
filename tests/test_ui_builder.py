@@ -95,12 +95,7 @@ def mock_ui_env():
 
 
 def _create_mock_window() -> MagicMock:
-    win = MagicMock()
-    win.VIDEO_PRESETS = VIDEO_PRESETS
-    win.AUDIO_PRESETS = AUDIO_PRESETS
-    win.CROP_PRESETS = CROP_PRESETS
-    win.SPEED_PRESETS = SPEED_PRESETS
-    return win
+    return MagicMock()
 
 
 @pytest.mark.usefixtures("mock_ui_env")
@@ -230,3 +225,15 @@ class TestWindowBuilder:
         assert isinstance(browse_btn, SignalMock)
         browse_btn.trigger("clicked", browse_btn)
         win.choose_output_destination.assert_called_once_with(is_audio=True)
+
+    def test_build_window_layout_with_mainwindow_spec(self) -> None:
+        """Verifies layout construction against a strict MainWindow spec without extra attributes."""
+        import media_toolbox.ui.window_builder as wb
+        from media_toolbox.ui.window import MainWindow
+
+        win = MagicMock(spec=MainWindow)
+        wb.build_window_layout(win)
+        assert win.video_preset_row is not None
+        assert win.crop_row is not None
+        assert win.speed_row is not None
+        assert win.audio_preset_row is not None
