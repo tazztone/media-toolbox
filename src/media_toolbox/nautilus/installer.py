@@ -29,6 +29,7 @@ __all__ = [
     "get_nautilus_paths",
     "run_update_desktop_database",
     "check_desktop_environment",
+    "resolve_desktop_inspect_exec",
     "install_nautilus",
     "uninstall_nautilus",
     "status_nautilus",
@@ -126,6 +127,26 @@ def check_desktop_environment(python_bin: str = sys.executable) -> tuple[bool, s
         return False, err
     except Exception as exc:
         return False, str(exc)
+
+
+def resolve_desktop_inspect_exec() -> str:
+    """
+    Resolve the most appropriate terminal emulator command for the desktop inspect action.
+    Maintains 'x-terminal-emulator -e media-toolbox inspect %f' when x-terminal-emulator
+    is present, otherwise falls back to available desktop terminal emulators.
+    """
+    if shutil.which("x-terminal-emulator"):
+        return "x-terminal-emulator -e media-toolbox inspect %f"
+
+    for candidate in ("ptyxis", "gnome-terminal"):
+        if shutil.which(candidate):
+            return f"{candidate} -- media-toolbox inspect %f"
+
+    for candidate in ("kgx", "alacritty", "kitty", "xterm"):
+        if shutil.which(candidate):
+            return f"{candidate} -e media-toolbox inspect %f"
+
+    return "x-terminal-emulator -e media-toolbox inspect %f"
 
 
 def _escape_shell_double_quotes(s: str) -> str:
@@ -230,6 +251,12 @@ def install_nautilus(
     # Read desktop entry content
     if src_desktop.is_file():
         desktop_content = src_desktop.read_text(encoding="utf-8")
+        inspect_exec = resolve_desktop_inspect_exec()
+        if "Exec=x-terminal-emulator -e media-toolbox inspect %f" in desktop_content:
+            desktop_content = desktop_content.replace(
+                "Exec=x-terminal-emulator -e media-toolbox inspect %f",
+                f"Exec={inspect_exec}",
+            )
     else:
         raise FileNotFoundError(f"Desktop entry template not found at '{src_desktop}'")
 

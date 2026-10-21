@@ -567,6 +567,42 @@ class TestNautilusInstaller:
             )
             assert proc.returncode == 0, f"desktop-file-validate failed:\n{proc.stderr}"
 
+    def test_resolve_desktop_inspect_exec(self) -> None:
+        """Assert resolve_desktop_inspect_exec maps available terminal binaries properly."""
+        with patch("shutil.which") as mock_which:
+            # 1. x-terminal-emulator present
+            mock_which.side_effect = lambda bin: "/usr/bin/x-terminal-emulator" if bin == "x-terminal-emulator" else None
+            assert installer.resolve_desktop_inspect_exec() == "x-terminal-emulator -e media-toolbox inspect %f"
+
+            # 2. x-terminal-emulator missing, ptyxis present
+            mock_which.side_effect = lambda bin: "/usr/bin/ptyxis" if bin == "ptyxis" else None
+            assert installer.resolve_desktop_inspect_exec() == "ptyxis -- media-toolbox inspect %f"
+
+            # 3. gnome-terminal present
+            mock_which.side_effect = lambda bin: "/usr/bin/gnome-terminal" if bin == "gnome-terminal" else None
+            assert installer.resolve_desktop_inspect_exec() == "gnome-terminal -- media-toolbox inspect %f"
+
+            # 4. xterm present
+            mock_which.side_effect = lambda bin: "/usr/bin/xterm" if bin == "xterm" else None
+            assert installer.resolve_desktop_inspect_exec() == "xterm -e media-toolbox inspect %f"
+
+            # 5. None present fallback
+            mock_which.side_effect = lambda bin: None
+            assert installer.resolve_desktop_inspect_exec() == "x-terminal-emulator -e media-toolbox inspect %f"
+
+    def test_desktop_action_inspect_substitutes_resolved_terminal(self, tmp_path: Path) -> None:
+        """Assert install_nautilus substitutes non-default resolved terminal into desktop action."""
+        with patch("media_toolbox.nautilus.installer.resolve_desktop_inspect_exec") as mock_resolve:
+            mock_resolve.return_value = "ptyxis -- media-toolbox inspect %f"
+            installer.install_nautilus(dest_dir=tmp_path)
+
+        desktop = tmp_path / "applications" / "io.github.tazztone.MediaToolbox.desktop"
+        config = configparser.ConfigParser(interpolation=None)
+        config.read_string(desktop.read_text(encoding="utf-8"))
+
+        assert "Desktop Action Inspect" in config.sections()
+        assert config["Desktop Action Inspect"].get("Exec") == "ptyxis -- media-toolbox inspect %f"
+
     def test_install_nautilus_idempotent_reinstall(self, tmp_path: Path) -> None:
         """Assert calling install_nautilus multiple times overwrites cleanly without error."""
         first_run = installer.install_nautilus(dest_dir=tmp_path)
