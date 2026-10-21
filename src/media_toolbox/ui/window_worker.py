@@ -144,45 +144,20 @@ class WindowWorkerMixin:
 
     def _worker_thread_entry(
         self,
-        *args: Any,
-        **kwargs: Any,
+        config: JobConfig,
+        cancel_event: threading.Event,
     ) -> None:
         """Worker thread running FFmpeg job in background without blocking UI thread."""
-        import media_toolbox.ui.window as window_mod
-
-        if len(args) == 2 and isinstance(args[0], JobConfig):
-            config = args[0]
-            cancel_event = args[1]
-            try:
-                result = run_job(
-                    config=config,
-                    progress_callback=lambda evt: GLib.idle_add(self._on_progress_idle, evt),
-                    pipeline_progress_callback=lambda p, t, evt: GLib.idle_add(self._on_pass_progress_idle, p, t, evt),
-                    cancel_event=cancel_event,
-                )
-                GLib.idle_add(self._on_success_idle, result.output_path)
-            except RunnerCancelledError:
-                GLib.idle_add(self._on_cancelled_idle, Path(config.output_path))
-            except RunnerError as err:
-                err_msg = err.last_error_line or str(err)
-                GLib.idle_add(self._on_error_idle, err_msg)
-            except Exception as exc:
-                GLib.idle_add(self._on_error_idle, str(exc))
-            return
-
-        # Legacy fallback signature: (cmds, total_duration, output_path, cancel_event)
-        cmds, total_duration, output_path, cancel_event = args[0], args[1], args[2], args[3]
         try:
-            window_mod.run_ffmpeg_pipeline(
-                cmds=cmds,
-                total_duration_seconds=total_duration,
+            result = run_job(
+                config=config,
                 progress_callback=lambda evt: GLib.idle_add(self._on_progress_idle, evt),
                 pipeline_progress_callback=lambda p, t, evt: GLib.idle_add(self._on_pass_progress_idle, p, t, evt),
                 cancel_event=cancel_event,
             )
-            GLib.idle_add(self._on_success_idle, output_path)
+            GLib.idle_add(self._on_success_idle, result.output_path)
         except RunnerCancelledError:
-            GLib.idle_add(self._on_cancelled_idle, output_path)
+            GLib.idle_add(self._on_cancelled_idle, Path(config.output_path))
         except RunnerError as err:
             err_msg = err.last_error_line or str(err)
             GLib.idle_add(self._on_error_idle, err_msg)

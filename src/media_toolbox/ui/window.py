@@ -28,7 +28,6 @@ from gi.repository import Adw, Gtk
 
 from media_toolbox.core.jobs import JobConfig
 from media_toolbox.core.models import EncodeOptions, MediaInfo
-from media_toolbox.core.runner import run_ffmpeg_pipeline
 from media_toolbox.ui.constants import (
     AUDIO_PRESETS,
     CROP_PRESETS,
@@ -58,7 +57,6 @@ from media_toolbox.ui.window_worker import WindowWorkerMixin
 __all__ = [
     "WindowState",
     "MainWindow",
-    "run_ffmpeg_pipeline",
 ]
 
 

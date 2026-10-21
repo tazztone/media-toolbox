@@ -14,7 +14,8 @@ import threading
 from unittest.mock import MagicMock, patch
 import pytest
 
-from media_toolbox.core.models import ProgressEvent
+from media_toolbox.core.jobs import JobConfig
+from media_toolbox.core.models import EncodeOptions, ProgressEvent
 from media_toolbox.core.runner import RunnerCancelledError, RunnerError
 from tests.ui_test_helpers import (
     drain_main_context,
@@ -344,10 +345,14 @@ class TestCancellationFlow:
         cancel_event = threading.Event()
         cancel_event.set()
 
-        with patch("media_toolbox.ui.window.run_ffmpeg_pipeline", side_effect=RunnerCancelledError("Process killed")):
-            MainWindow._worker_thread_entry(
-                mock_win, [["ffmpeg"]], 10.0, pre_existing_file, cancel_event
-            )
+        config = JobConfig(
+            input_path=Path("/tmp/input.mp4"),
+            output_path=pre_existing_file,
+            options=EncodeOptions(),
+        )
+
+        with patch("media_toolbox.ui.window_worker.run_job", side_effect=RunnerCancelledError("Process killed")):
+            MainWindow._worker_thread_entry(mock_win, config, cancel_event)
 
         # File is safely preserved, not deleted
         assert pre_existing_file.exists()
@@ -384,8 +389,14 @@ class TestCancellationFlow:
         cancel_event = threading.Event()
         cancel_event.set()
 
-        with patch("media_toolbox.ui.window.run_ffmpeg_pipeline", side_effect=RunnerCancelledError("Aborted")):
-            MainWindow._worker_thread_entry(mock_win, [["ffmpeg"]], 5.0, pre_existing_file, cancel_event)
+        config = JobConfig(
+            input_path=Path("/tmp/input.mp4"),
+            output_path=pre_existing_file,
+            options=EncodeOptions(),
+        )
+
+        with patch("media_toolbox.ui.window_worker.run_job", side_effect=RunnerCancelledError("Aborted")):
+            MainWindow._worker_thread_entry(mock_win, config, cancel_event)
 
         assert pre_existing_file.exists()
         assert pre_existing_file.read_bytes() == b"original output bytes"
