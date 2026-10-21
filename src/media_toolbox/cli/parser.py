@@ -100,6 +100,7 @@ def build_parser() -> argparse.ArgumentParser:
     trans_parser.add_argument("--mute-audio", action="store_true", help="Remove audio stream from output")
     trans_parser.add_argument("--normalize", action="store_true", help="Normalize audio loudness using EBU R128")
     trans_parser.add_argument("-f", "--overwrite", action="store_true", help="Overwrite destination file if it exists")
+    trans_parser.add_argument("--allow-fallback-copy", action="store_true", help="Allow non-atomic copy publication on filesystems lacking hard link support")
     trans_parser.add_argument("--quiet", action="store_true", help="Suppress interactive progress bar")
 
     # Subcommand: extract-audio
@@ -108,6 +109,7 @@ def build_parser() -> argparse.ArgumentParser:
     audio_parser.add_argument("output", nargs="?", default=None, help="Destination audio file (or specify via -o/--output)")
     audio_parser.add_argument("-o", "--output", dest="output_opt", default=None, help="Destination audio file")
     audio_parser.add_argument("-f", "--overwrite", action="store_true", help="Overwrite destination file if it exists")
+    audio_parser.add_argument("--allow-fallback-copy", action="store_true", help="Allow non-atomic copy publication on filesystems lacking hard link support")
     audio_parser.add_argument("--codec", default=None, help="Audio codec (e.g. mp3, aac, opus, flac)")
     audio_parser.add_argument("--bitrate", type=int, default=192, help="Audio bitrate in kbps (default: 192)")
     audio_parser.add_argument("--speed", type=float, default=None, help="Audio playback speed multiplier")

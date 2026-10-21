@@ -269,3 +269,15 @@ class TestValidationAndPresetNormalization:
         spec = resolve_job_spec(opts)
         assert spec.audio_codec == "libmp3lame"
 
+    def test_extra_args_positional_tokens_rejected(self) -> None:
+        """Naked positional file paths in extra_args are rejected."""
+        opts = EncodeOptions(extra_args=("/path/to/rogue.mp4",))
+        with pytest.raises(ValueError, match="Positional token .* in extra_args is invalid"):
+            validate_encode_options(opts)
+
+    def test_extra_args_forbidden_flags_rejected(self) -> None:
+        """Managed execution flags like -y are rejected in extra_args."""
+        opts = EncodeOptions(extra_args=("-y",))
+        with pytest.raises(ValueError, match="Flag '-y' is managed by media-toolbox"):
+            validate_encode_options(opts)
+

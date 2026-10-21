@@ -135,6 +135,7 @@ def handle_transcode(args: argparse.Namespace) -> int:
         options=options,
         media_info=media_info,
         overwrite=getattr(args, "overwrite", False),
+        allow_non_atomic_fallback=getattr(args, "allow_fallback_copy", False),
     )
 
     cancel_event = threading.Event()
@@ -249,6 +250,7 @@ def handle_extract_audio(args: argparse.Namespace) -> int:
         options=options,
         media_info=media_info,
         overwrite=getattr(args, "overwrite", False),
+        allow_non_atomic_fallback=getattr(args, "allow_fallback_copy", False),
     )
 
     cancel_event = threading.Event()

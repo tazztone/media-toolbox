@@ -116,6 +116,17 @@ class TestPathSafety:
         with pytest.raises(FileNotFoundError, match="not found"):
             validate_job_paths(inp, out)
 
+    def test_output_symlink_rejected_even_with_overwrite(self, tmp_path: Path):
+        inp = tmp_path / "in.mp4"
+        inp.touch()
+        target = tmp_path / "target.mp4"
+        target.touch()
+        symlink_out = tmp_path / "link.mp4"
+        symlink_out.symlink_to(target)
+
+        with pytest.raises(FileCollisionError, match="cannot be a symbolic link"):
+            validate_job_paths(inp, symlink_out, overwrite=True)
+
 
 class TestTransactionalJobExecution:
     @patch("media_toolbox.core.jobs.run_ffmpeg_pipeline")

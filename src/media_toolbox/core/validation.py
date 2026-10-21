@@ -31,6 +31,30 @@ def normalize_preset_name(preset_str: Optional[str]) -> Optional[str]:
     return _PRESET_ALIASES.get(raw, raw)
 
 
+def validate_extra_args(extra_args: tuple[str, ...]) -> None:
+    """
+    Validate that extra_args contains only valid FFmpeg option flags and parameter pairs.
+    Rejects naked positional file arguments or conflicting output flags.
+    """
+    forbidden_flags = {"-y", "-n", "-nostdin"}
+    i = 0
+    while i < len(extra_args):
+        token = extra_args[i]
+        if not token:
+            raise ValueError("extra_args cannot contain empty tokens")
+        if token in forbidden_flags:
+            raise ValueError(f"Flag '{token}' is managed by media-toolbox and cannot be passed in extra_args")
+        if not token.startswith("-"):
+            raise ValueError(
+                f"Positional token '{token}' in extra_args is invalid. "
+                "extra_args must only contain option flags and option values."
+            )
+        if i + 1 < len(extra_args) and not extra_args[i + 1].startswith("-"):
+            i += 2
+        else:
+            i += 1
+
+
 def resolve_job_spec(
     options: EncodeOptions,
     media_info: Optional[MediaInfo] = None,
@@ -306,7 +330,11 @@ def validate_encode_options(
                 f"Volume boost must be finite and between -60 and +60 dB, got {options.volume_boost_db}"
             )
 
-    # Mode 5: Container extension compatibility
+    # Mode 5: extra_args security and boundary validation
+    if options.extra_args:
+        validate_extra_args(options.extra_args)
+
+    # Mode 6: Container extension compatibility
     if output_path is not None:
         ext = spec.container_extension
         if ext:

@@ -239,6 +239,7 @@ class TestCliSubcommandParsing:
             "--crop",
             "--two-pass",
             "--quiet",
+            "--allow-fallback-copy",
         ):
             assert flag in captured
 
@@ -248,7 +249,7 @@ class TestCliSubcommandParsing:
             cli.main(["extract-audio", "--help"])
         assert exc_info.value.code == 0
         captured = capsys.readouterr().out
-        for flag in ("--codec", "--bitrate", "--speed", "--normalize"):
+        for flag in ("--codec", "--bitrate", "--speed", "--normalize", "--allow-fallback-copy"):
             assert flag in captured
 
     def test_unknown_subcommand_exits_nonzero(self) -> None:
@@ -525,6 +526,29 @@ class TestCliTranscodeCommand:
         opts: EncodeOptions = mock_builder.call_args[0][2]
         assert opts.target_size_mb == 25.0
         assert opts.two_pass is True
+
+    @patch("media_toolbox.cli.run_job")
+    @patch("media_toolbox.cli.probe_media")
+    def test_transcode_allow_fallback_copy_flag(
+        self,
+        mock_probe: MagicMock,
+        mock_run_job: MagicMock,
+        mock_standard_video_info: MediaInfo,
+        tmp_path: Path,
+    ) -> None:
+        """--allow-fallback-copy forwards allow_non_atomic_fallback=True to JobConfig."""
+        mock_probe.return_value = mock_standard_video_info
+        mock_run_job.return_value = MagicMock(output_path=tmp_path / "out.mp4")
+
+        exit_code = cli.main([
+            "transcode",
+            "in.mp4",
+            str(tmp_path / "out.mp4"),
+            "--allow-fallback-copy",
+        ])
+        assert exit_code == 0
+        cfg = mock_run_job.call_args[0][0]
+        assert cfg.allow_non_atomic_fallback is True
 
     @patch("media_toolbox.cli.run_ffmpeg_pipeline")
     @patch("media_toolbox.cli.build_ffmpeg_commands")

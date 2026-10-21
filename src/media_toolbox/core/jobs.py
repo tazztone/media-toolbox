@@ -115,7 +115,41 @@ def validate_job_paths(
                 f"Destination file already exists: {out_raw}. Use overwrite to replace."
             )
 
+        if out_raw.is_symlink():
+            raise FileCollisionError(
+                f"Output path cannot be a symbolic link: {out_raw}. "
+                "Overwriting symlinks is disallowed for security; please specify the direct destination file."
+            )
+
     return in_resolved, out_resolved
+
+
+def check_atomic_publish_supported(directory: Path) -> bool:
+    """
+    Pre-flight test verifying whether directory's filesystem supports hard links for atomic publication.
+    """
+    probe_src = directory / f".mtb_probe_{uuid.uuid4().hex[:8]}.tmp"
+    probe_dst = directory / f".mtb_probe_{uuid.uuid4().hex[:8]}.tmp"
+    try:
+        probe_src.touch(exist_ok=False)
+        try:
+            os.link(probe_src, probe_dst)
+            return True
+        except OSError:
+            return False
+        finally:
+            try:
+                probe_dst.unlink(missing_ok=True)
+            except OSError:
+                pass
+    except OSError:
+        # If directory permissions prevent probe touch, defer validation to publish_output
+        return True
+    finally:
+        try:
+            probe_src.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def _fallback_noclobber_publish(staging_path: Path, out_path: Path) -> None:
@@ -270,6 +304,14 @@ def run_job(
 
     # Ensure target directory exists
     out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Pre-flight verify atomic publication capability before beginning potentially expensive encode
+    if not config.overwrite and not config.allow_non_atomic_fallback:
+        if not check_atomic_publish_supported(out_path.parent):
+            raise OutputPublishError(
+                f"Underlying filesystem for '{out_path}' does not support atomic no-clobber publication "
+                "(hard links unsupported). Pass --allow-fallback-copy to permit non-atomic copy."
+            )
 
     # Staging directory on the same filesystem ensures atomic publication
     staging_temp_dir = tempfile.TemporaryDirectory(
