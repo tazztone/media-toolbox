@@ -94,7 +94,8 @@ class TestPerformanceAndTiming:
         ProgressFooterWidget.start(mock_footer, "Transcoding...")
         assert mock_footer._current_fraction == 0.0
 
-    def test_async_probe_sequence_counter_discards_stale_completion(self, gi_env, tmp_path: Path) -> None:
+    @pytest.mark.usefixtures("gi_env")
+    def test_async_probe_sequence_counter_discards_stale_completion(self, tmp_path: Path) -> None:
         """Verify stale probe completion from earlier request ID is discarded."""
         from media_toolbox.ui.window import MainWindow
         from media_toolbox.core.models import MediaInfo, FormatInfo

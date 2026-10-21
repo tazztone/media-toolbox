@@ -41,11 +41,11 @@ import media_toolbox.__main__ as main_module
 # ---------------------------------------------------------------------------
 
 
-def _fake_builder(in_p: str, out_p: str, *args: Any, **kwargs: Any) -> list[list[str]]:
+def _fake_builder(in_p: str, out_p: str, *_args: Any, **_kwargs: Any) -> list[list[str]]:
     return [["ffmpeg", "-i", str(in_p), str(out_p)]]
 
 
-def _fake_runner(cmds: list[list[str]], **kwargs: Any) -> None:
+def _fake_runner(cmds: list[list[str]], **_kwargs: Any) -> None:
     if cmds and cmds[-1]:
         p = Path(cmds[-1][-1])
         if not str(p).startswith("/dev/") and p.name != "null":
@@ -251,13 +251,13 @@ class TestCliSubcommandParsing:
         for flag in ("--codec", "--bitrate", "--speed", "--normalize"):
             assert flag in captured
 
-    def test_unknown_subcommand_exits_nonzero(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_unknown_subcommand_exits_nonzero(self) -> None:
         """Passing an unrecognized subcommand exits non-zero (exit code 2)."""
         with pytest.raises(SystemExit) as exc_info:
             cli.main(["nonexistent-command"])
         assert exc_info.value.code != 0
 
-    def test_no_arguments_prints_help_or_usage(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_no_arguments_prints_help_or_usage(self) -> None:
         """Invoking CLI with empty arguments prints usage/help and exits with status 0 or 2."""
         with pytest.raises(SystemExit) as exc_info:
             cli.main([])
@@ -660,7 +660,6 @@ class TestCliTranscodeCommand:
         self,
         mock_probe: MagicMock,
         mock_standard_video_info: MediaInfo,
-        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Non-positive --speed parameter emits error and returns non-zero."""
         mock_probe.return_value = mock_standard_video_info
@@ -745,7 +744,7 @@ class TestCliTranscodeCommand:
     def test_transcode_target_size_too_small_exits_2(
         self,
         mock_probe: MagicMock,
-        mock_val: MagicMock,
+        _mock_val: MagicMock,
         mock_run_job: MagicMock,
         mock_standard_video_info: MediaInfo,
         capsys: pytest.CaptureFixture[str],
@@ -764,7 +763,7 @@ class TestCliTranscodeCommand:
     def test_transcode_probe_error_exits_1(
         self,
         mock_probe: MagicMock,
-        mock_val: MagicMock,
+        _mock_val: MagicMock,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Probe error during transcode reports error and exits with code 1."""
@@ -1007,7 +1006,7 @@ class TestCliFormattersAndEdgeCases:
         with pytest.raises(ValueError):
             cli.parse_scale_arg("0:720")
 
-    def test_create_progress_reporter(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_create_progress_reporter(self) -> None:
         assert cli.create_progress_reporter(quiet=True) is None
 
         reporter = cli.create_progress_reporter(quiet=False)

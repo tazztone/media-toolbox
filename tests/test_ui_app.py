@@ -97,7 +97,8 @@ class TestDisplayEnvironment:
 class TestMediaToolboxApp:
     """Tests Adw.Application subclass properties, flags, and open-file dispatch."""
 
-    def test_app_instantiation_and_id(self, gi_env) -> None:
+    @pytest.mark.usefixtures("gi_env")
+    def test_app_instantiation_and_id(self) -> None:
         """Verify app instantiates headlessly with correct application_id."""
         from media_toolbox.ui.app import MediaToolboxApp
 
@@ -112,7 +113,8 @@ class TestMediaToolboxApp:
         app = MediaToolboxApp()
         assert app.get_flags() & Gio.ApplicationFlags.HANDLES_OPEN
 
-    def test_app_startup_installs_actions(self, gi_env) -> None:
+    @pytest.mark.usefixtures("gi_env")
+    def test_app_startup_installs_actions(self) -> None:
         """Verify startup installs 'quit', 'open', and 'about' GActions."""
         from media_toolbox.ui.app import MediaToolboxApp
 
@@ -122,7 +124,8 @@ class TestMediaToolboxApp:
         assert app.lookup_action("open") is not None
         assert app.lookup_action("about") is not None
 
-    def test_app_activate_presents_window(self, gi_env) -> None:
+    @pytest.mark.usefixtures("gi_env")
+    def test_app_activate_presents_window(self) -> None:
         """Verify do_activate presents window."""
         from media_toolbox.ui.app import MediaToolboxApp
 
@@ -149,7 +152,8 @@ class TestMediaToolboxApp:
         mock_win.load_media_file.assert_called_once_with(str(test_file))
         mock_win.present.assert_called_once()
 
-    def test_app_do_open_empty_files_noop(self, gi_env) -> None:
+    @pytest.mark.usefixtures("gi_env")
+    def test_app_do_open_empty_files_noop(self) -> None:
         """Verify do_open handles empty file list without error."""
         from media_toolbox.ui.app import MediaToolboxApp
 

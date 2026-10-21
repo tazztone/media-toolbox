@@ -138,7 +138,7 @@ def handle_transcode(args: argparse.Namespace) -> int:
 
     cancel_event = threading.Event()
 
-    def _sigint_handler(signum: int, frame: Any) -> None:
+    def _sigint_handler(_signum: int, _frame: Any) -> None:
         cancel_event.set()
         sys.stderr.write("\nProcess cancellation requested...\n")
 
@@ -252,7 +252,7 @@ def handle_extract_audio(args: argparse.Namespace) -> int:
 
     cancel_event = threading.Event()
 
-    def _sigint_handler(signum: int, frame: Any) -> None:
+    def _sigint_handler(_signum: int, _frame: Any) -> None:
         cancel_event.set()
         sys.stderr.write("\nAudio extraction cancellation requested...\n")
 

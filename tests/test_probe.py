@@ -229,7 +229,7 @@ class TestProbeMediaExecution:
             probe_media(dummy_file)
 
     @patch("subprocess.run", side_effect=FileNotFoundError("Executable not found"))
-    def test_probe_media_missing_binary(self, mock_run: MagicMock, tmp_path: Path) -> None:
+    def test_probe_media_missing_binary(self, _mock_run: MagicMock, tmp_path: Path) -> None:
         dummy_file = tmp_path / "valid.mp4"
         dummy_file.write_bytes(b"content")
 
@@ -237,7 +237,7 @@ class TestProbeMediaExecution:
             probe_media(dummy_file, ffprobe_bin="nonexistent_ffprobe_bin")
 
     @patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="ffprobe", timeout=5.0))
-    def test_probe_media_timeout(self, mock_run: MagicMock, tmp_path: Path) -> None:
+    def test_probe_media_timeout(self, _mock_run: MagicMock, tmp_path: Path) -> None:
         dummy_file = tmp_path / "valid.mp4"
         dummy_file.write_bytes(b"content")
 

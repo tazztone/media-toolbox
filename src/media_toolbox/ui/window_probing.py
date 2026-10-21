@@ -139,7 +139,7 @@ class WindowProbingMixin:
         self._set_ui_controls_sensitive(True)
         return False
 
-    def _on_probe_error(self, p: Path, req_id: int, error_msg: str) -> bool:
+    def _on_probe_error(self, _p: Path, req_id: int, error_msg: str) -> bool:
         if getattr(self, "state", None) == WindowState.CLOSED or req_id != self._probe_request_id:
             return False
 

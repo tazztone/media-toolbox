@@ -756,7 +756,7 @@ class TestNautilusCLISubcommands:
         assert "dry-run" in combined.lower() or "would remove" in combined.lower() or "no files" in combined.lower()
 
     def test_cli_install_and_uninstall_with_dest_dir(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+        self, tmp_path: Path
     ) -> None:
         """Assert CLI subcommands correctly pass --dest-dir to installer module."""
         # 1. Install via CLI

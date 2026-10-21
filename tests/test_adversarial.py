@@ -708,7 +708,8 @@ class TestAdversarialDesktopAndAST:
         # Assert no canary file was touched
         assert not canary_file.exists(), "Command injection vulnerability detected: canary file was created!"
 
-    def test_nautilus_extension_shlex_quote_hardening(self, mock_nautilus_env: Any, tmp_path: Path) -> None:
+    @pytest.mark.usefixtures("mock_nautilus_env")
+    def test_nautilus_extension_shlex_quote_hardening(self, tmp_path: Path) -> None:
         """Nautilus extension shell scripts must safely escape special characters with shlex.quote."""
         from media_toolbox.nautilus.extension import MediaToolboxExtension
 
@@ -739,7 +740,8 @@ class TestAdversarialDesktopAndAST:
             subprocess.run(["bash", "-c", script], capture_output=True, text=True)
             assert not canary.exists(), "Command injection vulnerability detected in Nautilus extension script!"
 
-    def test_nautilus_extension_non_colliding_output_path_generators(self, mock_nautilus_env: Any, tmp_path: Path) -> None:
+    @pytest.mark.usefixtures("mock_nautilus_env")
+    def test_nautilus_extension_non_colliding_output_path_generators(self, tmp_path: Path) -> None:
         """Extension output generators must avoid colliding with existing files by appending counters."""
         from media_toolbox.nautilus.extension import (
             get_extract_audio_output_path,

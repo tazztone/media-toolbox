@@ -437,7 +437,7 @@ class TestRunFFmpegExecution:
         """Verify that ffmpeg commands automatically receive -nostats -progress pipe:1."""
         captured_cmd: list[str] = []
 
-        def fake_popen(cmd: list[str], **kwargs: Any) -> Any:
+        def fake_popen(cmd: list[str], **_kwargs: Any) -> Any:
             captured_cmd.extend(cmd)
             mock = MagicMock()
             mock.pid = 99999
@@ -597,7 +597,7 @@ class TestRunnerCancellation:
 
         alive_calls = [True, True, False]
 
-        def fake_is_pgid_alive(pgid: int) -> bool:
+        def fake_is_pgid_alive(_pgid: int) -> bool:
             return alive_calls.pop(0) if alive_calls else False
 
         with patch("media_toolbox.core.runner._is_pgid_alive", side_effect=fake_is_pgid_alive), \
@@ -678,7 +678,7 @@ class TestMultiPassPipeline:
     def test_pipeline_cancellation_between_passes(self) -> None:
         cancel_event = threading.Event()
 
-        def _cb(ev: ProgressEvent) -> None:
+        def _cb(_ev: ProgressEvent) -> None:
             cancel_event.set()
 
         cmd1 = [sys.executable, "-c", "print('out_time_us=1000000\\nprogress=end', flush=True)"]

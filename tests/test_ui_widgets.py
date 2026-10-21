@@ -146,10 +146,11 @@ class TestDynamicRevealers:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("gi_env")
 class TestMetadataCard:
     """Headless unit verification for MetadataCard.set_media_info and clear."""
 
-    def test_metadata_card_video_and_audio(self, gi_env) -> None:
+    def test_metadata_card_video_and_audio(self) -> None:
         """Verify card displays both video and audio stream specs and [Video + Audio] badge."""
         from media_toolbox.ui.widgets import MetadataCard
 
@@ -188,7 +189,7 @@ class TestMetadataCard:
             "mov,mp4 | Duration: 00:01:00.00 | Size: 14.31 MiB (15,000,000 bytes)"
         )
 
-    def test_metadata_card_silent_video(self, gi_env) -> None:
+    def test_metadata_card_silent_video(self) -> None:
         """Verify card displays [Silent Video] badge and 'No audio stream' for video-only media."""
         from media_toolbox.ui.widgets import MetadataCard
 
@@ -216,7 +217,7 @@ class TestMetadataCard:
             "mp4 | Duration: 00:00:10.00 | Size: 17.88 MiB (18,750,000 bytes)"
         )
 
-    def test_metadata_card_audio_only(self, gi_env) -> None:
+    def test_metadata_card_audio_only(self) -> None:
         """Verify card displays [Audio Only] badge and 'No video stream' for audio-only media."""
         from media_toolbox.ui.widgets import MetadataCard
 
@@ -244,7 +245,7 @@ class TestMetadataCard:
             "mp3 | Duration: 00:02:00.00 | Size: 4.58 MiB (4,800,000 bytes)"
         )
 
-    def test_metadata_card_still_image(self, gi_env) -> None:
+    def test_metadata_card_still_image(self) -> None:
         """Verify card displays [Still Image / Other] for images and containers without streams."""
         from media_toolbox.ui.widgets import MetadataCard
 
@@ -277,7 +278,7 @@ class TestMetadataCard:
         mock_card_empty.video_row.set_subtitle.assert_called_with("No video stream")
         mock_card_empty.audio_row.set_subtitle.assert_called_with("No audio stream")
 
-    def test_metadata_card_missing_channel_layout(self, gi_env) -> None:
+    def test_metadata_card_missing_channel_layout(self) -> None:
         """Verify format_channels works seamlessly when channel_layout is None."""
         from media_toolbox.ui.widgets import MetadataCard
 
@@ -313,7 +314,7 @@ class TestMetadataCard:
         MetadataCard.set_media_info(mock_card_mono, info_mono)
         mock_card_mono.audio_row.set_subtitle.assert_called_with("WAV | 1 channel | 44.1 kHz | Bitrate: 706 kbps")
 
-    def test_metadata_card_clear(self, gi_env) -> None:
+    def test_metadata_card_clear(self) -> None:
         """Verify clear restores placeholder labels across all rows."""
         from media_toolbox.ui.widgets import MetadataCard
 

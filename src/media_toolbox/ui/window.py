@@ -131,12 +131,12 @@ class MainWindow(Adw.ApplicationWindow, WindowProbingMixin, WindowWorkerMixin):
         idx = self.audio_preset_row.get_selected()
         return AUDIO_PRESETS[idx][1]
 
-    def _on_video_preset_changed(self, combo: Adw.ComboRow, _param: Any) -> None:
+    def _on_video_preset_changed(self, _combo: Adw.ComboRow, _param: Any) -> None:
         preset = self.get_current_video_preset()
         self.rate_widget.set_codec_preset(preset)
         self._update_default_output_paths()
 
-    def _on_audio_preset_changed(self, combo: Adw.ComboRow, _param: Any) -> None:
+    def _on_audio_preset_changed(self, _combo: Adw.ComboRow, _param: Any) -> None:
         preset = self.get_current_audio_preset()
         self.extract_bitrate_row.set_sensitive(preset != "flac")
         self._update_default_output_paths()

@@ -458,7 +458,7 @@ class TestScenario2HighSpeedPreview:
             audio_streams=(AudioStream(index=1, codec_name="aac", channels=2, sample_rate=48000),),
         )
 
-        def _fake_run(cmds, **kwargs):
+        def _fake_run(cmds, **_kwargs):
             Path(cmds[-1][-1]).write_bytes(b"dummy preview output")
 
         with (
@@ -542,7 +542,7 @@ class TestScenario3AudioExtractionAndNormalization:
             audio_streams=(AudioStream(index=1, codec_name="flac", channels=2, sample_rate=48000),),
         )
 
-        def _fake_run(cmds, **kwargs):
+        def _fake_run(cmds, **_kwargs):
             Path(cmds[-1][-1]).write_bytes(b"dummy mp3 content")
 
         with (
@@ -763,7 +763,8 @@ class TestScenario7NautilusContextMenuDispatch:
     - Launcher script shell syntax and argument parsing
     """
 
-    def test_nautilus_extension_mime_and_path_filtering(self, mock_nautilus_env: Any) -> None:
+    @pytest.mark.usefixtures("mock_nautilus_env")
+    def test_nautilus_extension_mime_and_path_filtering(self) -> None:
         """Extension accepts video/audio files with spaces and rejects non-media documents."""
         from media_toolbox.nautilus.extension import (
             MediaToolboxExtension,
@@ -793,7 +794,8 @@ class TestScenario7NautilusContextMenuDispatch:
         subitems = root.submenu.get_items()
         assert len(subitems) == 4
 
-    def test_nautilus_space_safe_dispatch_execution(self, mock_nautilus_env: Any) -> None:
+    @pytest.mark.usefixtures("mock_nautilus_env")
+    def test_nautilus_space_safe_dispatch_execution(self) -> None:
         """Menu activations quote paths with spaces using shlex.quote and spawn detached processes."""
         from media_toolbox.nautilus.extension import MediaToolboxExtension
 

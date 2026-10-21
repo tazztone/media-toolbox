@@ -130,7 +130,7 @@ class TestTransactionalJobExecution:
         out = tmp_path / "output.mp4"
 
         # Simulate FFmpeg creating the staging output file
-        def fake_ffmpeg(cmds, **kwargs):
+        def fake_ffmpeg(cmds, **_kwargs):
             # Target path is the last arg in the single-pass command
             staging_file = Path(cmds[0][-1])
             staging_file.write_bytes(b"dummy video data")
@@ -157,7 +157,7 @@ class TestTransactionalJobExecution:
     @patch("media_toolbox.core.jobs.run_ffmpeg_pipeline")
     def test_pre_cancelled_job_leaves_existing_destination_intact(
         self,
-        mock_pipeline: MagicMock,
+        _mock_pipeline: MagicMock,
         tmp_path: Path,
         dummy_media_info: MediaInfo,
     ):
@@ -197,7 +197,7 @@ class TestTransactionalJobExecution:
         out = tmp_path / "output.mp4"
         out.write_bytes(b"original output")
 
-        def fake_cancellation(cmds, **kwargs):
+        def fake_cancellation(cmds, **_kwargs):
             staging_file = Path(cmds[0][-1])
             staging_file.write_bytes(b"partial bytes")
             raise RunnerCancelledError("cancelled")
@@ -230,7 +230,7 @@ class TestTransactionalJobExecution:
         inp.write_bytes(b"source")
         out = tmp_path / "new_output.mp4"
 
-        def fake_failure(cmds, **kwargs):
+        def fake_failure(cmds, **_kwargs):
             staging_file = Path(cmds[0][-1])
             staging_file.write_bytes(b"partial corrupted data")
             raise RunnerError("ffmpeg crashed", returncode=1)
@@ -260,7 +260,7 @@ class TestTransactionalJobExecution:
         out = tmp_path / "new_output.mp4"
 
         # Runner function runs and exits 0 but creates no output file
-        def fake_silent_runner(cmds, **kwargs):
+        def fake_silent_runner(_cmds, **_kwargs):
             pass
 
         config = JobConfig(
@@ -284,7 +284,7 @@ class TestTransactionalJobExecution:
         inp.write_bytes(b"source")
         out = tmp_path / "new_output.mp4"
 
-        def fake_empty_runner(cmds, **kwargs):
+        def fake_empty_runner(cmds, **_kwargs):
             staging_file = Path(cmds[0][-1])
             staging_file.touch()
 
@@ -309,7 +309,7 @@ class TestTransactionalJobExecution:
         inp.write_bytes(b"source")
         out = tmp_path / "race_output.mp4"
 
-        def fake_racing_runner(cmds, **kwargs):
+        def fake_racing_runner(cmds, **_kwargs):
             staging_file = Path(cmds[0][-1])
             staging_file.write_bytes(b"staged content")
             # Concurrently create destination right before publication
@@ -341,7 +341,7 @@ class TestTransactionalJobExecution:
         out = tmp_path / "cancelled_output.mp4"
         cancel_evt = threading.Event()
 
-        def fake_runner_cancelling_late(cmds, **kwargs):
+        def fake_runner_cancelling_late(cmds, **_kwargs):
             staging_file = Path(cmds[0][-1])
             staging_file.write_bytes(b"complete staging file")
             # Cancellation requested right before runner returns
@@ -369,7 +369,7 @@ class TestTransactionalJobExecution:
         inp.write_bytes(b"source")
         out = tmp_path / "pub_error_output.mp4"
 
-        def fake_runner(cmds, **kwargs):
+        def fake_runner(cmds, **_kwargs):
             staging_file = Path(cmds[0][-1])
             staging_file.write_bytes(b"staged content")
 
@@ -452,7 +452,7 @@ class TestTransactionalJobExecution:
             allow_unprobed=True,
         )
 
-        def fake_runner(cmds, **kwargs):
+        def fake_runner(cmds, **_kwargs):
             staging_file = Path(cmds[0][-1])
             staging_file.write_bytes(b"staged stream")
 
@@ -484,7 +484,7 @@ class TestTransactionalJobExecution:
     @patch("media_toolbox.core.jobs.run_ffmpeg_pipeline")
     def test_run_job_fails_closed_when_hardlinks_unsupported(
         self,
-        mock_pipeline: MagicMock,
+        _mock_pipeline: MagicMock,
         tmp_path: Path,
         dummy_media_info: MediaInfo,
     ):
@@ -492,7 +492,7 @@ class TestTransactionalJobExecution:
         inp.touch()
         out = tmp_path / "out.mp4"
 
-        def fake_runner(cmds, **kwargs):
+        def fake_runner(cmds, **_kwargs):
             staging_file = Path(cmds[0][-1])
             staging_file.write_bytes(b"data")
 

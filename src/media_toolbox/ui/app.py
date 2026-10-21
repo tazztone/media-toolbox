@@ -93,7 +93,7 @@ class MediaToolboxApp(_AppBase):  # type: ignore[misc,valid-type]
             self.window = MainWindow(application=self)
         self.window.present()
 
-    def do_open(self, files: list[Gio.File], n_files: int, hint: str) -> None:
+    def do_open(self, files: list[Gio.File], n_files: int, _hint: str) -> None:
         """Handles opening files passed via CLI arguments or file managers."""
         if self.window is None:
             from media_toolbox.ui.window import MainWindow

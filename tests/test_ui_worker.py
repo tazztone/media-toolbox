@@ -199,7 +199,8 @@ class TestNonBlockingWorkerThread:
         mock_footer.cancel_button.set_sensitive.assert_called_with(False)
         mock_footer.status_label.set_text.assert_called_with("Failed: Invalid codec parameters")
 
-    def test_worker_start_disables_open_btn(self, gi_env, tmp_path: Path) -> None:
+    @pytest.mark.usefixtures("gi_env")
+    def test_worker_start_disables_open_btn(self, tmp_path: Path) -> None:
         """Verify _start_worker marks is_transcoding and disables open_btn."""
         from media_toolbox.ui.window import MainWindow
 
@@ -216,7 +217,8 @@ class TestNonBlockingWorkerThread:
         mock_win.progress_footer.start.assert_called_with("Transcoding...")
         mock_thread_cls.assert_called_once()
 
-    def test_worker_success_completion_restores_open_btn(self, gi_env, tmp_path: Path) -> None:
+    @pytest.mark.usefixtures("gi_env")
+    def test_worker_success_completion_restores_open_btn(self, tmp_path: Path) -> None:
         """Verify _on_success_idle marks is_transcoding=False and enables open_btn."""
         from media_toolbox.ui.window import MainWindow
 
@@ -232,7 +234,8 @@ class TestNonBlockingWorkerThread:
         mock_win.open_btn.set_sensitive.assert_called_with(True)
         mock_win.progress_footer.finish.assert_called_with(True, f"Saved: {out_file.name}")
 
-    def test_worker_cancelled_completion_restores_open_btn(self, gi_env, tmp_path: Path) -> None:
+    @pytest.mark.usefixtures("gi_env")
+    def test_worker_cancelled_completion_restores_open_btn(self, tmp_path: Path) -> None:
         """Verify _on_cancelled_idle marks is_transcoding=False and enables open_btn."""
         from media_toolbox.ui.window import MainWindow
 
@@ -248,7 +251,8 @@ class TestNonBlockingWorkerThread:
         mock_win.open_btn.set_sensitive.assert_called_with(True)
         mock_win.progress_footer.finish.assert_called_with(False, "Operation cancelled")
 
-    def test_worker_error_restores_open_btn(self, gi_env) -> None:
+    @pytest.mark.usefixtures("gi_env")
+    def test_worker_error_restores_open_btn(self) -> None:
         """Verify _on_error_idle marks is_transcoding=False and enables open_btn."""
         from media_toolbox.ui.window import MainWindow
 
@@ -263,7 +267,8 @@ class TestNonBlockingWorkerThread:
         mock_win.open_btn.set_sensitive.assert_called_with(True)
         mock_win.progress_footer.finish.assert_called_with(False, "Failed: Encode failed")
 
-    def test_open_file_dialog_blocked_during_transcoding(self, gi_env) -> None:
+    @pytest.mark.usefixtures("gi_env")
+    def test_open_file_dialog_blocked_during_transcoding(self) -> None:
         """Verify open_file_dialog toasts and returns early when is_transcoding=True."""
         from media_toolbox.ui.window import MainWindow
 
@@ -274,7 +279,8 @@ class TestNonBlockingWorkerThread:
 
         mock_win.toast_overlay.add_toast.assert_called_once()
 
-    def test_load_media_file_blocked_during_transcoding(self, gi_env, tmp_path: Path) -> None:
+    @pytest.mark.usefixtures("gi_env")
+    def test_load_media_file_blocked_during_transcoding(self, tmp_path: Path) -> None:
         """Verify load_media_file toasts and does not load file when is_transcoding=True."""
         from media_toolbox.ui.window import MainWindow
 

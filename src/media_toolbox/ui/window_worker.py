@@ -71,7 +71,7 @@ class WindowWorkerMixin:
 
             current_input = getattr(self, "input_file", None)
 
-            def _on_response(d: Any, response_id: str) -> None:
+            def _on_response(_d: Any, response_id: str) -> None:
                 self._pending_confirmation = False
                 if getattr(self, "state", None) == WindowState.CLOSED:
                     return
@@ -185,7 +185,7 @@ class WindowWorkerMixin:
         self.toast_overlay.add_toast(Adw.Toast(title=f"Completed successfully: {output_path.name}"))
         return GLib.SOURCE_REMOVE
 
-    def _on_cancelled_idle(self, output_path: Path) -> bool:
+    def _on_cancelled_idle(self, _output_path: Path) -> bool:
         if getattr(self, "state", None) == WindowState.CLOSED:
             return GLib.SOURCE_REMOVE
         self.state = WindowState.READY
@@ -215,7 +215,7 @@ class WindowWorkerMixin:
             self.cancel_event.set()
         self.progress_footer.set_cancelling()
 
-    def _on_close_request(self, *args: Any) -> bool:
+    def _on_close_request(self, *_args: Any) -> bool:
         self.state = WindowState.CLOSED
         if getattr(self, "is_transcoding", False):
             cancel_event = self.cancel_event
