@@ -26,6 +26,11 @@
   - Headless unit & CLI suite: `.venv/bin/pytest -m "not desktop and not integration"`
   - Desktop GUI & Nautilus suite: `.venv/bin/pytest -m "desktop"`
   - Real FFmpeg integration suite: `.venv/bin/pytest -m "integration"`
+- CI Pipeline Isolation:
+  - `headless-tests`: Asserts host FFmpeg absence; verifies AST headless invariants and pure mock unit suite (`not desktop and not integration`).
+  - `integration-tests`: Provisions FFmpeg binaries; verifies real media encoding pipeline (`integration`).
+  - `desktop-tests`: Provisions GTK4 / Libadwaita / Xvfb; verifies graphical UI lifecycle (`desktop`).
+  - `packaging-smoke-test`: Clean-room wheel build and isolated CLI execution.
 - Pass/fail semantics: 100% exit code 0, 0 failures, 0 regressions across entire suite (553+ tests passing)
 - Test directory: `tests/`
 - Real-media integration: `tests/test_integration_media.py` (real FFmpeg execution)
