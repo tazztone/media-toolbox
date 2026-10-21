@@ -15,6 +15,8 @@ IMPORTANT: Zero top-level `import gi` to prevent polluting sys.modules before
 `tests/test_headless_ast.py` runs. All gi imports are lazily resolved inside fixtures/helpers.
 """
 
+# pyright: reportMissingImports=false, reportMissingModuleSource=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportGeneralTypeIssues=false, reportInvalidTypeForm=false
+
 from __future__ import annotations
 
 import os

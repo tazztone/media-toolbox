@@ -12,6 +12,8 @@ Features:
 - Window close-request handler ensuring no orphaned background FFmpeg processes.
 """
 
+# pyright: reportMissingImports=false, reportMissingModuleSource=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportGeneralTypeIssues=false, reportInvalidTypeForm=false
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -35,6 +37,11 @@ from media_toolbox.ui.constants import (
     WindowState,
 )
 from media_toolbox.ui.widgets import (
+    AudioOptionsWidget,
+    MetadataCard,
+    ProgressFooterWidget,
+    RateControlWidget,
+    ResolutionWidget,
     build_encode_options_from_state,
     resolve_default_output_path,
 )
@@ -70,6 +77,33 @@ class MainWindow(Adw.ApplicationWindow, WindowProbingMixin, WindowWorkerMixin):
     # Backward compatibility delegates for view builders
     _build_transcode_page = staticmethod(build_transcode_page)
     _build_extract_audio_page = staticmethod(build_extract_audio_page)
+
+    # Widget attributes attached by window_builder.build_window_layout()
+    header_bar: Adw.HeaderBar
+    window_title: Adw.WindowTitle
+    toast_overlay: Adw.ToastOverlay
+    main_stack: Gtk.Stack
+    metadata_card: MetadataCard
+    view_stack: Adw.ViewStack
+    view_switcher: Adw.ViewSwitcher
+    progress_footer: ProgressFooterWidget
+    video_preset_row: Adw.ComboRow
+    rate_widget: RateControlWidget
+    res_widget: ResolutionWidget
+    crop_row: Adw.ComboRow
+    speed_row: Adw.ComboRow
+    audio_widget: AudioOptionsWidget
+    video_dest_row: Adw.ActionRow
+    transcode_btn: Gtk.Button
+    audio_preset_row: Adw.ComboRow
+    extract_bitrate_adj: Gtk.Adjustment
+    extract_bitrate_row: Adw.SpinRow
+    extract_speed_row: Adw.ComboRow
+    extract_norm_switch: Adw.SwitchRow
+    extract_boost_adj: Gtk.Adjustment
+    extract_boost_row: Adw.SpinRow
+    audio_dest_row: Adw.ActionRow
+    extract_btn: Gtk.Button
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)

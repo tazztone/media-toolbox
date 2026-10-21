@@ -552,9 +552,9 @@ class TestNautilusInstaller:
         assert entry.get("Terminal") in ("false", "False")
         assert entry.get("Exec") == "media-toolbox-gui %F"
         assert "Categories" in entry
-        assert "AudioVideo;" in entry.get("Categories")
+        assert "AudioVideo;" in entry.get("Categories", "")
         assert "MimeType" in entry
-        assert "video/mp4;" in entry.get("MimeType")
+        assert "video/mp4;" in entry.get("MimeType", "")
 
         # System XDG validator check (if tool present on Linux)
         validator = shutil.which("desktop-file-validate")

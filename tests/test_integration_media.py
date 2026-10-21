@@ -69,7 +69,7 @@ def test_real_probe_media(synthetic_av_clip: Path) -> None:
     assert pv.width == 640
     assert pv.height == 360
     assert pv.codec_name == "h264"
-    assert round(pv.fps) == 30
+    assert round(pv.fps or 0) == 30
 
     pa = info.primary_audio
     assert pa is not None
@@ -99,6 +99,7 @@ def test_real_single_pass_transcode(synthetic_av_clip: Path, tmp_path: Path) -> 
     info = probe_media(out_file)
     assert info.has_video is True
     assert info.has_audio is True
+    assert info.primary_video is not None
     assert info.primary_video.width == 320
     assert info.primary_video.height == 180
     # 3.0s input at 1.5x speed should be approximately 2.0s
@@ -123,6 +124,7 @@ def test_real_audio_extraction(synthetic_av_clip: Path, tmp_path: Path) -> None:
     info = probe_media(out_file)
     assert info.has_video is False
     assert info.has_audio is True
+    assert info.primary_audio is not None
     assert info.primary_audio.codec_name == "mp3"
 
 
@@ -226,6 +228,7 @@ def test_real_concurrent_two_pass_h265_isolation(synthetic_av_clip: Path, tmp_pa
 
     info1 = probe_media(out1)
     info2 = probe_media(out2)
+    assert info1.primary_video is not None and info2.primary_video is not None
     assert info1.primary_video.codec_name == "hevc"
     assert info2.primary_video.codec_name == "hevc"
 

@@ -2,6 +2,8 @@
 Libadwaita / GTK4 Application entrypoint and lifecycle manager for media_toolbox.
 """
 
+# pyright: reportMissingImports=false, reportMissingModuleSource=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportGeneralTypeIssues=false, reportInvalidTypeForm=false
+
 from __future__ import annotations
 
 import os

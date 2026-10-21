@@ -2,6 +2,8 @@
 Media probing and file chooser portal mixin for Media Toolbox MainWindow.
 """
 
+# pyright: reportMissingImports=false, reportMissingModuleSource=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportGeneralTypeIssues=false, reportInvalidTypeForm=false
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -151,7 +153,8 @@ class WindowProbingMixin:
         return False
 
     def _update_default_output_paths(self) -> None:
-        if not getattr(self, "input_file", None):
+        input_file = self.input_file
+        if input_file is None:
             return
 
         # Video path
@@ -159,7 +162,7 @@ class WindowProbingMixin:
             video_preset = self.get_current_video_preset()
             is_target_size = (self.rate_widget.get_mode() == "target_size") and video_preset not in ("gif", "prores")
             self.video_output_path = resolve_default_output_path(
-                self.input_file,
+                input_file,
                 video_preset,
                 is_extract_audio=False,
                 is_target_size=is_target_size,
@@ -170,7 +173,7 @@ class WindowProbingMixin:
         if not getattr(self, "_audio_output_custom", False):
             audio_preset = self.get_current_audio_preset()
             self.audio_output_path = resolve_default_output_path(
-                self.input_file,
+                input_file,
                 audio_preset,
                 is_extract_audio=True,
             )

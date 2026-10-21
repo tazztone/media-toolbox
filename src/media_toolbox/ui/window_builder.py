@@ -2,6 +2,8 @@
 Declarative layout and widget hierarchy builder for Media Toolbox MainWindow.
 """
 
+# pyright: reportMissingImports=false, reportMissingModuleSource=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportGeneralTypeIssues=false, reportInvalidTypeForm=false
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -34,12 +36,13 @@ def build_window_layout(win: MainWindow) -> None:
     """Construct and attach the complete Libadwaita window UI layout."""
     # Top Header Bar
     win.header_bar = Adw.HeaderBar()
-    win.open_btn = Gtk.Button(
+    open_btn = Gtk.Button(
         icon_name="document-open-symbolic",
         tooltip_text="Open Media File (<Ctrl>O)",
     )
-    win.open_btn.connect("clicked", lambda _b: win.open_file_dialog())
-    win.header_bar.pack_start(win.open_btn)
+    win.open_btn = open_btn
+    open_btn.connect("clicked", lambda _b: win.open_file_dialog())
+    win.header_bar.pack_start(open_btn)
 
     win.window_title = Adw.WindowTitle(
         title="Media Toolbox",

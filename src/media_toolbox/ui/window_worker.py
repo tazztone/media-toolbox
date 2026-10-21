@@ -2,6 +2,8 @@
 Background worker thread lifecycle, GLib idle synchronization, and overwrite confirmation mixin.
 """
 
+# pyright: reportMissingImports=false, reportMissingModuleSource=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportGeneralTypeIssues=false, reportInvalidTypeForm=false
+
 from __future__ import annotations
 
 import dataclasses
@@ -240,8 +242,10 @@ class WindowWorkerMixin:
 
     def _on_close_request(self, *args: Any) -> bool:
         self.state = WindowState.CLOSED
-        if getattr(self, "is_transcoding", False) and getattr(self, "cancel_event", None):
-            self.cancel_event.set()
+        if getattr(self, "is_transcoding", False):
+            cancel_event = self.cancel_event
+            if cancel_event is not None:
+                cancel_event.set()
             if hasattr(self, "_active_worker") and self._active_worker is not None and self._active_worker.is_alive():
                 self._active_worker.join(timeout=2.0)
         return False

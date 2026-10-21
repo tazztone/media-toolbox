@@ -10,6 +10,8 @@ Features:
 - ProgressFooterWidget: progress bar, metric indicators (percentage, speed, ETA, size), and cancellation.
 """
 
+# pyright: reportMissingImports=false, reportMissingModuleSource=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportGeneralTypeIssues=false, reportInvalidTypeForm=false
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -47,8 +49,6 @@ __all__ = [
     "resolve_default_output_path",
     "RateControlWidget",
     "ResolutionWidget",
-    "AudioConfigWidget",
-    "MetadataCardWidget",
     "ProgressFooterWidget",
 ]
 

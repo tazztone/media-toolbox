@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 import shutil
 import subprocess
-from typing import Optional
+from typing import Any, Optional
 
 
 class PresetName(str, Enum):
