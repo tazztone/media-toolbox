@@ -240,3 +240,64 @@ def test_real_check_encoder_available() -> None:
     assert check_encoder_available("nonexistent_codec_12345") is False
 
 
+@pytest.mark.parametrize(
+    "preset,ext,encoder",
+    [
+        ("vp9", ".webm", "libvpx-vp9"),
+        ("gif", ".gif", "gif"),
+        ("prores", ".mov", "prores_ks"),
+    ],
+)
+def test_real_video_presets(
+    synthetic_av_clip: Path,
+    tmp_path: Path,
+    preset: str,
+    ext: str,
+    encoder: str,
+) -> None:
+    """Verify real transcoding for built-in video presets."""
+    if not check_encoder_available(encoder):
+        pytest.skip(f"{encoder} encoder not supported in installed ffmpeg")
+
+    out_file = tmp_path / f"out_{preset}{ext}"
+    opts = EncodeOptions(preset=preset)
+    config = JobConfig(input_path=synthetic_av_clip, output_path=out_file, options=opts)
+    result = run_job(config)
+
+    assert result.output_path == out_file
+    assert out_file.is_file()
+    assert out_file.stat().st_size > 0
+
+
+@pytest.mark.parametrize(
+    "preset,ext,encoder",
+    [
+        ("aac", ".m4a", "aac"),
+        ("opus", ".opus", "libopus"),
+        ("flac", ".flac", "flac"),
+    ],
+)
+def test_real_audio_presets(
+    synthetic_av_clip: Path,
+    tmp_path: Path,
+    preset: str,
+    ext: str,
+    encoder: str,
+) -> None:
+    """Verify real audio extraction for built-in audio presets."""
+    if not check_encoder_available(encoder):
+        pytest.skip(f"{encoder} encoder not supported in installed ffmpeg")
+
+    out_file = tmp_path / f"out_{preset}{ext}"
+    opts = EncodeOptions(preset=preset, extract_audio=True)
+    config = JobConfig(input_path=synthetic_av_clip, output_path=out_file, options=opts)
+    result = run_job(config)
+
+    assert result.output_path == out_file
+    assert out_file.is_file()
+    assert out_file.stat().st_size > 0
+    info = probe_media(out_file)
+    assert info.has_video is False
+    assert info.has_audio is True
+
+

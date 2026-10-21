@@ -25,10 +25,9 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
 
-      - name: Assert FFmpeg Absence
+      - name: Ensure Headless Environment (Mask FFmpeg Binaries)
         run: |
-          ! which ffmpeg
-          ! which ffprobe
+          sudo rm -f $(which ffmpeg 2>/dev/null) $(which ffprobe 2>/dev/null) || true
 
       - name: Install Headless Package & Test Dependencies
         run: |

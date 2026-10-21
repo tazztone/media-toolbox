@@ -440,21 +440,47 @@ class TestAdversarialRunner:
             mock_popen.assert_not_called()
 
     def test_runner_cancellation_cleans_partial_output_file(self, tmp_path: Path) -> None:
-        """Worker cancellation flow must cleanly delete partial output file."""
-        partial_file = tmp_path / "partial_output.mp4"
-        partial_file.write_bytes(b"\x00" * 4096)
-        assert partial_file.exists()
+        """Job cancellation flow must cleanly delete partial staging files and never publish incomplete output."""
+        from media_toolbox.core.jobs import JobConfig, run_job
+        from media_toolbox.core.models import EncodeOptions, FormatInfo, MediaInfo, VideoStream
+
+        inp = tmp_path / "in.mp4"
+        inp.write_bytes(b"source data")
+        out = tmp_path / "cancelled_output.mp4"
+
+        fmt = FormatInfo(
+            filename=str(inp),
+            format_name="mov,mp4,m4a,3gp,3g2,mj2",
+            duration=10.0,
+            size_bytes=len(inp.read_bytes()),
+        )
+        v_stream = VideoStream(index=0, codec_name="h264", width=640, height=360)
+        dummy_info = MediaInfo(format=fmt, video_streams=(v_stream,), audio_streams=())
 
         cancel_event = threading.Event()
-        cancel_event.set()
 
-        try:
-            run_ffmpeg(["ffmpeg", "-i", "in.mp4", str(partial_file)], cancel_event=cancel_event)
-        except RunnerCancelledError:
-            if partial_file.exists():
-                partial_file.unlink()
+        def fake_runner_cancelling(cmds: list[list[str]], **_kwargs: Any) -> None:
+            # Staging file is created during run
+            staging_file = Path(cmds[0][-1])
+            staging_file.write_bytes(b"partial encoded data")
+            assert staging_file.exists()
+            cancel_event.set()
+            raise RunnerCancelledError("Cancelled mid-run")
 
-        assert not partial_file.exists()
+        config = JobConfig(
+            input_path=inp,
+            output_path=out,
+            options=EncodeOptions(),
+            media_info=dummy_info,
+        )
+
+        with pytest.raises(RunnerCancelledError):
+            run_job(config, runner=fake_runner_cancelling, cancel_event=cancel_event)
+
+        # Intended destination was never published
+        assert not out.exists()
+        # Staging directory and partial output are completely cleaned up
+        assert list(tmp_path.glob(".tmp_*")) == []
 
     def test_runner_stderr_pipe_overflow_stress_128kb(self) -> None:
         """Subprocess emitting 128KB of error text to stderr must not block or deadlock runner."""
