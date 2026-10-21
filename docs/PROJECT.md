@@ -59,7 +59,12 @@ tests/
 ├── test_probe.py             # Valid videos, silent media, audio-only, images, N/A durations, 0/0 fps
 ├── test_runner.py            # Subprocess runner, progress parsing, ETA, cancellation
 ├── test_runner_lifecycle.py  # Subprocess shutdown semantics, EOF handling, bounded thread reaping
-├── test_ui.py                # UI logic, state transitions, headless mocking, monotonic progress
+├── test_ui_app.py            # App lifecycle, display environment, GActions, CLI open dispatch
+├── test_ui_forms.py          # Pure form state translation, collision-safe output paths
+├── test_ui_widgets.py        # Dynamic revealers, metadata card layouts, stream badge formatting
+├── test_ui_window.py         # Window coordinator, state machine, monotonic aggregate progress
+├── test_ui_worker.py         # Background worker lifecycle, non-blocking execution, cancellation flow
+├── ui_test_helpers.py        # Shared lazy PyGObject loaders, main context drains, mock fixtures
 └── test_validation.py        # Centralized encode options and preset validation
 ```
 
