@@ -1427,7 +1427,7 @@ class TestWindowStateAndProgressDecoupling:
 
     def test_overwrite_confirmation_behavior(self, tmp_path: Path) -> None:
         """Non-existing file starts directly; existing file triggers Adw.MessageDialog."""
-        from media_toolbox.ui.window import MainWindow
+        from media_toolbox.ui.window import MainWindow, WindowState
         from media_toolbox.core.jobs import JobConfig
         from media_toolbox.core.models import EncodeOptions
 
@@ -1442,6 +1442,8 @@ class TestWindowStateAndProgressDecoupling:
 
         # Case 2: existing destination triggers message dialog
         mock_win._start_worker.reset_mock()
+        mock_win.state = WindowState.READY
+        mock_win.input_file = "in.mp4"
         existing = tmp_path / "already_exists.mp4"
         existing.touch()
         cfg2 = JobConfig(input_path="in.mp4", output_path=existing, options=EncodeOptions())
@@ -1455,6 +1457,70 @@ class TestWindowStateAndProgressDecoupling:
             mock_dialog.present.assert_called_once()
             # Worker must NOT start before user confirmation
             mock_win._start_worker.assert_not_called()
+            # UI controls must be disabled while dialog is open
+            mock_win._set_ui_controls_sensitive.assert_called_with(False)
+            assert mock_win._pending_confirmation is True
+
+            # Duplicate confirmation request while dialog is open must be ignored
+            mock_dialog.present.reset_mock()
+            MainWindow._confirm_overwrite_and_start(mock_win, cfg2, "Encoding...")
+            mock_dialog.present.assert_not_called()
+
+            # Callback handling: user cancels -> re-enable controls, no worker
+            response_callback = mock_dialog.connect.call_args[0][1]
+            mock_win._set_ui_controls_sensitive.reset_mock()
+            response_callback(mock_dialog, "cancel")
+            assert mock_win._pending_confirmation is False
+            mock_win._set_ui_controls_sensitive.assert_called_with(True)
+            mock_win._start_worker.assert_not_called()
+
+            # User replaces -> starts worker with overwrite=True
+            mock_win._start_worker.reset_mock()
+            mock_win._pending_confirmation = True
+            response_callback(mock_dialog, "replace")
+            assert mock_win._pending_confirmation is False
+            mock_win._start_worker.assert_called_once()
+            assert mock_win._start_worker.call_args[0][0].overwrite is True
+
+    def test_start_worker_ignores_duplicate_when_worker_alive(self) -> None:
+        """MainWindow._start_worker does not launch a second worker if one is active and alive."""
+        from media_toolbox.ui.window import MainWindow, WindowState
+        from media_toolbox.core.jobs import JobConfig
+        from media_toolbox.core.models import EncodeOptions
+
+        mock_win = MagicMock()
+        mock_alive_worker = MagicMock()
+        mock_alive_worker.is_alive.return_value = True
+        mock_win._active_worker = mock_alive_worker
+
+        cfg = JobConfig(input_path="in.mp4", output_path="out.mp4", options=EncodeOptions())
+        with patch("threading.Thread") as mock_thread_cls:
+            MainWindow._start_worker(mock_win, cfg, "Title")
+            mock_thread_cls.assert_not_called()
+
+    def test_start_actions_do_not_mutate_filesystem_on_ui_thread(self, tmp_path: Path) -> None:
+        """_start_transcode and _start_extract_audio delegate destination directory creation to run_job."""
+        from media_toolbox.ui.window import MainWindow, WindowState
+        from media_toolbox.core.models import EncodeOptions, MediaInfo, FormatInfo
+
+        mock_win = MagicMock()
+        mock_win.state = WindowState.READY
+        mock_win.input_file = tmp_path / "input.mp4"
+        mock_win.media_info = MediaInfo(format=FormatInfo(filename="input.mp4", format_name="mp4", duration=1.0))
+        mock_win.video_output_path = tmp_path / "nonexistent_dir" / "out.mp4"
+        mock_win.audio_output_path = tmp_path / "nonexistent_dir2" / "out.mp3"
+        mock_win.get_transcode_options.return_value = EncodeOptions()
+        mock_win.get_extract_audio_options.return_value = EncodeOptions()
+        mock_win._confirm_overwrite_and_start = MagicMock()
+
+        MainWindow._start_transcode(mock_win)
+        assert not (tmp_path / "nonexistent_dir").exists()
+        mock_win._confirm_overwrite_and_start.assert_called_once()
+
+        mock_win._confirm_overwrite_and_start.reset_mock()
+        MainWindow._start_extract_audio(mock_win)
+        assert not (tmp_path / "nonexistent_dir2").exists()
+        mock_win._confirm_overwrite_and_start.assert_called_once()
 
     def test_probe_success_sets_effective_rotated_dimensions(self, tmp_path: Path) -> None:
         """Probe success passes rotation-compensated effective dimensions to resolution widget."""

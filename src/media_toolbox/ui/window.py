@@ -99,6 +99,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.is_transcoding: bool = False
         self.open_btn: Optional[Gtk.Button] = None
         self._probe_request_id: int = 0
+        self._pending_confirmation: bool = False
 
         self._build_ui()
         self.connect("close-request", self._on_close_request)
@@ -615,8 +616,6 @@ class MainWindow(Adw.ApplicationWindow):
             out_path = resolve_default_output_path(self.input_file, options.preset or "h264")
             self.video_output_path = out_path
 
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-
         config = JobConfig(
             input_path=self.input_file,
             output_path=out_path,
@@ -638,8 +637,6 @@ class MainWindow(Adw.ApplicationWindow):
             out_path = resolve_default_output_path(self.input_file, options.preset or "mp3", is_extract_audio=True)
             self.audio_output_path = out_path
 
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-
         config = JobConfig(
             input_path=self.input_file,
             output_path=out_path,
@@ -651,8 +648,17 @@ class MainWindow(Adw.ApplicationWindow):
         self._confirm_overwrite_and_start(config, "Extracting audio...")
 
     def _confirm_overwrite_and_start(self, config: JobConfig, title: str) -> None:
+        if getattr(self, "_pending_confirmation", False) is True:
+            return
+
         out_p = Path(config.output_path)
         if out_p.exists():
+            self._pending_confirmation = True
+            if hasattr(self, "_set_ui_controls_sensitive"):
+                self._set_ui_controls_sensitive(False)
+            if hasattr(self, "open_btn") and self.open_btn is not None and hasattr(self.open_btn, "set_sensitive"):
+                self.open_btn.set_sensitive(False)
+
             dialog = Adw.MessageDialog(
                 transient_for=self,
                 heading="Replace File?",
@@ -664,10 +670,27 @@ class MainWindow(Adw.ApplicationWindow):
             dialog.set_default_response("cancel")
             dialog.set_close_response("cancel")
 
+            current_input = getattr(self, "input_file", None)
+
             def _on_response(d: Any, response_id: str) -> None:
+                self._pending_confirmation = False
+                if getattr(self, "state", None) == WindowState.CLOSED:
+                    return
+
                 if response_id == "replace":
+                    if getattr(self, "state", None) != WindowState.READY or getattr(self, "input_file", None) != current_input:
+                        if hasattr(self, "_set_ui_controls_sensitive"):
+                            self._set_ui_controls_sensitive(True)
+                        if hasattr(self, "open_btn") and self.open_btn is not None and hasattr(self.open_btn, "set_sensitive"):
+                            self.open_btn.set_sensitive(True)
+                        return
                     confirmed_config = dataclasses.replace(config, overwrite=True)
                     self._start_worker(confirmed_config, title)
+                else:
+                    if hasattr(self, "_set_ui_controls_sensitive"):
+                        self._set_ui_controls_sensitive(True)
+                    if hasattr(self, "open_btn") and self.open_btn is not None and hasattr(self.open_btn, "set_sensitive"):
+                        self.open_btn.set_sensitive(True)
 
             dialog.connect("response", _on_response)
             dialog.present()
@@ -679,6 +702,15 @@ class MainWindow(Adw.ApplicationWindow):
         target_or_cmds: Any,
         *args: Any,
     ) -> None:
+        if (
+            hasattr(self, "_active_worker")
+            and self._active_worker is not None
+            and hasattr(self._active_worker, "is_alive")
+            and self._active_worker.is_alive() is True
+        ):
+            return
+        if getattr(self, "state", None) == WindowState.CLOSED:
+            return
         self.state = WindowState.RUNNING
         self.cancel_event = threading.Event()
         self.is_transcoding = True
