@@ -131,7 +131,11 @@ class MediaToolboxApp(_AppBase):  # type: ignore[misc,valid-type]
         win = self.window or self.get_active_window()
         from media_toolbox import __version__
 
-        about = Adw.AboutDialog(
+        about_cls = getattr(Adw, "AboutDialog", None) or getattr(Adw, "AboutWindow", None)
+        if about_cls is None:
+            return
+
+        about = about_cls(
             application_name="Media Toolbox",
             application_icon="io.github.tazztone.MediaToolbox",
             developer_name="tazztone",
@@ -141,7 +145,13 @@ class MediaToolboxApp(_AppBase):  # type: ignore[misc,valid-type]
             issue_url="https://github.com/tazztone/media-toolbox/issues",
             license_type=Gtk.License.APACHE_2_0,
         )
-        if win:
+        if hasattr(about, "set_transient_for") and win:
+            try:
+                about.set_transient_for(win)
+            except Exception:
+                pass
+
+        if win and hasattr(Adw, "AboutDialog") and isinstance(about, getattr(Adw, "AboutDialog")):
             about.present(win)
         else:
             about.present()

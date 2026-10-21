@@ -208,6 +208,15 @@ def install_nautilus(
             "Ensure ~/.local/bin or your Python environment's bin directory is in PATH for desktop launchers.\n"
         )
 
+    if not shutil.which("ffmpeg"):
+        sys.stderr.write(
+            "Warning: 'ffmpeg' not found on PATH. Media transcoding will fail until FFmpeg is installed.\n"
+        )
+    if not shutil.which("ffprobe"):
+        sys.stderr.write(
+            "Warning: 'ffprobe' not found on PATH. Media inspection will fail until FFprobe is installed.\n"
+        )
+
     paths = get_nautilus_paths(dest_dir)
     targets = [paths["launcher"], paths["extension"], paths["desktop"]]
 

@@ -345,7 +345,12 @@ class MediaToolboxExtension(GObject.GObject, Nautilus.MenuProvider):
         py = find_python_interpreter()
         term = find_terminal_emulator()
 
-        lines = ["set -e", "echo '=== Media Toolbox: Quick Transcode (H.264) ==='"]
+        lines = [
+            "set -e",
+            'trap "if command -v notify-send >/dev/null 2>&1; then notify-send \'Media Toolbox\' \'Transcoding failed\'; fi" ERR',
+            'if command -v notify-send >/dev/null 2>&1; then notify-send \'Media Toolbox\' \'Starting video transcode...\'; fi',
+            "echo '=== Media Toolbox: Quick Transcode (H.264) ==='",
+        ]
         for idx, p in enumerate(paths, 1):
             out_p = get_transcode_output_path(p)
             lines.append(f"echo {shlex.quote(f'[{idx}/{len(paths)}] Transcoding {p} -> {out_p}')}")
@@ -367,7 +372,12 @@ class MediaToolboxExtension(GObject.GObject, Nautilus.MenuProvider):
         py = find_python_interpreter()
         term = find_terminal_emulator()
 
-        lines = ["set -e", "echo '=== Media Toolbox: Extract Audio (MP3) ==='"]
+        lines = [
+            "set -e",
+            'trap "if command -v notify-send >/dev/null 2>&1; then notify-send \'Media Toolbox\' \'Audio extraction failed\'; fi" ERR',
+            'if command -v notify-send >/dev/null 2>&1; then notify-send \'Media Toolbox\' \'Starting audio extraction...\'; fi',
+            "echo '=== Media Toolbox: Extract Audio (MP3) ==='",
+        ]
         for idx, p in enumerate(paths, 1):
             out_p = get_extract_audio_output_path(p)
             lines.append(f"echo {shlex.quote(f'[{idx}/{len(paths)}] Extracting audio {p} -> {out_p}')}")

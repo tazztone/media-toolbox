@@ -30,6 +30,18 @@ Modern Python media inspection, transcoding, and audio extraction package replac
   - XDG desktop entry pointing to `media-toolbox-gui %F`.
   - One-click installer and status checker CLI.
 
+## System Requirements
+
+- **External Binaries**: `ffmpeg` and `ffprobe` on `$PATH` (e.g. `sudo apt install ffmpeg`).
+- **Desktop GUI Requirements (optional)**:
+  - System GTK 4.10+ and Libadwaita (`gir1.2-gtk-4.0`, `gir1.2-adw-1`).
+  - Python desktop dependencies (`pip install ".[desktop]"`).
+- **Nautilus Context Menu (optional)**: `python3-nautilus` package.
+- **Filesystem Safety Guarantees**:
+  - Atomic publication uses same-filesystem hard links (`os.link`) by default to prevent clobbering existing files.
+  - On filesystems lacking hardlink support (e.g. FAT, exFAT), pass `--allow-fallback-copy`.
+  - Output paths pointing to symbolic links are rejected by default to prevent accidental modification of unintended target files.
+
 ## Quick Start
 
 ### Installation

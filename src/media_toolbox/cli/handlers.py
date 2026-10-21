@@ -322,6 +322,8 @@ def handle_install_nautilus(args: argparse.Namespace) -> int:
             sys.stdout.write(f"{label} {len(installed)} Nautilus component(s):\n")
             for p in installed:
                 sys.stdout.write(f"  ✓ {p}\n")
+            if not dry_run:
+                sys.stdout.write("Tip: Run 'nautilus -q' to reload Nautilus extensions.\n")
         return 0
     except Exception as err:
         sys.stderr.write(f"Error installing Nautilus integration: {err}\n")
@@ -345,6 +347,8 @@ def handle_uninstall_nautilus(args: argparse.Namespace) -> int:
                 sys.stdout.write(f"{label} {len(removed)} Nautilus component(s):\n")
                 for p in removed:
                     sys.stdout.write(f"  ✓ {p}\n")
+                if not dry_run:
+                    sys.stdout.write("Tip: Run 'nautilus -q' to reload Nautilus extensions.\n")
         return 0
     except Exception as err:
         sys.stderr.write(f"Error uninstalling Nautilus integration: {err}\n")
@@ -378,6 +382,14 @@ def handle_status_nautilus(args: argparse.Namespace) -> int:
             if not shutil.which("media-toolbox-gui"):
                 sys.stdout.write(
                     "Note: 'media-toolbox-gui' was not found on PATH. Ensure your Python script directory is in PATH for desktop launching.\n"
+                )
+            if not shutil.which("ffmpeg"):
+                sys.stdout.write(
+                    "Note: 'ffmpeg' was not found on PATH. Media transcoding operations require FFmpeg.\n"
+                )
+            if not shutil.which("ffprobe"):
+                sys.stdout.write(
+                    "Note: 'ffprobe' was not found on PATH. Media inspection operations require FFprobe.\n"
                 )
 
         if check_mode and not status["installed"]:
