@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import signal
 import sys
 import threading
@@ -371,6 +372,11 @@ def handle_status_nautilus(args: argparse.Namespace) -> int:
             sys.stdout.write(f"  Python Extension:  {ext_label} ({paths['extension']})\n")
             sys.stdout.write(f"  Desktop Entry:     {desk_label} ({paths['desktop']})\n")
             sys.stdout.write(f"Overall Status:      {all_label}\n")
+
+            if not shutil.which("media-toolbox-gui"):
+                sys.stdout.write(
+                    "Note: 'media-toolbox-gui' was not found on PATH. Ensure your Python script directory is in PATH for desktop launching.\n"
+                )
 
         if check_mode and not status["installed"]:
             return 1

@@ -202,6 +202,12 @@ def install_nautilus(
     if not gtk_ok:
         sys.stderr.write(f"Warning: {gtk_msg}. Desktop GUI entry may fail to launch.\n")
 
+    if not shutil.which("media-toolbox-gui"):
+        sys.stderr.write(
+            "Warning: 'media-toolbox-gui' not found on PATH. "
+            "Ensure ~/.local/bin or your Python environment's bin directory is in PATH for desktop launchers.\n"
+        )
+
     paths = get_nautilus_paths(dest_dir)
     targets = [paths["launcher"], paths["extension"], paths["desktop"]]
 

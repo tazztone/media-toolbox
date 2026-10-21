@@ -603,6 +603,15 @@ class TestNautilusInstaller:
         assert "Desktop Action Inspect" in config.sections()
         assert config["Desktop Action Inspect"].get("Exec") == "ptyxis -- media-toolbox inspect %f"
 
+    def test_install_nautilus_warns_when_gui_not_in_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Installer emits warning on stderr if media-toolbox-gui is absent from PATH."""
+        monkeypatch.setattr(shutil, "which", lambda bin: None)
+        installer.install_nautilus(dest_dir=tmp_path)
+        captured = capsys.readouterr()
+        assert "Warning: 'media-toolbox-gui' not found on PATH" in captured.err
+
     def test_install_nautilus_idempotent_reinstall(self, tmp_path: Path) -> None:
         """Assert calling install_nautilus multiple times overwrites cleanly without error."""
         first_run = installer.install_nautilus(dest_dir=tmp_path)
@@ -837,6 +846,17 @@ class TestNautilusCLISubcommands:
         assert not paths["launcher"].exists()
         assert not paths["extension"].exists()
         assert not paths["desktop"].exists()
+
+    def test_cli_status_nautilus_reports_path_warning(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Assert status-nautilus console output notes when media-toolbox-gui is not in PATH."""
+        monkeypatch.setattr(shutil, "which", lambda bin: None)
+        code = cli.main(["status-nautilus", "--dest-dir", str(tmp_path)])
+        assert code == 0
+        captured = capsys.readouterr()
+        assert "media-toolbox-gui" in captured.out
+        assert "was not found on PATH" in captured.out
 
     def test_cli_status_nautilus_json_mode(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
