@@ -433,8 +433,6 @@ _PRESET_ALIASES: dict[str, str] = {
     "hevc": "h265",
     "av1": "av1",
     "libaom-av1": "av1",
-    "libsvtav1": "av1",
-    "svt-av1": "av1",
     "aom": "av1",
     "vp9": "vp9",
     "libvpx-vp9": "vp9",

@@ -53,6 +53,8 @@ def resolve_job_spec(
             if canon_codec and canon_codec in VIDEO_PRESETS:
                 v_preset = VIDEO_PRESETS[canon_codec]
 
+    ext = Path(output_path).suffix.lower().lstrip(".") if output_path else None
+
     a_preset = None
     if canon_preset and canon_preset in AUDIO_PRESETS:
         a_preset = AUDIO_PRESETS[canon_preset]
@@ -60,8 +62,10 @@ def resolve_job_spec(
         canon_acodec = normalize_preset_name(options.audio_codec)
         if canon_acodec and canon_acodec in AUDIO_PRESETS:
             a_preset = AUDIO_PRESETS[canon_acodec]
-
-    ext = Path(output_path).suffix.lower().lstrip(".") if output_path else None
+    elif is_audio_op and ext:
+        canon_ext = normalize_preset_name(ext)
+        if canon_ext and canon_ext in AUDIO_PRESETS:
+            a_preset = AUDIO_PRESETS[canon_ext]
 
     # Effective codecs
     effective_vcodec = (
@@ -75,6 +79,8 @@ def resolve_job_spec(
     elif is_audio_op:
         if a_preset:
             effective_acodec = a_preset.codec_name
+        elif options.audio_codec:
+            effective_acodec = options.audio_codec
         elif options.video_codec in ("mp3", "aac", "opus", "flac"):
             effective_acodec = options.video_codec
         else:
@@ -167,7 +173,7 @@ def validate_encode_options(
     a_preset = AUDIO_PRESETS.get(spec.audio_preset_name) if spec.audio_preset_name else None
 
     # Contradictory options
-    if options.extract_audio and options.mute_audio:
+    if (options.extract_audio or (canon_preset is not None and canon_preset in AUDIO_PRESETS)) and options.mute_audio:
         raise ValueError("Cannot simultaneously extract and mute audio")
 
     # Duration check for bitrate targeting

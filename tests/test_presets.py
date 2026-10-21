@@ -75,7 +75,8 @@ def test_preset_case_insensitive_and_aliases() -> None:
 
     assert get_preset("av1") == AV1_PRESET
     assert get_preset("libaom-av1") == AV1_PRESET
-    assert get_preset("libsvtav1") == AV1_PRESET
+    assert not is_video_preset("libsvtav1")
+    assert not is_video_preset("svt-av1")
 
     assert get_preset("vp9") == VP9_PRESET
     assert get_preset("libvpx-vp9") == VP9_PRESET

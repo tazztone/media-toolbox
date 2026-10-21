@@ -735,4 +735,39 @@ def test_map_metadata_does_not_disable_default_stream_mapping() -> None:
     assert "-map_metadata" in cmd
 
 
+def test_two_pass_video_extra_args_symmetric(sample_mediainfo_standard_mp4: MediaInfo) -> None:
+    """Video-affecting extra_args are forwarded to pass 1 and pass 2, while audio/container flags stay pass 2."""
+    options = EncodeOptions(
+        two_pass=True,
+        target_size_mb=25.0,
+        extra_args=("-tune", "film", "-profile:v", "high", "-b:a", "192k", "-movflags", "+faststart"),
+    )
+    cmds = build_ffmpeg_commands("in.mp4", "out.mp4", options, media_info=sample_mediainfo_standard_mp4)
+    pass1, pass2 = cmds[0], cmds[1]
+
+    # Video flags must be present in pass 1
+    assert "-tune" in pass1
+    assert pass1[pass1.index("-tune") + 1] == "film"
+    assert "-profile:v" in pass1
+    assert pass1[pass1.index("-profile:v") + 1] == "high"
+
+    # Audio & container flags must NOT be in pass 1
+    assert "-movflags" not in pass1
+
+    # All extra args in pass 2
+    assert "-tune" in pass2
+    assert "-profile:v" in pass2
+    assert "-movflags" in pass2
+
+
+def test_audio_extract_preserves_custom_codec() -> None:
+    """build_audio_extract_command respects custom audio codec without enforcing AAC or default mp3."""
+    options = EncodeOptions(extract_audio=True, audio_codec="pcm_s16le")
+    cmds = build_ffmpeg_commands("in.mp4", "out.wav", options)
+    assert len(cmds) == 1
+    cmd = cmds[0]
+    assert "-c:a" in cmd
+    assert cmd[cmd.index("-c:a") + 1] == "pcm_s16le"
+
+
 

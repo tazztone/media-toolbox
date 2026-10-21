@@ -83,6 +83,49 @@ def extract_user_stream_maps(extra_args: tuple[str, ...]) -> list[str]:
     return maps
 
 
+_AUDIO_OR_CONTAINER_ARG_FLAGS = frozenset({
+    "-c:a", "-codec:a", "-b:a", "-ar", "-ac", "-af", "-filter:a", "-disposition:a",
+    "-f", "-movflags", "-brand",
+})
+_AUDIO_OR_CONTAINER_BOOL_FLAGS = frozenset({
+    "-an",
+})
+
+
+def extract_two_pass_video_extra_args(extra_args: tuple[str, ...]) -> list[str]:
+    """Extract video-affecting arguments from extra_args for forwarding to pass 1."""
+    args: list[str] = []
+    i = 0
+    while i < len(extra_args):
+        arg = extra_args[i]
+        if arg in _AUDIO_OR_CONTAINER_BOOL_FLAGS:
+            i += 1
+            continue
+        if arg in _AUDIO_OR_CONTAINER_ARG_FLAGS:
+            i += 2
+            continue
+        if arg.startswith(("-c:a", "-codec:a", "-b:a", "-ar:", "-ac:", "-af:", "-filter:a", "-disposition:a")):
+            i += 2
+            continue
+        # User stream maps handled separately or forwarded
+        if arg == "-map":
+            if i + 1 < len(extra_args):
+                args.extend(["-map", extra_args[i + 1]])
+                i += 2
+                continue
+        elif arg.startswith("-map:") or (
+            arg.startswith("-map")
+            and not arg.startswith(("-map_metadata", "-map_chapters"))
+        ):
+            args.append(arg)
+            i += 1
+            continue
+
+        args.append(arg)
+        i += 1
+    return args
+
+
 def resolve_stream_mappings(
     media_info: Optional[MediaInfo],
 ) -> tuple[str, str]:
@@ -134,7 +177,7 @@ def build_audio_extract_command(
 
     # Resolve audio preset / codec
     audio_preset = AUDIO_PRESETS.get(spec.audio_preset_name) if spec.audio_preset_name else None
-    if audio_preset is None:
+    if audio_preset is None and spec.audio_codec is None:
         out_ext = Path(output_path).suffix.lstrip(".").lower()
         if is_audio_preset(out_ext):
             audio_preset = get_audio_preset(out_ext)
@@ -143,7 +186,9 @@ def build_audio_extract_command(
         cmd.extend(audio_preset.build_audio_args(bitrate_kbps=options.audio_bitrate_kbps, extract_audio=False))
     else:
         codec = spec.audio_codec or options.audio_codec or "aac"
-        cmd.extend(["-c:a", codec, "-b:a", f"{options.audio_bitrate_kbps}k"])
+        cmd.extend(["-c:a", codec])
+        if not codec.startswith("pcm_") and codec != "copy":
+            cmd.extend(["-b:a", f"{options.audio_bitrate_kbps}k"])
 
     cmd.extend(options.extra_args)
     cmd.append(output_path)
@@ -258,8 +303,6 @@ def build_two_pass_commands(
     pass1_cmd.extend(["-i", input_path])
     if not has_user_map:
         pass1_cmd.extend(["-map", v_map])
-    else:
-        pass1_cmd.extend(extract_user_stream_maps(options.extra_args))
     pass1_cmd.extend(vf_args)
 
     if v_preset is not None:
@@ -290,6 +333,7 @@ def build_two_pass_commands(
         if speed_preset:
             pass1_cmd.extend(["-preset", speed_preset])
 
+    pass1_cmd.extend(extract_two_pass_video_extra_args(options.extra_args))
     pass1_cmd.extend(["-an", "-f", "null", os.devnull])
 
     # Pass 2 Command

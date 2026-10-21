@@ -176,3 +176,34 @@ class TestValidationAndPresetNormalization:
         with pytest.raises(ValueError, match="Two-pass.*not supported.*audio"):
             validate_encode_options(opts_2pass)
 
+    def test_audio_preset_with_mute_audio_rejected(self) -> None:
+        """Audio preset combined with mute_audio is rejected as contradictory."""
+        opts = EncodeOptions(preset="mp3", mute_audio=True)
+        with pytest.raises(ValueError, match="Cannot simultaneously extract and mute audio"):
+            validate_encode_options(opts)
+
+    def test_resolve_job_spec_preserves_explicit_svtav1(self) -> None:
+        """Explicit video_codec='libsvtav1' is preserved and not substituted with libaom-av1."""
+        from media_toolbox.core.validation import resolve_job_spec
+
+        opts = EncodeOptions(video_codec="libsvtav1")
+        spec = resolve_job_spec(opts)
+        assert spec.video_codec == "libsvtav1"
+
+    def test_resolve_job_spec_audio_extract_m4a_resolves_to_aac(self) -> None:
+        """Audio extraction to .m4a canonicalizes to AAC preset and codec."""
+        from media_toolbox.core.validation import resolve_job_spec
+
+        opts = EncodeOptions(extract_audio=True)
+        spec = resolve_job_spec(opts, output_path="output.m4a")
+        assert spec.audio_preset_name == "aac"
+        assert spec.audio_codec == "aac"
+
+    def test_resolve_job_spec_preserves_explicit_audio_codec(self) -> None:
+        """Explicit audio codec like pcm_s16le is preserved for extraction."""
+        from media_toolbox.core.validation import resolve_job_spec
+
+        opts = EncodeOptions(extract_audio=True, audio_codec="pcm_s16le")
+        spec = resolve_job_spec(opts, output_path="output.wav")
+        assert spec.audio_codec == "pcm_s16le"
+
