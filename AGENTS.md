@@ -26,14 +26,14 @@ nautilus/           ──> launcher.sh / installer.py (installs entry point, en
 ## Development Commands
 
 ```bash
-.venv/bin/pytest tests/          # run tests (524 pass as of 2026-10)
+.venv/bin/pytest tests/          # run tests (580 pass as of 2026-10)
 .venv/bin/pytest tests/ -q       # addopts already: -ra -q --import-mode=importlib
 media-toolbox inspect video.mp4
 media-toolbox transcode input.mp4 output.mp4 --preset h264
 media-toolbox transcode input.mp4 output.mp4 --target-mb 25   # two-pass
 media-toolbox extract-audio input.mp4 output.mp3
 media-toolbox-gui                # GUI (needs DISPLAY/WAYLAND_DISPLAY)
-uvx basedpyright src tests       # type check (CI gates on this)
+.venv/bin/basedpyright src tests # type check (CI gates on this; or uvx basedpyright)
 ```
 
 CI configured via GitHub Actions (`.github/workflows/ci.yml`): headless tests, desktop tests with Xvfb, wheel build smoke test, and basedpyright typecheck. Package build: `python -m build` (setuptools backend, src layout).
@@ -64,7 +64,7 @@ CI configured via GitHub Actions (`.github/workflows/ci.yml`): headless tests, d
 
 ## Testing & QA
 
-- pytest 8/9, flat `tests/` layout; 524 tests, ~3.5s runtime.
+- pytest 8/9, flat `tests/` layout; 580 tests, ~8.9s full suite runtime (~2.7s for pure unit `pytest -m "not integration and not desktop"`).
 - Mock all subprocess calls in unit tests (`unittest.mock.patch`); real FFmpeg verified in `tests/test_integration_media.py`.
 - Synthetic in-memory ffprobe JSON fixtures live in `tests/conftest.py`; temp files via `tmp_path`.
 - `pytest.raises(match=...)` for error assertions; `pytest.mark.parametrize` heavily used.
