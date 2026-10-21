@@ -143,6 +143,17 @@ class TestDisplayEnvironment:
         captured = capsys.readouterr()
         assert "No graphical display" in captured.err
 
+    def test_app_main_exits_when_gui_libraries_missing(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+        """Verify media_toolbox.ui.app.main exits with 1 and prints friendly warning when PyGObject is missing."""
+        from media_toolbox.ui import app
+
+        monkeypatch.setattr(app, "_GUI_AVAILABLE", False)
+        monkeypatch.setattr(app, "_GUI_IMPORT_ERROR", "No module named 'gi'")
+        exit_code = app.main([])
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "Desktop GUI requirements not satisfied" in captured.err
+
     def test_app_main_launches_when_display_available(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Verify media_toolbox.ui.app.main calls app.run when display is available."""
         from media_toolbox.ui import app

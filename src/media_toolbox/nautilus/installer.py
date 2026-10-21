@@ -120,6 +120,11 @@ def check_desktop_environment(python_bin: str = sys.executable) -> tuple[bool, s
         "    major, minor = Gtk.get_major_version(), Gtk.get_minor_version()\n"
         "    if (major, minor) < (4, 10):\n"
         "        sys.exit(2)\n"
+        "    for cls in ('SpinRow', 'SwitchRow'):\n"
+        "        if not hasattr(Adw, cls):\n"
+        "            sys.exit(3)\n"
+        "    if not hasattr(Adw, 'AboutDialog') and not hasattr(Adw, 'AboutWindow'):\n"
+        "        sys.exit(3)\n"
         "except Exception as err:\n"
         "    sys.stderr.write(str(err))\n"
         "    sys.exit(1)\n"
@@ -136,6 +141,8 @@ def check_desktop_environment(python_bin: str = sys.executable) -> tuple[bool, s
             return True, "GTK >= 4.10 and Libadwaita are available"
         if proc.returncode == 2:
             return False, "GTK version is older than required 4.10"
+        if proc.returncode == 3:
+            return False, "Libadwaita is missing required widgets (AboutDialog/SpinRow/SwitchRow)"
         err = proc.stderr.strip() or "PyGObject / GTK4 / Libadwaita not found"
         return False, err
     except Exception as exc:

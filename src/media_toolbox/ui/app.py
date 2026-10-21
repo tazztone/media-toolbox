@@ -8,11 +8,22 @@ import os
 import sys
 from typing import Any, Optional, Sequence
 
-import gi
+try:
+    import gi
 
-gi.require_version("Gtk", "4.0")
-gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, Gio, Gtk
+    gi.require_version("Gtk", "4.0")
+    gi.require_version("Adw", "1")
+    from gi.repository import Adw, Gdk, Gio, Gtk
+
+    _GUI_AVAILABLE = True
+    _GUI_IMPORT_ERROR = ""
+except (ImportError, ValueError) as _err:
+    _GUI_AVAILABLE = False
+    _GUI_IMPORT_ERROR = str(_err)
+    Adw = Any  # type: ignore[misc,assignment]
+    Gdk = Any  # type: ignore[misc,assignment]
+    Gio = Any  # type: ignore[misc,assignment]
+    Gtk = Any  # type: ignore[misc,assignment]
 
 
 def has_graphical_display() -> bool:
@@ -20,6 +31,8 @@ def has_graphical_display() -> bool:
     Robust verification that a graphical display server (Wayland or X11) is active.
     Prevents GTK initialization segfaults in headless CI or sandbox containers.
     """
+    if not _GUI_AVAILABLE:
+        return False
     if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
         return False
     try:
@@ -30,7 +43,10 @@ def has_graphical_display() -> bool:
         return False
 
 
-class MediaToolboxApp(Adw.Application):
+_AppBase = Adw.Application if _GUI_AVAILABLE else object
+
+
+class MediaToolboxApp(_AppBase):  # type: ignore[misc,valid-type]
     """
     Libadwaita desktop application instance.
     Handles startup action registrations, command-line file arguments, and window lifecycle.
@@ -129,6 +145,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     """
     Desktop UI entrypoint. Checks for graphical display availability before running.
     """
+    if not _GUI_AVAILABLE:
+        sys.stderr.write(
+            f"Error: Desktop GUI requirements not satisfied: {_GUI_IMPORT_ERROR}\n"
+            "Please install desktop dependencies (e.g. 'pip install .[desktop]') and system GTK4 / Libadwaita libraries.\n"
+        )
+        return 1
+
     if not has_graphical_display():
         sys.stderr.write(
             "Error: No graphical display server found (Wayland or X11 required).\n"
