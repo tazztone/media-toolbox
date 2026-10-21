@@ -149,5 +149,14 @@ tests/
 - `build_ffmpeg_commands(input_path: str, output_path: str, options: EncodeOptions) -> list[list[str]]`
   (Returns 1 command for CRF/single-pass, or 2 commands for 2-pass bitrate mode).
 
-### `core/runner.py`
-- `run_command(cmd: list[str], total_duration: float, progress_callback: Optional[Callable[[ProgressEvent], None]], cancel_event: Optional[threading.Event]) -> None`
+### `core/validation.py`
+- `validate_encode_options(options: EncodeOptions, output_path: Optional[str] = None) -> None`: Centralized option verification. Enforces mutual exclusivity (CRF vs 2-pass/target-size), positive dimensions and framerates, preset audio bitrate ranges, codec-container compatibility (e.g. strict WebM validation where non-Opus/Vorbis codecs raise `ValueError` rather than silent fallback), and filter/copy incompatibility checks.
+- `validate_extra_args(extra_args: tuple[str, ...]) -> None`: Rejects naked positional tokens, managed execution flags (`-y`, `-n`, `-nostdin`), and input flags (`-i`). Allows negative numbers as parameter values (e.g. `-ss -5`).
+- `resolve_job_spec(options: EncodeOptions, media_info: Optional[MediaInfo] = None, output_path: Optional[str] = None) -> ResolvedJobSpec`: Resolves canonical presets, encoder names (aliases like `mp3` → `libmp3lame`), container defaults, rate control parameters, and filter chains.
+
+### `core/jobs.py`
+- `run_job(config: JobConfig, progress_callback: Optional[Callable[[ProgressEvent], None]] = None, pipeline_progress_callback: Optional[Callable[[int, int, ProgressEvent], None]] = None, cancel_event: Optional[threading.Event] = None) -> JobResult`: Transactional staging in a private temporary directory on the same filesystem (`.tmp_media_toolbox_<uuid>/`), atomic no-clobber publication, preflight hard-link capability checks, symlink overwrite rejection, and cleanup on failure or cancellation.
+
+### `ui/window_worker.py`
+- `WindowWorkerMixin`: Asynchronous worker execution with GLib idle loop dispatch, generation guards (`_job_generation`) dropping stale completion/progress events from superseded jobs, and cancel-then-close lifecycle ensuring application quit during active transcodes defers window destruction until staging cleanup completes without orphaned FFmpeg processes.
+
