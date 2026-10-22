@@ -416,7 +416,8 @@ class TestRunFFmpegExecution:
         cmd = [sys.executable, "-c", script]
         events: list[ProgressEvent] = []
 
-        run_command(cmd, total_duration=1.0, progress_callback=events.append)
+        with pytest.deprecated_call():
+            run_command(cmd, total_duration=1.0, progress_callback=events.append)
         assert len(events) >= 1
         assert events[-1].is_completed is True
 

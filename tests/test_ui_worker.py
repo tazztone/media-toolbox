@@ -51,7 +51,8 @@ class TestNonBlockingWorkerThread:
             mock_thread_inst = MagicMock()
             mock_thread_cls.return_value = mock_thread_inst
 
-            MainWindow._launch_worker_pipeline(mock_win, config, "Encoding...")
+            with pytest.deprecated_call():
+                MainWindow._launch_worker_pipeline(mock_win, config, "Encoding...")
 
             assert mock_win.is_transcoding is True
             assert isinstance(mock_win.cancel_event, threading.Event)
