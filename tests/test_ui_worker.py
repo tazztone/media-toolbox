@@ -5,8 +5,6 @@ Tests:
 - Cancellation flow, process group termination, and partial file cleanup
 """
 
-# pyright: reportMissingImports=false, reportMissingModuleSource=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportGeneralTypeIssues=false, reportInvalidTypeForm=false
-
 from __future__ import annotations
 
 import threading

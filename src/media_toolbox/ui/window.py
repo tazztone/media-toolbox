@@ -12,8 +12,6 @@ Features:
 - Window close-request handler ensuring no orphaned background FFmpeg processes.
 """
 
-# pyright: reportMissingImports=false, reportMissingModuleSource=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportGeneralTypeIssues=false, reportInvalidTypeForm=false
-
 from __future__ import annotations
 
 import threading
@@ -24,7 +22,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk
+from gi.repository import Adw, Gtk  # pyright: ignore[reportAttributeAccessIssue]
 
 from media_toolbox.core.jobs import JobConfig
 from media_toolbox.core.models import EncodeOptions, MediaInfo

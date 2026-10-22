@@ -1,5 +1,12 @@
 name: CI
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
@@ -38,7 +45,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.12", "3.13"]
+        python-version: ["3.10", "3.12", "3.13", "3.14"]
 
     steps:
       - name: Check out repository
@@ -73,7 +80,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.12", "3.13"]
+        python-version: ["3.10", "3.12", "3.13", "3.14"]
 
     steps:
       - name: Check out repository
@@ -178,7 +185,7 @@ jobs:
           TEST_INSTALLED=1 pytest -o pythonpath="" -m "not desktop and not integration" tests/
 
   typecheck:
-    name: Type Check (basedpyright)
+    name: Headless Type Check (basedpyright)
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -193,5 +200,43 @@ jobs:
           python -m venv .venv
           .venv/bin/pip install -U pip
           .venv/bin/pip install .[dev]
-      - name: Run basedpyright
+      - name: Run basedpyright (Headless Core & CLI)
+        run: .venv/bin/basedpyright src/media_toolbox/core src/media_toolbox/cli tests/test_builder.py tests/test_jobs.py tests/test_cli.py tests/test_validation.py tests/test_probe.py tests/test_bitrate.py tests/test_runner.py tests/test_filtergraph.py tests/test_presets.py tests/test_models.py tests/test_formatters.py tests/test_headless_ast.py
+
+  desktop-typecheck:
+    name: Desktop & UI Type Check (basedpyright)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Python 3.12
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install System Dependencies (GTK4, Libadwaita)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev gir1.2-adw-1 libgirepository-2.0-dev libcairo2-dev python3-gi python3-gi-cairo
+      - name: Create venv with system site-packages and install package
+        run: |
+          python -m venv --system-site-packages .venv
+          .venv/bin/pip install -U pip
+          .venv/bin/pip install .[all]
+      - name: Run basedpyright (Full Suite)
         run: .venv/bin/basedpyright src tests
+
+  audit:
+    name: Dependency Security Audit (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Set up Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.12"
+      - name: Run pip-audit
+        run: |
+          pip install pip-audit
+          pip-audit

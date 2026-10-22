@@ -5,8 +5,6 @@ Tests:
 - MainWindow state machine, probing lockout, overwrite confirmation, and progress decoupling
 """
 
-# pyright: reportMissingImports=false, reportMissingModuleSource=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportGeneralTypeIssues=false, reportInvalidTypeForm=false
-
 from __future__ import annotations
 
 import threading
@@ -311,7 +309,7 @@ class TestWindowStateAndProgressDecoupling:
         # Subcase 2b: Fallback to Adw.MessageDialog (Libadwaita < 1.5)
         mock_win._start_worker.reset_mock()
         mock_win._pending_confirmation = False
-        import gi.repository.Adw as AdwModule
+        from gi.repository import Adw as AdwModule  # pyright: ignore[reportAttributeAccessIssue]
 
         with (
             patch.object(AdwModule, "AlertDialog", None),

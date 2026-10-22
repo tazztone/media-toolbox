@@ -5,8 +5,6 @@ Tests:
 - MetadataCard rendering for video+audio, silent video, audio only, still image, and cleared states
 """
 
-# pyright: reportMissingImports=false, reportMissingModuleSource=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportGeneralTypeIssues=false, reportInvalidTypeForm=false
-
 from __future__ import annotations
 
 from unittest.mock import MagicMock

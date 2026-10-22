@@ -2,32 +2,35 @@
 Libadwaita / GTK4 Application entrypoint and lifecycle manager for media_toolbox.
 """
 
-# pyright: reportMissingImports=false, reportMissingModuleSource=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportGeneralTypeIssues=false, reportInvalidTypeForm=false
-
 from __future__ import annotations
 
 import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-try:
-    import gi
-
-    gi.require_version("Gtk", "4.0")
-    gi.require_version("Adw", "1")
-    from gi.repository import Adw, Gdk, Gio, Gtk
+if TYPE_CHECKING:
+    from gi.repository import Adw, Gdk, Gio, Gtk  # pyright: ignore[reportAttributeAccessIssue]
 
     _GUI_AVAILABLE = True
     _GUI_IMPORT_ERROR = ""
-except (ImportError, ValueError) as _err:
-    _GUI_AVAILABLE = False
-    _GUI_IMPORT_ERROR = str(_err)
-    Adw = Any  # type: ignore[misc,assignment]
-    Gdk = Any  # type: ignore[misc,assignment]
-    Gio = Any  # type: ignore[misc,assignment]
-    Gtk = Any  # type: ignore[misc,assignment]
+else:
+    try:
+        import gi
+
+        gi.require_version("Gtk", "4.0")
+        gi.require_version("Adw", "1")
+        from gi.repository import Adw, Gdk, Gio, Gtk
+
+        _GUI_AVAILABLE = True
+        _GUI_IMPORT_ERROR = ""
+    except (ImportError, ValueError) as _err:
+        _GUI_AVAILABLE = False
+        _GUI_IMPORT_ERROR = str(_err)
+        Adw = Gdk = Gio = Gtk = None
+
+__all__ = ["Adw", "MediaToolboxApp", "has_graphical_display", "main"]
 
 
 def has_graphical_display() -> bool:

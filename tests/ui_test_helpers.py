@@ -3,8 +3,6 @@
 Zero top-level `import gi` to prevent polluting sys.modules before AST scanner runs.
 """
 
-# pyright: reportMissingImports=false, reportMissingModuleSource=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportGeneralTypeIssues=false, reportInvalidTypeForm=false
-
 from __future__ import annotations
 
 import inspect
@@ -28,7 +26,7 @@ def get_gi_modules():
 
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")
-    from gi.repository import Adw, Gdk, Gio, GLib, Gtk
+    from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # pyright: ignore[reportAttributeAccessIssue]
 
     return gi, Gtk, Gdk, Adw, Gio, GLib
 

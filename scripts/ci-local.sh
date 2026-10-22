@@ -10,7 +10,7 @@
 #   packaging   sdist/wheel build, isolated install, CLI + installed-package tests
 #
 # Differences from CI:
-#   * One interpreter, not the 3.10/3.12/3.13 matrix. Override with PYTHON=...
+#   * One interpreter, not the 3.10/3.12/3.13/3.14 matrix. Override with PYTHON=...
 #   * CI removes ffmpeg/ffprobe from PATH for the headless job; this script
 #     cannot do that safely on a developer machine, so headless runs with
 #     ffmpeg available (unit tests mock subprocess anyway).

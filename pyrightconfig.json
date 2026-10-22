@@ -3,6 +3,9 @@
   "exclude": ["**/build", "**/.venv", "**/__pycache__"],
   "venvPath": ".",
   "venv": ".venv",
+  "extraPaths": [
+    "/usr/lib/python3/dist-packages"
+  ],
   "typeCheckingMode": "standard",
   "reportMissingTypeStubs": "none",
   "reportUnsupportedDunderAll": "none",

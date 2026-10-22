@@ -2,8 +2,6 @@
 Declarative layout and widget hierarchy builder for Media Toolbox MainWindow.
 """
 
-# pyright: reportMissingImports=false, reportMissingModuleSource=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportGeneralTypeIssues=false, reportInvalidTypeForm=false
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -12,7 +10,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gio, Gtk
+from gi.repository import Adw, Gio, Gtk  # pyright: ignore[reportAttributeAccessIssue]
 
 from media_toolbox.ui.constants import (
     AUDIO_PRESETS,

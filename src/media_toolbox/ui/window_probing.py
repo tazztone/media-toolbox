@@ -2,18 +2,17 @@
 Media probing and file chooser portal mixin for Media Toolbox MainWindow.
 """
 
-# pyright: reportMissingImports=false, reportMissingModuleSource=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportGeneralTypeIssues=false, reportInvalidTypeForm=false
-
 from __future__ import annotations
 
 import threading
 from pathlib import Path
+from typing import Any
 
 import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gio, GLib, Gtk
+from gi.repository import Adw, Gio, GLib, Gtk  # pyright: ignore[reportAttributeAccessIssue]
 
 from media_toolbox.core.models import MediaInfo
 from media_toolbox.core.probe import probe_media
@@ -24,10 +23,32 @@ from media_toolbox.ui.forms import resolve_default_output_path
 class WindowProbingMixin:
     """Mixin providing file dialogs, async media probing, and output path resolution."""
 
-    # Attributes declared on MainWindow
+    # Host attributes provided by MainWindow
     state: WindowState
     input_file: Path | None
     media_info: MediaInfo | None
+    toast_overlay: Any
+    main_stack: Any
+    metadata_card: Any
+    window_title: Any
+    transcode_btn: Any
+    extract_btn: Any
+    video_dest_row: Any
+    audio_dest_row: Any
+    res_widget: Any
+    audio_widget: Any
+    rate_widget: Any
+    batch_queue: list[Path]
+    batch_index: int
+    is_batch_running: bool
+    is_batch_active: bool
+
+    def _set_ui_controls_sensitive(self, _sensitive: bool) -> None: ...
+    def _start_transcode(self) -> None: ...
+    def _start_extract_audio(self) -> None: ...
+    def get_current_video_preset(self) -> Any: ...
+    def get_current_audio_preset(self) -> Any: ...
+
     video_output_path: Path | None
     audio_output_path: Path | None
     _video_output_custom: bool

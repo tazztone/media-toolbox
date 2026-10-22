@@ -5,8 +5,6 @@ Tests:
 - MediaToolboxApp instantiation, application ID, actions, and file opening
 """
 
-# pyright: reportMissingImports=false, reportMissingModuleSource=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportGeneralTypeIssues=false, reportInvalidTypeForm=false
-
 from __future__ import annotations
 
 from pathlib import Path

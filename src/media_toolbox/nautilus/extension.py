@@ -12,7 +12,7 @@ Non-blocking: all external commands spawn detached subprocesses (start_new_sessi
 Graceful fallback: imports without crashing when python-nautilus is not installed.
 """
 
-# pyright: reportMissingImports=false, reportMissingModuleSource=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportGeneralTypeIssues=false, reportInvalidTypeForm=false
+# pyright: reportAttributeAccessIssue=false, reportGeneralTypeIssues=false, reportCallIssue=false
 
 from __future__ import annotations
 

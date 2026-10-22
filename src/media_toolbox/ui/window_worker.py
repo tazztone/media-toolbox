@@ -2,8 +2,6 @@
 Background worker thread lifecycle, GLib idle synchronization, and overwrite confirmation mixin.
 """
 
-# pyright: reportMissingImports=false, reportMissingModuleSource=false
-
 from __future__ import annotations
 
 import dataclasses
@@ -16,7 +14,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, GLib, Gtk
+from gi.repository import Adw, GLib, Gtk  # pyright: ignore[reportAttributeAccessIssue]
 
 from media_toolbox.core.jobs import JobConfig, JobResult, run_job
 from media_toolbox.core.models import ProgressEvent

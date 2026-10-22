@@ -10,8 +10,6 @@ Features:
 - ProgressFooterWidget: progress bar, metric indicators (percentage, speed, ETA, size), and cancellation.
 """
 
-# pyright: reportMissingImports=false, reportMissingModuleSource=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportGeneralTypeIssues=false, reportInvalidTypeForm=false
-
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
@@ -21,7 +19,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk
+from gi.repository import Adw, Gtk  # pyright: ignore[reportAttributeAccessIssue]
 
 from media_toolbox.core.formatters import (
     format_bitrate,
