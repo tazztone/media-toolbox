@@ -66,8 +66,13 @@ def handle_inspect(args: argparse.Namespace) -> int:
     return 0
 
 
-def handle_transcode(args: argparse.Namespace) -> int:
-    """Handle 'transcode' subcommand."""
+def _run_cli_job(
+    args: argparse.Namespace,
+    options: EncodeOptions,
+    label: str,
+    error_prefix: str = "FFmpeg",
+) -> int:
+    """Execute a media processing job through CLI lifecycle, handling signals and errors."""
     if args.output and args.output_opt and args.output != args.output_opt:
         sys.stderr.write(
             f"Error: Conflicting output paths specified: '{args.output}' and '{args.output_opt}'\n"
@@ -81,12 +86,6 @@ def handle_transcode(args: argparse.Namespace) -> int:
 
     if args.speed is not None and args.speed <= 0:
         sys.stderr.write(f"Error: Speed multiplier must be positive, got {args.speed}\n")
-        return 2
-
-    try:
-        scale_tuple = parse_scale_arg(args.scale)
-    except ValueError as err:
-        sys.stderr.write(f"Error: {err}\n")
         return 2
 
     # Validate paths early before expensive probing
@@ -115,22 +114,6 @@ def handle_transcode(args: argparse.Namespace) -> int:
         sys.stderr.write(f"Error probing media: {err}\n")
         return 1
 
-    options = EncodeOptions(
-        preset=args.preset,
-        crf=args.crf,
-        target_size_mb=args.target_size_mb,
-        two_pass=args.two_pass,
-        speed=args.speed,
-        scale=scale_tuple,
-        crop=args.crop,
-        pad=args.pad,
-        audio_codec=args.audio_codec,
-        audio_bitrate_kbps=args.audio_bitrate,
-        mute_audio=args.mute_audio,
-        normalize_audio=args.normalize,
-        strict_size=getattr(args, "strict_size", False),
-    )
-
     config = JobConfig(
         input_path=args.input,
         output_path=output_path,
@@ -144,7 +127,7 @@ def handle_transcode(args: argparse.Namespace) -> int:
 
     def _sigint_handler(_signum: int, _frame: Any) -> None:
         cancel_event.set()
-        sys.stderr.write("\nProcess cancellation requested...\n")
+        sys.stderr.write(f"\n{label} cancellation requested...\n")
 
     try:
         orig_sigint = signal.signal(signal.SIGINT, _sigint_handler)
@@ -169,7 +152,7 @@ def handle_transcode(args: argparse.Namespace) -> int:
                 f"Warning: Output size ({actual_mb:.2f} MB) exceeded target ({target_mb:.2f} MB) due to container overhead.\n"
             )
         if not args.quiet:
-            sys.stdout.write(f"✓ Transcoding complete: {output_path}\n")
+            sys.stdout.write(f"✓ {label} complete: {output_path}\n")
         return 0
     except TargetSizeTooSmallError as err:
         sys.stderr.write(f"Error: {err}\n")
@@ -178,7 +161,7 @@ def handle_transcode(args: argparse.Namespace) -> int:
         sys.stderr.write(f"Error: {err}\n")
         return 2
     except ValueError as err:
-        sys.stderr.write(f"Error building FFmpeg command: {err}\n")
+        sys.stderr.write(f"Error building {error_prefix} command: {err}\n")
         return 2
     except DestinationExistsError as err:
         sys.stderr.write(f"Error: {err}\n")
@@ -193,7 +176,8 @@ def handle_transcode(args: argparse.Namespace) -> int:
         sys.stderr.write("Operation cancelled by user.\n")
         return 130
     except RunnerError as err:
-        sys.stderr.write(f"Transcoding failed: {err}\n")
+        fail_label = "Transcoding" if label == "Transcoding" else "Extraction"
+        sys.stderr.write(f"{fail_label} failed: {err}\n")
         return 1
     except OutputPublishError as err:
         sys.stderr.write(f"Output publication failed: {err}\n")
@@ -206,48 +190,34 @@ def handle_transcode(args: argparse.Namespace) -> int:
                 pass
 
 
+def handle_transcode(args: argparse.Namespace) -> int:
+    """Handle 'transcode' subcommand."""
+    try:
+        scale_tuple = parse_scale_arg(args.scale)
+    except ValueError as err:
+        sys.stderr.write(f"Error: {err}\n")
+        return 2
+
+    options = EncodeOptions(
+        preset=args.preset,
+        crf=args.crf,
+        target_size_mb=args.target_size_mb,
+        two_pass=args.two_pass,
+        speed=args.speed,
+        scale=scale_tuple,
+        crop=args.crop,
+        pad=args.pad,
+        audio_codec=args.audio_codec,
+        audio_bitrate_kbps=args.audio_bitrate,
+        mute_audio=args.mute_audio,
+        normalize_audio=args.normalize,
+        strict_size=getattr(args, "strict_size", False),
+    )
+    return _run_cli_job(args, options, label="Transcoding", error_prefix="FFmpeg")
+
+
 def handle_extract_audio(args: argparse.Namespace) -> int:
     """Handle 'extract-audio' subcommand."""
-    if args.output and args.output_opt and args.output != args.output_opt:
-        sys.stderr.write(
-            f"Error: Conflicting output paths specified: '{args.output}' and '{args.output_opt}'\n"
-        )
-        return 2
-
-    output_path = args.output or args.output_opt
-    if not output_path:
-        sys.stderr.write("Error: Output path is required (pass positional argument or via -o/--output)\n")
-        return 2
-
-    if args.speed is not None and args.speed <= 0:
-        sys.stderr.write(f"Error: Speed multiplier must be positive, got {args.speed}\n")
-        return 2
-
-    # Validate paths early before expensive probing
-    try:
-        cli.validate_job_paths(args.input, output_path, overwrite=getattr(args, "overwrite", False))
-    except DestinationExistsError as err:
-        sys.stderr.write(f"Error: {err}\n")
-        return 1
-    except FileCollisionError as err:
-        sys.stderr.write(f"Error: {err}\n")
-        return 1
-    except FileNotFoundError as err:
-        sys.stderr.write(f"Error: Input file not found: {err}\n")
-        return 1
-
-    try:
-        media_info = cli.probe_media(args.input)
-    except FileNotFoundError as err:
-        sys.stderr.write(f"Error: Input file not found: {err}\n")
-        return 1
-    except ProbeError as err:
-        sys.stderr.write(f"Error probing media: {err}\n")
-        return 1
-    except Exception as err:
-        sys.stderr.write(f"Error probing media: {err}\n")
-        return 1
-
     options = EncodeOptions(
         extract_audio=True,
         audio_codec=args.codec,
@@ -255,73 +225,7 @@ def handle_extract_audio(args: argparse.Namespace) -> int:
         speed=args.speed,
         normalize_audio=args.normalize,
     )
-
-    config = JobConfig(
-        input_path=args.input,
-        output_path=output_path,
-        options=options,
-        media_info=media_info,
-        overwrite=getattr(args, "overwrite", False),
-        allow_non_atomic_fallback=getattr(args, "allow_fallback_copy", False),
-    )
-
-    cancel_event = threading.Event()
-
-    def _sigint_handler(_signum: int, _frame: Any) -> None:
-        cancel_event.set()
-        sys.stderr.write("\nAudio extraction cancellation requested...\n")
-
-    try:
-        orig_sigint = signal.signal(signal.SIGINT, _sigint_handler)
-    except (ValueError, AttributeError):
-        orig_sigint = None
-
-    reporter = create_progress_reporter(quiet=args.quiet)
-
-    try:
-        cli.run_job(
-            config,
-            progress_callback=reporter,
-            cancel_event=cancel_event,
-            builder=cli.build_ffmpeg_commands,
-            runner=cli.run_ffmpeg_pipeline,
-        )
-        if not args.quiet:
-            sys.stdout.write(f"✓ Audio extraction complete: {output_path}\n")
-        return 0
-    except TargetSizeTooSmallError as err:
-        sys.stderr.write(f"Error: {err}\n")
-        return 2
-    except InvalidOptionsError as err:
-        sys.stderr.write(f"Error: {err}\n")
-        return 2
-    except ValueError as err:
-        sys.stderr.write(f"Error building audio extraction command: {err}\n")
-        return 2
-    except DestinationExistsError as err:
-        sys.stderr.write(f"Error: {err}\n")
-        return 1
-    except FileCollisionError as err:
-        sys.stderr.write(f"Error: {err}\n")
-        return 1
-    except (FileNotFoundError, OSError) as err:
-        sys.stderr.write(f"Error: {err}\n")
-        return 1
-    except RunnerCancelledError:
-        sys.stderr.write("Operation cancelled by user.\n")
-        return 130
-    except RunnerError as err:
-        sys.stderr.write(f"Extraction failed: {err}\n")
-        return 1
-    except OutputPublishError as err:
-        sys.stderr.write(f"Output publication failed: {err}\n")
-        return 1
-    finally:
-        if orig_sigint is not None:
-            try:
-                signal.signal(signal.SIGINT, orig_sigint)
-            except (ValueError, AttributeError):
-                pass
+    return _run_cli_job(args, options, label="Audio extraction", error_prefix="audio extraction")
 
 
 def handle_install_nautilus(args: argparse.Namespace) -> int:

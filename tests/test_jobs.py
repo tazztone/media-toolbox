@@ -8,6 +8,7 @@ import errno
 import os
 from pathlib import Path
 import threading
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -593,4 +594,32 @@ class TestTransactionalJobExecution:
         assert call_count == 2
         assert res.exceeded_target is False
         assert res.file_size_bytes == 900_000
+
+    def test_job_config_forwards_custom_ffmpeg_bin(self, tmp_path: Path, dummy_media_info: MediaInfo):
+        """JobConfig.ffmpeg_bin is forwarded to the command builder."""
+        inp = tmp_path / "in.mp4"
+        inp.touch()
+        out = tmp_path / "out.mp4"
+
+        captured_builder_kwargs: dict[str, Any] = {}
+
+        def capturing_builder(*_args: Any, **kwargs: Any) -> list[list[str]]:
+            captured_builder_kwargs.update(kwargs)
+            return [["/custom/ffmpeg", "-y", "-i", str(inp), str(_args[1])]]
+
+        def fake_runner(cmds: list[list[str]], **_kwargs: Any) -> None:
+            staging_file = Path(cmds[-1][-1])
+            staging_file.write_bytes(b"data")
+
+        config = JobConfig(
+            input_path=inp,
+            output_path=out,
+            options=EncodeOptions(),
+            media_info=dummy_media_info,
+            overwrite=True,
+            ffmpeg_bin="/custom/ffmpeg",
+        )
+        run_job(config, builder=capturing_builder, runner=fake_runner)
+        assert captured_builder_kwargs.get("ffmpeg_bin") == "/custom/ffmpeg"
+
 

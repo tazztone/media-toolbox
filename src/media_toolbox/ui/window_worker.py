@@ -2,7 +2,7 @@
 Background worker thread lifecycle, GLib idle synchronization, and overwrite confirmation mixin.
 """
 
-# pyright: reportMissingImports=false, reportMissingModuleSource=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportGeneralTypeIssues=false, reportInvalidTypeForm=false
+# pyright: reportMissingImports=false, reportMissingModuleSource=false
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import dataclasses
 from pathlib import Path
 import threading
 from typing import Any, Optional
+import warnings
 
 import gi
 
@@ -33,8 +34,16 @@ class WindowWorkerMixin:
     state: WindowState
     cancel_event: Optional[threading.Event]
     is_transcoding: bool
-    _pending_confirmation: bool
-    _active_worker: Optional[threading.Thread]
+    input_file: Optional[Path] = None
+    view_stack: Any = None
+    transcode_btn: Any = None
+    extract_btn: Any = None
+    open_btn: Any = None
+    progress_footer: Any = None
+    toast_overlay: Any = None
+    destroy: Any = None
+    _pending_confirmation: bool = False
+    _active_worker: Optional[threading.Thread] = None
     _job_generation: int = 0
     _close_after_cleanup: bool = False
 
@@ -133,8 +142,14 @@ class WindowWorkerMixin:
         self._active_worker = worker_thread
         worker_thread.start()
 
-    # Backwards compatibility alias
-    _launch_worker_pipeline = _start_worker
+    def _launch_worker_pipeline(self, *args: Any, **kwargs: Any) -> None:
+        """Deprecated alias for _start_worker."""
+        warnings.warn(
+            "_launch_worker_pipeline is deprecated; use _start_worker instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        WindowWorkerMixin._start_worker(self, *args, **kwargs)
 
     def _worker_thread_entry(
         self,
@@ -185,7 +200,7 @@ class WindowWorkerMixin:
         self.progress_footer.update_progress(event, pass_info=pass_info)
         return GLib.SOURCE_REMOVE
 
-    def _on_success_idle(self, output_path: Path, result: Optional[JobResult] = None) -> bool:
+    def _finish(self, success: bool, footer_msg: str, toast_msg: str) -> bool:
         if getattr(self, "state", None) == WindowState.CLOSED:
             return GLib.SOURCE_REMOVE
 
@@ -199,61 +214,28 @@ class WindowWorkerMixin:
         self.state = WindowState.READY
         self.is_transcoding = False
         self._set_ui_controls_sensitive(True)
-        if hasattr(self, "open_btn") and self.open_btn is not None:
+        if self.open_btn is not None:
             self.open_btn.set_sensitive(True)
-        self.progress_footer.finish(True, f"Saved: {output_path.name}")
+        if self.progress_footer is not None:
+            self.progress_footer.finish(success, footer_msg)
+        if self.toast_overlay is not None:
+            self.toast_overlay.add_toast(Adw.Toast(title=toast_msg))
+        return GLib.SOURCE_REMOVE
+
+    def _on_success_idle(self, output_path: Path, result: Optional[JobResult] = None) -> bool:
+        toast_msg = f"Completed successfully: {output_path.name}"
         if result is not None and getattr(result, "exceeded_target", False) is True:
             actual_mb = getattr(result, "file_size_bytes", 0) / 1_000_000
             target_bytes = getattr(result, "target_size_bytes", None)
             target_mb = (target_bytes / 1_000_000) if target_bytes else 0
-            self.toast_overlay.add_toast(
-                Adw.Toast(
-                    title=f"Saved with warning: size exceeded target ({actual_mb:.1f} MB > {target_mb:.1f} MB)"
-                )
-            )
-        else:
-            self.toast_overlay.add_toast(Adw.Toast(title=f"Completed successfully: {output_path.name}"))
-        return GLib.SOURCE_REMOVE
+            toast_msg = f"Saved with warning: size exceeded target ({actual_mb:.1f} MB > {target_mb:.1f} MB)"
+        return WindowWorkerMixin._finish(self, True, f"Saved: {output_path.name}", toast_msg)
 
     def _on_cancelled_idle(self, _output_path: Path) -> bool:
-        if getattr(self, "state", None) == WindowState.CLOSED:
-            return GLib.SOURCE_REMOVE
-
-        if getattr(self, "_close_after_cleanup", False) is True:
-            self.state = WindowState.CLOSED
-            self.is_transcoding = False
-            if hasattr(self, "destroy"):
-                self.destroy()
-            return GLib.SOURCE_REMOVE
-
-        self.state = WindowState.READY
-        self.is_transcoding = False
-        self._set_ui_controls_sensitive(True)
-        if hasattr(self, "open_btn") and self.open_btn is not None:
-            self.open_btn.set_sensitive(True)
-        self.progress_footer.finish(False, "Operation cancelled")
-        self.toast_overlay.add_toast(Adw.Toast(title="Operation cancelled by user."))
-        return GLib.SOURCE_REMOVE
+        return WindowWorkerMixin._finish(self, False, "Operation cancelled", "Operation cancelled by user.")
 
     def _on_error_idle(self, error_message: str) -> bool:
-        if getattr(self, "state", None) == WindowState.CLOSED:
-            return GLib.SOURCE_REMOVE
-
-        if getattr(self, "_close_after_cleanup", False) is True:
-            self.state = WindowState.CLOSED
-            self.is_transcoding = False
-            if hasattr(self, "destroy"):
-                self.destroy()
-            return GLib.SOURCE_REMOVE
-
-        self.state = WindowState.READY
-        self.is_transcoding = False
-        self._set_ui_controls_sensitive(True)
-        if hasattr(self, "open_btn") and self.open_btn is not None:
-            self.open_btn.set_sensitive(True)
-        self.progress_footer.finish(False, f"Failed: {error_message}")
-        self.toast_overlay.add_toast(Adw.Toast(title=f"Encoding failed: {error_message}"))
-        return GLib.SOURCE_REMOVE
+        return WindowWorkerMixin._finish(self, False, f"Failed: {error_message}", f"Encoding failed: {error_message}")
 
     def _on_cancel_clicked(self) -> None:
         self.state = WindowState.CANCELLING

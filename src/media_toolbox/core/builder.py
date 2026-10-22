@@ -148,6 +148,7 @@ def build_audio_extract_command(
     media_info: Optional[MediaInfo] = None,
     include_progress: bool = False,
     spec: Optional[ResolvedJobSpec] = None,
+    ffmpeg_bin: str = "ffmpeg",
 ) -> list[str]:
     """
     Construct FFmpeg command for audio extraction / transcoding.
@@ -155,7 +156,7 @@ def build_audio_extract_command(
     if spec is None:
         spec = resolve_job_spec(options, media_info=media_info, output_path=output_path)
 
-    cmd: list[str] = ["ffmpeg", "-y", "-nostdin"]
+    cmd: list[str] = [ffmpeg_bin, "-y", "-nostdin"]
     if include_progress:
         cmd.extend(["-progress", "pipe:1", "-nostats"])
 
@@ -201,11 +202,12 @@ def build_gif_command(
     options: EncodeOptions,
     media_info: Optional[MediaInfo] = None,
     include_progress: bool = False,
+    ffmpeg_bin: str = "ffmpeg",
 ) -> list[str]:
     """
     Construct FFmpeg command for paletted animated GIF generation.
     """
-    cmd: list[str] = ["ffmpeg", "-y", "-nostdin"]
+    cmd: list[str] = [ffmpeg_bin, "-y", "-nostdin"]
     if include_progress:
         cmd.extend(["-progress", "pipe:1", "-nostats"])
 
@@ -248,6 +250,7 @@ def build_two_pass_commands(
     pass_logfile: Optional[str] = None,
     include_progress: bool = False,
     spec: Optional[ResolvedJobSpec] = None,
+    ffmpeg_bin: str = "ffmpeg",
 ) -> list[list[str]]:
     """
     Construct two FFmpeg commands for two-pass bitrate targeting.
@@ -296,110 +299,74 @@ def build_two_pass_commands(
     v_map, a_map = resolve_stream_mappings(media_info)
     has_user_map = has_stream_map(options.extra_args)
 
-    # Pass 1 Command
-    pass1_cmd: list[str] = ["ffmpeg", "-y", "-nostdin"]
-    if include_progress:
-        pass1_cmd.extend(["-progress", "pipe:1", "-nostats"])
-    pass1_cmd.extend(["-i", input_path])
-    if not has_user_map:
-        pass1_cmd.extend(["-map", v_map])
-    pass1_cmd.extend(vf_args)
+    def _pass_cmd(pass_num: int) -> list[str]:
+        cmd: list[str] = [ffmpeg_bin, "-y", "-nostdin"]
+        if include_progress:
+            cmd.extend(["-progress", "pipe:1", "-nostats"])
+        cmd.extend(["-i", input_path])
+        if not has_user_map:
+            cmd.extend(["-map", v_map])
+            if pass_num == 2 and not options.mute_audio and (media_info is None or media_info.has_audio):
+                cmd.extend(["-map", a_map])
+        cmd.extend(vf_args)
 
-    if v_preset is not None:
-        pass1_cmd.extend(
-            v_preset.build_video_args(
-                bitrate_kbps=v_bitrate_kbps,
-                pass_num=1,
-                pass_logfile=log_prefix,
-                speed_preset=speed_preset,
-            )
-        )
-    else:
-        v_codec = spec.video_codec or options.video_codec or "libx264"
-        pass1_cmd.extend([
-            "-c:v", v_codec,
-            "-b:v", f"{int(v_bitrate_kbps)}k",
-        ])
-        if v_codec in ("libx265", "x265", "hevc"):
-            x265_opts = ["pass=1"]
-            if log_prefix:
-                x265_opts.append(f"stats={log_prefix}")
-            pass1_cmd.extend(["-x265-params", ":".join(x265_opts)])
-        else:
-            pass1_cmd.extend([
-                "-pass", "1",
-                "-passlogfile", log_prefix,
-            ])
-        if speed_preset:
-            pass1_cmd.extend(["-preset", speed_preset])
-
-    pass1_cmd.extend(extract_two_pass_video_extra_args(options.extra_args))
-    pass1_cmd.extend(["-an", "-f", "null", os.devnull])
-
-    # Pass 2 Command
-    pass2_cmd: list[str] = ["ffmpeg", "-y", "-nostdin"]
-    if include_progress:
-        pass2_cmd.extend(["-progress", "pipe:1", "-nostats"])
-    pass2_cmd.extend(["-i", input_path])
-    if not has_user_map:
-        pass2_cmd.extend(["-map", v_map])
-        if not options.mute_audio and (media_info is None or media_info.has_audio):
-            pass2_cmd.extend(["-map", a_map])
-    pass2_cmd.extend(vf_args)
-
-    if v_preset is not None:
-        pass2_cmd.extend(
-            v_preset.build_video_args(
-                bitrate_kbps=v_bitrate_kbps,
-                pass_num=2,
-                pass_logfile=log_prefix,
-                speed_preset=speed_preset,
-            )
-        )
-    else:
-        v_codec = spec.video_codec or options.video_codec or "libx264"
-        pass2_cmd.extend([
-            "-c:v", v_codec,
-            "-b:v", f"{int(v_bitrate_kbps)}k",
-        ])
-        if v_codec in ("libx265", "x265", "hevc"):
-            x265_opts = ["pass=2"]
-            if log_prefix:
-                x265_opts.append(f"stats={log_prefix}")
-            pass2_cmd.extend(["-x265-params", ":".join(x265_opts)])
-        else:
-            pass2_cmd.extend([
-                "-pass", "2",
-                "-passlogfile", log_prefix,
-            ])
-        if speed_preset:
-            pass2_cmd.extend(["-preset", speed_preset])
-
-    # Pass 2 Audio
-    if options.mute_audio or not media_info.has_audio:
-        pass2_cmd.append("-an")
-    else:
-        a_codec = spec.audio_codec or "aac"
-        if a_codec != "copy":
-            pass2_cmd.extend(
-                build_audio_filter_args(
-                    speed=options.speed,
-                    normalize_loudness=options.normalize_audio,
-                    volume_boost_db=options.volume_boost_db,
+        if v_preset is not None:
+            cmd.extend(
+                v_preset.build_video_args(
+                    bitrate_kbps=v_bitrate_kbps,
+                    pass_num=pass_num,
+                    pass_logfile=log_prefix,
+                    speed_preset=speed_preset,
                 )
             )
-        pass2_cmd.extend(["-c:a", a_codec])
-        if not a_codec.startswith("pcm_") and a_codec != "copy":
-            pass2_cmd.extend(["-b:a", f"{options.audio_bitrate_kbps}k"])
+        else:
+            v_codec = spec.video_codec or options.video_codec or "libx264"
+            cmd.extend([
+                "-c:v", v_codec,
+                "-b:v", f"{int(v_bitrate_kbps)}k",
+            ])
+            if v_codec in ("libx265", "x265", "hevc"):
+                x265_opts = [f"pass={pass_num}"]
+                if log_prefix:
+                    x265_opts.append(f"stats={log_prefix}")
+                cmd.extend(["-x265-params", ":".join(x265_opts)])
+            else:
+                cmd.extend([
+                    "-pass", str(pass_num),
+                    "-passlogfile", log_prefix,
+                ])
+            if speed_preset:
+                cmd.extend(["-preset", speed_preset])
 
-    if v_preset is not None:
-        pass2_cmd.extend(v_preset.build_container_args(output_path))
-    else:
-        pass2_cmd.extend(get_container_faststart_args(output_path))
-    pass2_cmd.extend(options.extra_args)
-    pass2_cmd.append(output_path)
+        if pass_num == 1:
+            cmd.extend(extract_two_pass_video_extra_args(options.extra_args))
+            cmd.extend(["-an", "-f", "null", os.devnull])
+        else:
+            if options.mute_audio or not media_info.has_audio:
+                cmd.append("-an")
+            else:
+                a_codec = spec.audio_codec or "aac"
+                if a_codec != "copy":
+                    cmd.extend(
+                        build_audio_filter_args(
+                            speed=options.speed,
+                            normalize_loudness=options.normalize_audio,
+                            volume_boost_db=options.volume_boost_db,
+                        )
+                    )
+                cmd.extend(["-c:a", a_codec])
+                if not a_codec.startswith("pcm_") and a_codec != "copy":
+                    cmd.extend(["-b:a", f"{options.audio_bitrate_kbps}k"])
 
-    return [pass1_cmd, pass2_cmd]
+            if v_preset is not None:
+                cmd.extend(v_preset.build_container_args(output_path))
+            else:
+                cmd.extend(get_container_faststart_args(output_path))
+            cmd.extend(options.extra_args)
+            cmd.append(output_path)
+        return cmd
+
+    return [_pass_cmd(1), _pass_cmd(2)]
 
 
 def build_single_pass_command(
@@ -409,6 +376,7 @@ def build_single_pass_command(
     media_info: Optional[MediaInfo] = None,
     include_progress: bool = False,
     spec: Optional[ResolvedJobSpec] = None,
+    ffmpeg_bin: str = "ffmpeg",
 ) -> list[str]:
     """
     Construct FFmpeg command for single-pass CRF or fixed-bitrate video encoding.
@@ -416,7 +384,7 @@ def build_single_pass_command(
     if spec is None:
         spec = resolve_job_spec(options, media_info=media_info, output_path=output_path)
 
-    cmd: list[str] = ["ffmpeg", "-y", "-nostdin"]
+    cmd: list[str] = [ffmpeg_bin, "-y", "-nostdin"]
     if include_progress:
         cmd.extend(["-progress", "pipe:1", "-nostats"])
 
@@ -487,6 +455,7 @@ def build_ffmpeg_commands(
     media_info: Optional[MediaInfo] = None,
     pass_logfile: Optional[str] = None,
     include_progress: bool = False,
+    ffmpeg_bin: str = "ffmpeg",
 ) -> list[list[str]]:
     """
     Construct deterministic FFmpeg CLI argument list(s).
@@ -495,8 +464,8 @@ def build_ffmpeg_commands(
         list[list[str]]: 1 command for single-pass/CRF/audio/GIF; 2 commands for 2-pass.
 
     Raises:
-        ValueError: On contradictory options (e.g. mute + extract audio, GIF + two-pass),
-                    non-positive speeds/target sizes, or missing duration for bitrate targeting.
+        InvalidOptionsError: On contradictory options (e.g. mute + extract audio, GIF + two-pass),
+                             non-positive speeds/target sizes, or missing duration for bitrate targeting.
     """
     input_str = str(input_path)
     output_str = str(output_path)
@@ -514,6 +483,7 @@ def build_ffmpeg_commands(
                 media_info=media_info,
                 include_progress=include_progress,
                 spec=spec,
+                ffmpeg_bin=ffmpeg_bin,
             )
         ]
 
@@ -526,6 +496,7 @@ def build_ffmpeg_commands(
                 options,
                 media_info=media_info,
                 include_progress=include_progress,
+                ffmpeg_bin=ffmpeg_bin,
             )
         ]
 
@@ -539,6 +510,7 @@ def build_ffmpeg_commands(
             pass_logfile=pass_logfile,
             include_progress=include_progress,
             spec=spec,
+            ffmpeg_bin=ffmpeg_bin,
         )
 
     # Mode 4: Single-Pass Video (CRF / ProRes)
@@ -550,5 +522,6 @@ def build_ffmpeg_commands(
             media_info=media_info,
             include_progress=include_progress,
             spec=spec,
+            ffmpeg_bin=ffmpeg_bin,
         )
     ]

@@ -22,7 +22,7 @@ import shutil
 import tempfile
 import threading
 import time
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 import uuid
 
 from media_toolbox.core.builder import build_ffmpeg_commands
@@ -54,6 +54,7 @@ class JobConfig:
     sigterm_timeout: float = 2.0
     allow_unprobed: bool = False
     allow_non_atomic_fallback: bool = False
+    ffmpeg_bin: str = "ffmpeg"
 
 
 @dataclass(frozen=True, slots=True)
@@ -360,15 +361,30 @@ def run_job(
         pass_tmp_dir = tempfile.TemporaryDirectory(prefix="media_toolbox_2pass_")
         pass_logfile_prefix = str(Path(pass_tmp_dir.name) / f"pass_{uuid.uuid4().hex[:8]}")
 
+    builder_kwargs: dict[str, Any] = {
+        "media_info": media_info,
+        "pass_logfile": pass_logfile_prefix,
+        "include_progress": True,
+    }
+    if config.ffmpeg_bin != "ffmpeg":
+        builder_kwargs["ffmpeg_bin"] = config.ffmpeg_bin
+
     try:
-        cmds = builder_fn(
-            str(in_path),
-            str(staging_path),
-            config.options,
-            media_info=media_info,
-            pass_logfile=pass_logfile_prefix,
-            include_progress=True,
-        )
+        try:
+            cmds = builder_fn(
+                str(in_path),
+                str(staging_path),
+                config.options,
+                **builder_kwargs,
+            )
+        except TypeError:
+            builder_kwargs.pop("ffmpeg_bin", None)
+            cmds = builder_fn(
+                str(in_path),
+                str(staging_path),
+                config.options,
+                **builder_kwargs,
+            )
 
         runner_fn(
             cmds,
@@ -420,14 +436,21 @@ def run_job(
             except OSError:
                 pass
 
-            retry_cmds = builder_fn(
-                str(in_path),
-                str(staging_path),
-                retry_options,
-                media_info=media_info,
-                pass_logfile=pass_logfile_prefix,
-                include_progress=True,
-            )
+            try:
+                retry_cmds = builder_fn(
+                    str(in_path),
+                    str(staging_path),
+                    retry_options,
+                    **builder_kwargs,
+                )
+            except TypeError:
+                builder_kwargs.pop("ffmpeg_bin", None)
+                retry_cmds = builder_fn(
+                    str(in_path),
+                    str(staging_path),
+                    retry_options,
+                    **builder_kwargs,
+                )
             runner_fn(
                 retry_cmds,
                 total_duration_seconds=duration,

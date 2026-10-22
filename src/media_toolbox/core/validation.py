@@ -12,6 +12,7 @@ from __future__ import annotations
 import math
 from pathlib import Path
 from typing import Optional
+import warnings
 
 from media_toolbox.core.models import (
     EncodeOptions,
@@ -139,6 +140,11 @@ def resolve_job_spec(
         elif options.audio_codec:
             effective_acodec = options.audio_codec
         elif options.video_codec in ("mp3", "aac", "opus", "flac"):
+            warnings.warn(
+                "Passing audio codec via video_codec for audio operations is deprecated; pass audio_codec instead",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             effective_acodec = options.video_codec
         else:
             effective_acodec = "mp3"

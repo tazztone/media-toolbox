@@ -24,6 +24,7 @@ import subprocess
 import threading
 import time
 from typing import Any, Callable, Iterable, Iterator, Optional, Union
+import warnings
 
 from media_toolbox.core.models import MediaToolboxError, ProgressEvent
 
@@ -438,6 +439,7 @@ def run_ffmpeg(
     cancel_event: Optional[threading.Event] = None,
     sigterm_timeout: float = 2.0,
     total_duration: Optional[float] = None,
+    is_ffmpeg: Optional[bool] = None,
 ) -> None:
     """
     Execute a single FFmpeg command, parsing progress output and handling cancellation.
@@ -448,7 +450,8 @@ def run_ffmpeg(
         progress_callback: Callback receiving ProgressEvent updates.
         cancel_event: Event to signal execution cancellation.
         sigterm_timeout: Grace period in seconds before SIGKILL escalation.
-        total_duration: Compatibility parameter for total_duration_seconds.
+        total_duration: Compatibility parameter for total_duration_seconds (deprecated).
+        is_ffmpeg: Explicit flag indicating whether command is FFmpeg (for -progress injection).
 
     Raises:
         ValueError: If cmd is empty.
@@ -459,6 +462,13 @@ def run_ffmpeg(
     if not cmd:
         raise ValueError("cmd argument list cannot be empty")
 
+    if total_duration is not None:
+        warnings.warn(
+            "total_duration is deprecated, use total_duration_seconds",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
     dur = total_duration_seconds if total_duration_seconds is not None else total_duration
 
     if cancel_event is not None and cancel_event.is_set():
@@ -466,7 +476,7 @@ def run_ffmpeg(
 
     effective_cmd = list(cmd)
     base_name = os.path.basename(effective_cmd[0]).lower()
-    if "ffmpeg" in base_name and "-progress" not in effective_cmd:
+    if (is_ffmpeg is True or (is_ffmpeg is None and "ffmpeg" in base_name)) and "-progress" not in effective_cmd:
         effective_cmd = [effective_cmd[0], "-nostats", "-progress", "pipe:1"] + effective_cmd[1:]
 
     try:
@@ -610,7 +620,12 @@ def run_command(
     total_duration_seconds: Optional[float] = None,
     sigterm_timeout: float = 2.0,
 ) -> None:
-    """Compatibility alias for run_ffmpeg supporting total_duration and total_duration_seconds."""
+    """Compatibility alias for run_ffmpeg supporting total_duration and total_duration_seconds (deprecated)."""
+    warnings.warn(
+        "run_command is deprecated, use run_ffmpeg instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     dur = total_duration_seconds if total_duration_seconds is not None else total_duration
     run_ffmpeg(
         cmd=cmd,
@@ -629,6 +644,7 @@ def run_ffmpeg_pipeline(
     cancel_event: Optional[threading.Event] = None,
     sigterm_timeout: float = 2.0,
     total_duration: Optional[float] = None,
+    is_ffmpeg: Optional[bool] = None,
 ) -> None:
     """
     Execute a sequential pipeline of FFmpeg commands (e.g. 2-pass bitrate targeting).
@@ -640,7 +656,8 @@ def run_ffmpeg_pipeline(
         pipeline_progress_callback: Callback receiving (pass_num, total_passes, raw_event).
         cancel_event: Event to signal cancellation across passes.
         sigterm_timeout: Grace period before SIGKILL escalation.
-        total_duration: Compatibility parameter for total_duration_seconds.
+        total_duration: Compatibility parameter for total_duration_seconds (deprecated).
+        is_ffmpeg: Explicit flag indicating whether commands are FFmpeg.
 
     Raises:
         ValueError: If cmds list is empty.
@@ -649,6 +666,13 @@ def run_ffmpeg_pipeline(
     """
     if not cmds:
         raise ValueError("cmds list cannot be empty")
+
+    if total_duration is not None:
+        warnings.warn(
+            "total_duration is deprecated, use total_duration_seconds",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
     dur = total_duration_seconds if total_duration_seconds is not None else total_duration
     num_passes = len(cmds)
@@ -706,4 +730,5 @@ def run_ffmpeg_pipeline(
             progress_callback=_pass_callback,
             cancel_event=cancel_event,
             sigterm_timeout=sigterm_timeout,
+            is_ffmpeg=is_ffmpeg,
         )

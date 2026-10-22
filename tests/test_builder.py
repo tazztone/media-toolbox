@@ -770,4 +770,18 @@ def test_audio_extract_preserves_custom_codec() -> None:
     assert cmd[cmd.index("-c:a") + 1] == "pcm_s16le"
 
 
+def test_custom_ffmpeg_bin_parameter() -> None:
+    """Builder functions use specified custom ffmpeg executable path."""
+    options = EncodeOptions(preset="h264")
+    cmds = build_ffmpeg_commands("in.mp4", "out.mp4", options, ffmpeg_bin="/opt/custom/ffmpeg")
+    assert cmds[0][0] == "/opt/custom/ffmpeg"
+
+    gif_cmds = build_ffmpeg_commands("in.mp4", "out.gif", EncodeOptions(preset="gif"), ffmpeg_bin="/custom/bin/ffmpeg")
+    assert gif_cmds[0][0] == "/custom/bin/ffmpeg"
+
+    audio_cmds = build_ffmpeg_commands("in.mp4", "out.mp3", EncodeOptions(extract_audio=True), ffmpeg_bin="/custom/bin/ffmpeg")
+    assert audio_cmds[0][0] == "/custom/bin/ffmpeg"
+
+
+
 

@@ -146,8 +146,13 @@ tests/
 - `build_audio_filter(speed: Optional[float], normalize_loudness: bool, volume_boost_db: Optional[float]) -> list[str]`
 
 ### `core/builder.py`
-- `build_ffmpeg_commands(input_path: str, output_path: str, options: EncodeOptions) -> list[list[str]]`
-  (Returns 1 command for CRF/single-pass, or 2 commands for 2-pass bitrate mode).
+- `build_ffmpeg_commands(input_path: str, output_path: str, options: EncodeOptions, ffmpeg_bin: str = "ffmpeg") -> list[list[str]]`
+  (Returns 1 command for CRF/single-pass, or 2 commands for 2-pass bitrate mode with unified pass generation and configurable binary path).
+
+### `core/runner.py`
+- `run_ffmpeg(cmd: list[str], total_duration_seconds: Optional[float] = None, ...)`: Subprocess execution with process-group isolation and graceful SIGTERM to SIGKILL escalation.
+- `run_ffmpeg_pipeline(cmds: list[list[str]], ...)`: Sequential multi-pass pipeline runner.
+- Compatibility: `run_command` and `total_duration` keyword arguments are deprecated in favor of `run_ffmpeg` and `total_duration_seconds`.
 
 ### `core/validation.py`
 - `validate_encode_options(options: EncodeOptions, output_path: Optional[str] = None) -> None`: Centralized option verification. Enforces mutual exclusivity (CRF vs 2-pass/target-size), positive dimensions and framerates, preset audio bitrate ranges, codec-container compatibility (e.g. strict WebM validation where non-Opus/Vorbis codecs raise `InvalidOptionsError` rather than silent fallback), and filter/copy incompatibility checks.
@@ -155,9 +160,13 @@ tests/
 - `resolve_job_spec(options: EncodeOptions, media_info: Optional[MediaInfo] = None, output_path: Optional[str] = None) -> ResolvedJobSpec`: Resolves canonical presets, encoder names (aliases like `mp3` → `libmp3lame`), container defaults, rate control parameters, and filter chains.
 
 ### `core/jobs.py`
+- `JobConfig`: Configuration specification supporting `ffmpeg_bin` executable configuration.
 - `run_job(config: JobConfig, progress_callback: Optional[Callable[[ProgressEvent], None]] = None, pipeline_progress_callback: Optional[Callable[[int, int, ProgressEvent], None]] = None, cancel_event: Optional[threading.Event] = None) -> JobResult`: Transactional staging in a private temporary directory on the same filesystem (`.tmp_media_toolbox_<uuid>/`), atomic no-clobber publication, preflight hard-link capability checks, symlink overwrite rejection, automated sweep of stale staging directories older than 24 hours, post-encode target size verification (`exceeded_target`), `--strict-size` retry pass, and cleanup on failure or cancellation.
 - `cleanup_stale_staging_dirs(target_dir: Path | str, max_age_seconds: float = 86400.0) -> int`: Sweeps orphaned staging directories in the target output directory older than specified max age.
 
+### `cli/handlers.py`
+- `_run_cli_job(args: argparse.Namespace, options: EncodeOptions, label: str, error_prefix: str = "FFmpeg") -> int`: Unified CLI job runner encapsulating signal trapping, probing, execution, and error handling.
+
 ### `ui/window_worker.py`
-- `WindowWorkerMixin`: Asynchronous worker execution with GLib idle loop dispatch, generation guards (`_job_generation`) dropping stale completion/progress events from superseded jobs, and cancel-then-close lifecycle ensuring application quit during active transcodes defers window destruction until staging cleanup completes without orphaned FFmpeg processes.
+- `WindowWorkerMixin`: Asynchronous worker execution with GLib idle loop dispatch, generation guards (`_job_generation`) dropping stale completion/progress events from superseded jobs, consolidated teardown handler (`_finish`), and cancel-then-close lifecycle ensuring application quit during active transcodes defers window destruction until staging cleanup completes without orphaned FFmpeg processes. Deprecates `_launch_worker_pipeline` in favor of `_start_worker`.
 
