@@ -26,8 +26,11 @@ nautilus/           ──> launcher.sh / installer.py (installs entry point, en
 ## Development Commands
 
 ```bash
-.venv/bin/pytest tests/          # run tests (580 pass as of 2026-10)
+.venv/bin/pytest tests/          # full suite: unit + desktop + integration
 .venv/bin/pytest tests/ -q       # addopts already: -ra -q --import-mode=importlib
+scripts/ci-local.sh --fast       # local CI mirror: lint + headless + typecheck
+scripts/ci-local.sh              # full CI mirror (adds integration, desktop, packaging)
+scripts/ci-local.sh --install-tools  # first run: install pinned dev tools into .venv
 media-toolbox inspect video.mp4
 media-toolbox transcode input.mp4 output.mp4 --preset h264
 media-toolbox transcode input.mp4 output.mp4 --target-mb 25   # two-pass
@@ -36,7 +39,7 @@ media-toolbox-gui                # GUI (needs DISPLAY/WAYLAND_DISPLAY)
 .venv/bin/basedpyright src tests # type check (CI gates on this; or uvx basedpyright)
 ```
 
-CI configured via GitHub Actions (`.github/workflows/ci.yml`): headless tests, desktop tests with Xvfb, wheel build smoke test, and basedpyright typecheck. Package build: `python -m build` (setuptools backend, src layout).
+CI configured via GitHub Actions (`.github/workflows/ci.yml`): headless tests, desktop tests with Xvfb, wheel build smoke test, and basedpyright typecheck. `scripts/ci-local.sh` mirrors those jobs locally (single interpreter, skips jobs whose prerequisites are missing unless `--strict`). Package build: `python -m build` (setuptools backend, src layout).
 
 ## Code Conventions & Common Patterns
 
@@ -53,6 +56,7 @@ CI configured via GitHub Actions (`.github/workflows/ci.yml`): headless tests, d
 - `pytest.ini` — all pytest config (testpaths, pythonpath=src, addopts).
 - `src/media_toolbox/cli/` — modular CLI (`__init__.py`, `parser.py`, `formatting.py`, `handlers.py`, `__main__.py`).
 - `.githooks/pre-commit` — bash `-n` syntax check + pytest (fast unit tests via `-m "not integration and not desktop"`, configurable via `PRE_COMMIT_TEST_MARKER`); activate: `git config core.hooksPath .githooks`.
+- `scripts/ci-local.sh` — local mirror of `.github/workflows/ci.yml` (`--fast` for lint/headless/typecheck, `--jobs` to select, `--strict` to fail on missing prerequisites).
 - `docs/PROJECT.md` — interface contracts, feature inventory. `docs/TEST_INFRA.md` — test philosophy, coverage tiers.
 - `src/media_toolbox/nautilus/launcher.sh` — installed to `~/.local/share/nautilus/scripts/Media-Toolbox`; resolves interpreter, sets `PYTHONPATH=src`.
 

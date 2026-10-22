@@ -5,7 +5,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$REPO_ROOT"
 
 # 1. Shell script syntax check
-SHELL_FILES=$(find src tests -type f -name "*.sh" 2>/dev/null || true)
+SHELL_FILES=$(find src tests scripts -type f -name "*.sh" 2>/dev/null || true)
 for sh_file in $SHELL_FILES; do
     [ -f "$sh_file" ] || continue
     if ! bash -n "$sh_file"; then

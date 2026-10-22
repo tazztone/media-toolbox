@@ -108,6 +108,12 @@ media-toolbox uninstall-nautilus
 # Run test suite
 .venv/bin/pytest tests/
 
+# Run the full CI suite locally (lint, tests, desktop, integration, packaging)
+scripts/ci-local.sh
+
+# Faster subset: lint + headless tests + typecheck
+scripts/ci-local.sh --fast
+
 # Configure and run local pre-commit hook (bash -n and pytest)
 git config core.hooksPath .githooks
 .githooks/pre-commit

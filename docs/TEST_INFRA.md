@@ -31,6 +31,7 @@
   - `integration-tests`: Provisions FFmpeg binaries; verifies real media encoding pipeline (`integration`).
   - `desktop-tests`: Provisions GTK4 / Libadwaita / Xvfb; verifies graphical UI lifecycle (`desktop`).
   - `packaging-smoke-test`: Clean-room wheel build and isolated CLI execution.
+- Local CI mirror: `scripts/ci-local.sh` runs the same jobs (lint, headless with the 85% coverage gate, integration, desktop, typecheck, packaging smoke test); `--fast` runs lint + headless + typecheck, `--strict` turns missing prerequisites into failures.
 - Pass/fail semantics: 100% exit code 0, 0 failures, 0 regressions across entire suite (553+ tests passing)
 - Test directory: `tests/`
 - Real-media integration: `tests/test_integration_media.py` (real FFmpeg execution)
