@@ -69,6 +69,9 @@ media-toolbox transcode video.mp4 output.mp4 --preset h264
 # 2-Pass target size transcode (in decimal MB)
 media-toolbox transcode video.mp4 output.mp4 --target-mb 25
 
+# 2-Pass with strict size retry enforcement
+media-toolbox transcode video.mp4 output.mp4 --target-mb 25 --strict-size
+
 # Overwrite existing destination safely
 media-toolbox transcode video.mp4 output.mp4 --overwrite
 

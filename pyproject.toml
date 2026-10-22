@@ -8,9 +8,32 @@ version = "0.1.0"
 description = "Modern Python media inspection, transcoding, and audio extraction package"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [{ name = "tazztone" }]
 dependencies = []
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: X11 Applications :: Gnome",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Multimedia :: Sound/Audio :: Conversion",
+    "Topic :: Multimedia :: Video :: Conversion",
+]
+
+[project.urls]
+Homepage = "https://github.com/tazztone/media-toolbox"
+Repository = "https://github.com/tazztone/media-toolbox"
+Issues = "https://github.com/tazztone/media-toolbox/issues"
+Documentation = "https://github.com/tazztone/media-toolbox#readme"
 
 [project.optional-dependencies]
 desktop = [
@@ -20,12 +43,10 @@ dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.0.0",
     "basedpyright>=1.40.2",
+    "ruff>=0.4.0",
 ]
 all = [
-    "PyGObject>=3.42.0",
-    "pytest>=8.0.0",
-    "pytest-cov>=4.0.0",
-    "basedpyright>=1.40.2",
+    "media-toolbox[desktop,dev]",
 ]
 
 [project.scripts]
@@ -38,4 +59,5 @@ media_toolbox_gui = "media_toolbox.ui.app:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
+"media_toolbox" = ["py.typed"]
 "media_toolbox.nautilus" = ["*.sh", "*.desktop"]
