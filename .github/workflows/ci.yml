@@ -22,7 +22,9 @@ jobs:
       - name: Install Ruff
         run: |
           python -m pip install --upgrade pip
-          pip install ruff
+          # Pinned: lint policy is the pinned version's default rule set.
+          # Bump the pin and the dev extra in pyproject.toml together.
+          pip install "ruff==0.17.1"
 
       - name: Run Ruff Lint
         run: ruff check .

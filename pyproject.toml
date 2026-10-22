@@ -42,7 +42,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.0.0",
     "basedpyright>=1.40.2",
-    "ruff>=0.4.0",
+    "ruff==0.17.1",
 ]
 all = [
     "media-toolbox[desktop,dev]",
@@ -60,3 +60,8 @@ where = ["src"]
 [tool.setuptools.package-data]
 "media_toolbox" = ["py.typed"]
 "media_toolbox.nautilus" = ["*.sh", "*.desktop"]
+
+[tool.ruff]
+# Lint policy is the pinned ruff version's default rule set (see dev extra and CI).
+target-version = "py310"
+line-length = 88

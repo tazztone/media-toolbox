@@ -49,7 +49,7 @@ CI configured via GitHub Actions (`.github/workflows/ci.yml`): headless tests, d
 
 ## Important Files
 
-- `pyproject.toml` — packaging (setuptools>=61), deps, console scripts (`media-toolbox`, `media_toolbox`, `media-toolbox-gui`, `media_toolbox_gui`).
+- `pyproject.toml` — packaging (setuptools>=77), deps, console scripts (`media-toolbox`, `media_toolbox`, `media-toolbox-gui`, `media_toolbox_gui`). Ruff is pinned in the `dev` extra; bump it and the CI pin together.
 - `pytest.ini` — all pytest config (testpaths, pythonpath=src, addopts).
 - `src/media_toolbox/cli/` — modular CLI (`__init__.py`, `parser.py`, `formatting.py`, `handlers.py`, `__main__.py`).
 - `.githooks/pre-commit` — bash `-n` syntax check + pytest (fast unit tests via `-m "not integration and not desktop"`, configurable via `PRE_COMMIT_TEST_MARKER`); activate: `git config core.hooksPath .githooks`.
