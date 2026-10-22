@@ -15,6 +15,7 @@ import pytest
 from media_toolbox.core.jobs import (
     JobConfig,
     JobResult,
+    cleanup_stale_staging_dirs,
     publish_output,
     run_job,
     validate_job_paths,
@@ -519,3 +520,77 @@ class TestTransactionalJobExecution:
         with patch("os.link", side_effect=err):
             with pytest.raises(OutputPublishError, match="does not support atomic no-clobber"):
                 run_job(config, runner=fake_runner)
+
+    def test_cleanup_stale_staging_dirs(self, tmp_path: Path):
+        """Orphaned staging dirs older than max_age are cleaned up, recent ones remain."""
+        import time
+
+        stale_dir = tmp_path / ".tmp_media_toolbox_old123"
+        stale_dir.mkdir()
+        now = time.time()
+        os.utime(stale_dir, (now - 100_000, now - 100_000))
+
+        fresh_dir = tmp_path / ".tmp_media_toolbox_fresh123"
+        fresh_dir.mkdir()
+        os.utime(fresh_dir, (now - 100, now - 100))
+
+        unrelated_file = tmp_path / ".tmp_media_toolbox_file.txt"
+        unrelated_file.write_text("hello")
+
+        cleaned = cleanup_stale_staging_dirs(tmp_path, max_age_seconds=86400)
+        assert cleaned == 1
+        assert not stale_dir.exists()
+        assert fresh_dir.exists()
+        assert unrelated_file.exists()
+
+    def test_target_size_exceeded_flag(self, tmp_path: Path, dummy_media_info: MediaInfo):
+        """When actual output size exceeds target size, exceeded_target is set on JobResult."""
+        inp = tmp_path / "in.mp4"
+        inp.touch()
+        out = tmp_path / "out.mp4"
+
+        def fake_runner(cmds, **_kwargs):
+            staging_file = Path(cmds[-1][-1])
+            staging_file.write_bytes(b"x" * 2_000_000)
+
+        config = JobConfig(
+            input_path=inp,
+            output_path=out,
+            options=EncodeOptions(target_size_mb=1.0),
+            media_info=dummy_media_info,
+            overwrite=True,
+        )
+        res = run_job(config, runner=fake_runner)
+        assert res.exceeded_target is True
+        assert res.target_size_bytes == 1_000_000
+        assert res.file_size_bytes == 2_000_000
+
+    def test_strict_size_retry_on_overshoot(self, tmp_path: Path, dummy_media_info: MediaInfo):
+        """With strict_size=True, an oversized output triggers a second pass retry."""
+        inp = tmp_path / "in.mp4"
+        inp.touch()
+        out = tmp_path / "out.mp4"
+
+        call_count = 0
+
+        def fake_runner(cmds, **_kwargs):
+            nonlocal call_count
+            call_count += 1
+            staging_file = Path(cmds[-1][-1])
+            if call_count == 1:
+                staging_file.write_bytes(b"x" * 1_500_000)  # Over target (1 MB)
+            else:
+                staging_file.write_bytes(b"x" * 900_000)  # Under target on retry
+
+        config = JobConfig(
+            input_path=inp,
+            output_path=out,
+            options=EncodeOptions(target_size_mb=1.0, strict_size=True),
+            media_info=dummy_media_info,
+            overwrite=True,
+        )
+        res = run_job(config, runner=fake_runner)
+        assert call_count == 2
+        assert res.exceeded_target is False
+        assert res.file_size_bytes == 900_000
+

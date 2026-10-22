@@ -17,7 +17,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib
 
-from media_toolbox.core.jobs import JobConfig, run_job
+from media_toolbox.core.jobs import JobConfig, JobResult, run_job
 from media_toolbox.core.models import ProgressEvent
 from media_toolbox.core.runner import (
     RunnerCancelledError,
@@ -160,7 +160,7 @@ class WindowWorkerMixin:
                 cancel_event=cancel_event,
             )
             if getattr(self, "_job_generation", 0) == current_gen:
-                GLib.idle_add(self._on_success_idle, result.output_path)
+                GLib.idle_add(self._on_success_idle, result.output_path, result)
         except RunnerCancelledError:
             if getattr(self, "_job_generation", 0) == current_gen:
                 GLib.idle_add(self._on_cancelled_idle, Path(config.output_path))
@@ -185,7 +185,7 @@ class WindowWorkerMixin:
         self.progress_footer.update_progress(event, pass_info=pass_info)
         return GLib.SOURCE_REMOVE
 
-    def _on_success_idle(self, output_path: Path) -> bool:
+    def _on_success_idle(self, output_path: Path, result: Optional[JobResult] = None) -> bool:
         if getattr(self, "state", None) == WindowState.CLOSED:
             return GLib.SOURCE_REMOVE
 
@@ -202,7 +202,17 @@ class WindowWorkerMixin:
         if hasattr(self, "open_btn") and self.open_btn is not None:
             self.open_btn.set_sensitive(True)
         self.progress_footer.finish(True, f"Saved: {output_path.name}")
-        self.toast_overlay.add_toast(Adw.Toast(title=f"Completed successfully: {output_path.name}"))
+        if result is not None and getattr(result, "exceeded_target", False) is True:
+            actual_mb = getattr(result, "file_size_bytes", 0) / 1_000_000
+            target_bytes = getattr(result, "target_size_bytes", None)
+            target_mb = (target_bytes / 1_000_000) if target_bytes else 0
+            self.toast_overlay.add_toast(
+                Adw.Toast(
+                    title=f"Saved with warning: size exceeded target ({actual_mb:.1f} MB > {target_mb:.1f} MB)"
+                )
+            )
+        else:
+            self.toast_overlay.add_toast(Adw.Toast(title=f"Completed successfully: {output_path.name}"))
         return GLib.SOURCE_REMOVE
 
     def _on_cancelled_idle(self, _output_path: Path) -> bool:

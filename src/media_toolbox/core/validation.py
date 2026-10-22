@@ -13,7 +13,12 @@ import math
 from pathlib import Path
 from typing import Optional
 
-from media_toolbox.core.models import EncodeOptions, MediaInfo, ResolvedJobSpec
+from media_toolbox.core.models import (
+    EncodeOptions,
+    InvalidOptionsError,
+    MediaInfo,
+    ResolvedJobSpec,
+)
 from media_toolbox.core.presets import (
     AUDIO_PRESETS,
     VALID_SPEED_PRESETS,
@@ -47,20 +52,37 @@ def validate_extra_args(extra_args: tuple[str, ...]) -> None:
     Validate that extra_args contains only valid FFmpeg option flags and parameter pairs.
     Rejects naked positional file arguments, input flags, or conflicting output flags.
     """
-    forbidden_flags = {"-y", "-n", "-nostdin", "-i"}
+    forbidden_flags = {
+        "-y",
+        "-n",
+        "-nostdin",
+        "-i",
+        "-filter_complex",
+        "-filter_complex_script",
+        "-lavfi",
+        "-passlogfile",
+        "-report",
+        "-dump_attachment",
+        "-protocol_whitelist",
+    }
     i = 0
     while i < len(extra_args):
         token = extra_args[i]
         if not token:
-            raise ValueError("extra_args cannot contain empty tokens")
+            raise InvalidOptionsError("extra_args cannot contain empty tokens")
         if token in forbidden_flags:
-            raise ValueError(f"Flag '{token}' is managed by media-toolbox and cannot be passed in extra_args")
+            raise InvalidOptionsError(f"Flag '{token}' is managed by media-toolbox and cannot be passed in extra_args")
         if not _is_flag(token):
-            raise ValueError(
+            raise InvalidOptionsError(
                 f"Positional token '{token}' in extra_args is invalid. "
                 "extra_args must only contain option flags and option values."
             )
+        if "movie=" in token.lower() or "amovie=" in token.lower():
+            raise InvalidOptionsError(f"Disallowed movie source in extra_args token '{token}'")
         if i + 1 < len(extra_args) and not _is_flag(extra_args[i + 1]):
+            val = extra_args[i + 1]
+            if "movie=" in val.lower() or "amovie=" in val.lower():
+                raise InvalidOptionsError(f"Disallowed movie source in extra_args value for '{token}'")
             i += 2
         else:
             i += 1
@@ -131,7 +153,7 @@ def resolve_job_spec(
             elif req_audio == "copy":
                 effective_acodec = "copy"
             else:
-                raise ValueError(
+                raise InvalidOptionsError(
                     f"Incompatible audio codec '{options.audio_codec}' for WebM/VP9 container. "
                     "WebM requires libopus or libvorbis (or copy)."
                 )
@@ -209,7 +231,7 @@ def validate_encode_options(
                 + list(AUDIO_PRESETS.keys())
                 + list(VALID_SPEED_PRESETS)
             )
-            raise ValueError(
+            raise InvalidOptionsError(
                 f"Unknown preset: '{options.preset}'. Available presets: {valid_keys}"
             )
 
@@ -221,10 +243,10 @@ def validate_encode_options(
 
     # Contradictory options
     if (options.extract_audio or (canon_preset is not None and canon_preset in AUDIO_PRESETS)) and options.mute_audio:
-        raise ValueError("Cannot simultaneously extract and mute audio")
+        raise InvalidOptionsError("Cannot simultaneously extract and mute audio")
 
     if options.crf is not None and (options.two_pass or options.target_size_mb is not None):
-        raise ValueError("CRF rate control is mutually exclusive with target size and two-pass mode")
+        raise InvalidOptionsError("CRF rate control is mutually exclusive with target size and two-pass mode")
 
     # Stream copy vs filters
     if spec.audio_codec == "copy":
@@ -234,7 +256,7 @@ def validate_encode_options(
             or (options.volume_boost_db is not None and options.volume_boost_db != 0.0)
         )
         if has_af:
-            raise ValueError(
+            raise InvalidOptionsError(
                 "Audio filters (speed, normalization, volume boost) cannot be applied when audio codec is 'copy'"
             )
 
@@ -247,73 +269,73 @@ def validate_encode_options(
             or (options.speed is not None and options.speed != 1.0)
         )
         if has_vf:
-            raise ValueError(
+            raise InvalidOptionsError(
                 "Video filters (scale, crop, pad, fps, speed) cannot be applied when video codec is 'copy'"
             )
 
     # Duration check for bitrate targeting
     if (options.two_pass or options.target_size_mb is not None) and media_info is not None and media_info.duration <= 0.0:
-        raise ValueError("Cannot calculate target bitrate: media duration is zero or unknown")
+        raise InvalidOptionsError("Cannot calculate target bitrate: media duration is zero or unknown")
 
     # Required stream checks against probed input media
     if spec.operation == "extract_audio":
         if media_info is not None and not media_info.has_audio:
-            raise ValueError("Cannot extract audio: input media contains no audio streams")
+            raise InvalidOptionsError("Cannot extract audio: input media contains no audio streams")
         if options.target_size_mb is not None:
-            raise ValueError("Target size bitrate targeting is not supported for audio extraction")
+            raise InvalidOptionsError("Target size bitrate targeting is not supported for audio extraction")
         if options.two_pass:
-            raise ValueError("Two-pass encoding is not supported for audio extraction")
+            raise InvalidOptionsError("Two-pass encoding is not supported for audio extraction")
     else:
         if media_info is not None and not media_info.has_video:
-            raise ValueError("Cannot transcode video: input media contains no video stream")
+            raise InvalidOptionsError("Cannot transcode video: input media contains no video stream")
 
     # Mode 1: ProRes capability constraints
     if spec.rate_mode == "prores":
         if options.two_pass:
-            raise ValueError("Two-pass encoding is not supported for ProRes preset")
+            raise InvalidOptionsError("Two-pass encoding is not supported for ProRes preset")
         if options.target_size_mb is not None:
-            raise ValueError("Target size bitrate targeting is not supported for ProRes preset")
+            raise InvalidOptionsError("Target size bitrate targeting is not supported for ProRes preset")
         if options.crf is not None:
-            raise ValueError("CRF rate control is not supported for ProRes preset (uses profile)")
+            raise InvalidOptionsError("CRF rate control is not supported for ProRes preset (uses profile)")
 
     # Mode 2: GIF capability constraints
     if spec.rate_mode == "gif":
         if options.two_pass:
-            raise ValueError("Two-pass encoding is not supported for GIF preset")
+            raise InvalidOptionsError("Two-pass encoding is not supported for GIF preset")
         if options.target_size_mb is not None:
-            raise ValueError("Target size bitrate targeting is not supported for GIF preset")
+            raise InvalidOptionsError("Target size bitrate targeting is not supported for GIF preset")
         if options.crf is not None:
-            raise ValueError("CRF rate control is not supported for GIF preset")
+            raise InvalidOptionsError("CRF rate control is not supported for GIF preset")
 
     # Mode 3: CRF boundaries (enforced on resolved preset even if requested via codec)
     if options.crf is not None:
         if v_preset is not None and v_preset.crf_range is not None:
             min_crf, max_crf = v_preset.crf_range
             if not (min_crf <= options.crf <= max_crf):
-                raise ValueError(
+                raise InvalidOptionsError(
                     f"CRF value {options.crf} out of valid range ({min_crf}-{max_crf}) for preset '{v_preset.name}'"
                 )
         elif not (0 <= options.crf <= 63):
-            raise ValueError(f"CRF value {options.crf} out of valid range (0-63)")
+            raise InvalidOptionsError(f"CRF value {options.crf} out of valid range (0-63)")
 
     # Mode 4: Numeric parameters sanity
     if options.speed is not None:
         if not math.isfinite(options.speed) or options.speed <= 0:
-            raise ValueError(f"Speed multiplier must be positive, got {options.speed}")
+            raise InvalidOptionsError(f"Speed multiplier must be positive, got {options.speed}")
 
     if options.target_size_mb is not None:
         if not math.isfinite(options.target_size_mb) or options.target_size_mb <= 0:
-            raise ValueError(f"target_size_mb must be positive, got {options.target_size_mb}")
+            raise InvalidOptionsError(f"target_size_mb must be positive, got {options.target_size_mb}")
 
     if options.audio_bitrate_kbps is not None:
         if not (8 <= options.audio_bitrate_kbps <= 2000):
-            raise ValueError(
+            raise InvalidOptionsError(
                 f"Audio bitrate must be between 8 and 2000 kbps, got {options.audio_bitrate_kbps}"
             )
         if a_preset is not None and a_preset.bitrate_range_kbps is not None:
             min_br, max_br = a_preset.bitrate_range_kbps
             if not (min_br <= options.audio_bitrate_kbps <= max_br):
-                raise ValueError(
+                raise InvalidOptionsError(
                     f"Audio bitrate {options.audio_bitrate_kbps} kbps out of valid range "
                     f"({min_br}-{max_br} kbps) for audio preset '{a_preset.name}'"
                 )
@@ -321,23 +343,23 @@ def validate_encode_options(
     if options.scale is not None:
         w, h = options.scale
         if w <= 0 and h <= 0:
-            raise ValueError(f"Scale dimensions cannot both be non-positive: {options.scale}")
+            raise InvalidOptionsError(f"Scale dimensions cannot both be non-positive: {options.scale}")
         if w == 0 or h == 0:
-            raise ValueError(f"Scale dimensions cannot be 0: {options.scale}")
+            raise InvalidOptionsError(f"Scale dimensions cannot be 0: {options.scale}")
         if not (
             (w > 0 and h > 0)
             or (w > 0 and h in (-1, -2))
             or (w in (-1, -2) and h > 0)
         ):
-            raise ValueError(f"Invalid scale dimensions: {options.scale}")
+            raise InvalidOptionsError(f"Invalid scale dimensions: {options.scale}")
 
     if options.fps is not None:
         if not math.isfinite(options.fps) or options.fps <= 0:
-            raise ValueError(f"Frame rate must be positive and finite, got {options.fps}")
+            raise InvalidOptionsError(f"Frame rate must be positive and finite, got {options.fps}")
 
     if options.volume_boost_db is not None:
         if not math.isfinite(options.volume_boost_db) or not (-60.0 <= options.volume_boost_db <= 60.0):
-            raise ValueError(
+            raise InvalidOptionsError(
                 f"Volume boost must be finite and between -60 and +60 dB, got {options.volume_boost_db}"
             )
 
@@ -351,13 +373,13 @@ def validate_encode_options(
         if ext:
             if spec.operation == "extract_audio" and a_preset is not None and a_preset.compatible_extensions:
                 if ext not in a_preset.compatible_extensions:
-                    raise ValueError(
+                    raise InvalidOptionsError(
                         f"Incompatible output extension '.{ext}' for preset '{a_preset.name}'. "
                         f"Supported extensions: {a_preset.compatible_extensions}"
                     )
             elif spec.operation != "extract_audio" and v_preset is not None and v_preset.compatible_extensions:
                 if ext not in v_preset.compatible_extensions:
-                    raise ValueError(
+                    raise InvalidOptionsError(
                         f"Incompatible output extension '.{ext}' for preset '{v_preset.name}'. "
                         f"Supported extensions: {v_preset.compatible_extensions}"
                     )

@@ -12,6 +12,7 @@ from media_toolbox.core.models import (
     AudioStream,
     EncodeOptions,
     FormatInfo,
+    InvalidOptionsError,
     MediaInfo,
     VideoStream,
 )
@@ -289,4 +290,45 @@ class TestValidationAndPresetNormalization:
         """Negative numeric values (e.g. -ss -5.5 or -q:v -1) are treated as values, not flags."""
         opts = EncodeOptions(extra_args=("-ss", "-5.5", "-threads", "4"))
         validate_encode_options(opts)
+
+    @pytest.mark.parametrize(
+        "flag",
+        [
+            "-filter_complex",
+            "-filter_complex_script",
+            "-lavfi",
+            "-passlogfile",
+            "-report",
+            "-dump_attachment",
+            "-protocol_whitelist",
+        ],
+    )
+    def test_extra_args_dangerous_flags_rejected(self, flag: str) -> None:
+        """Dangerous or managed execution flags in extra_args are rejected."""
+        opts = EncodeOptions(extra_args=(flag, "dangerous_val"))
+        with pytest.raises(InvalidOptionsError, match=f"Flag '{flag}' is managed by media-toolbox"):
+            validate_encode_options(opts)
+
+    @pytest.mark.parametrize(
+        "arg_pair",
+        [
+            ("-vf", "movie=secret.png[logo];[in][logo]overlay"),
+            ("-filter:v", "amovie=secret.wav[a]"),
+            ("-filter_src", "MOVIE=sample.mp4"),
+        ],
+    )
+    def test_extra_args_movie_sources_rejected(self, arg_pair: tuple[str, str]) -> None:
+        """Filter specifications referencing movie= or amovie= are rejected."""
+        opts = EncodeOptions(extra_args=arg_pair)
+        with pytest.raises(InvalidOptionsError, match="Disallowed movie source"):
+            validate_encode_options(opts)
+
+    def test_invalid_options_error_hierarchy(self) -> None:
+        """InvalidOptionsError inherits from both MediaToolboxError and ValueError."""
+        from media_toolbox.core.models import MediaToolboxError
+
+        err = InvalidOptionsError("test message")
+        assert isinstance(err, MediaToolboxError)
+        assert isinstance(err, ValueError)
+
 

@@ -28,6 +28,7 @@ from media_toolbox.core.models import (
     DestinationExistsError,
     EncodeOptions,
     FileCollisionError,
+    InvalidOptionsError,
     OutputPublishError,
     ProbeError,
     TargetSizeTooSmallError,
@@ -127,6 +128,7 @@ def handle_transcode(args: argparse.Namespace) -> int:
         audio_bitrate_kbps=args.audio_bitrate,
         mute_audio=args.mute_audio,
         normalize_audio=args.normalize,
+        strict_size=getattr(args, "strict_size", False),
     )
 
     config = JobConfig(
@@ -152,17 +154,27 @@ def handle_transcode(args: argparse.Namespace) -> int:
     reporter = create_progress_reporter(quiet=args.quiet)
 
     try:
-        cli.run_job(
+        result = cli.run_job(
             config,
             progress_callback=reporter,
             cancel_event=cancel_event,
             builder=cli.build_ffmpeg_commands,
             runner=cli.run_ffmpeg_pipeline,
         )
+        if getattr(result, "exceeded_target", False) is True:
+            actual_mb = getattr(result, "file_size_bytes", 0) / 1_000_000
+            target_bytes = getattr(result, "target_size_bytes", None)
+            target_mb = (target_bytes / 1_000_000) if target_bytes else (args.target_size_mb or 0)
+            sys.stderr.write(
+                f"Warning: Output size ({actual_mb:.2f} MB) exceeded target ({target_mb:.2f} MB) due to container overhead.\n"
+            )
         if not args.quiet:
             sys.stdout.write(f"✓ Transcoding complete: {output_path}\n")
         return 0
     except TargetSizeTooSmallError as err:
+        sys.stderr.write(f"Error: {err}\n")
+        return 2
+    except InvalidOptionsError as err:
         sys.stderr.write(f"Error: {err}\n")
         return 2
     except ValueError as err:
@@ -278,6 +290,9 @@ def handle_extract_audio(args: argparse.Namespace) -> int:
             sys.stdout.write(f"✓ Audio extraction complete: {output_path}\n")
         return 0
     except TargetSizeTooSmallError as err:
+        sys.stderr.write(f"Error: {err}\n")
+        return 2
+    except InvalidOptionsError as err:
         sys.stderr.write(f"Error: {err}\n")
         return 2
     except ValueError as err:

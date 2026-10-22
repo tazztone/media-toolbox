@@ -90,6 +90,11 @@ def build_parser() -> argparse.ArgumentParser:
         dest="target_size_mb",
         help="Target file size in MB for two-pass encoding",
     )
+    trans_parser.add_argument(
+        "--strict-size",
+        action="store_true",
+        help="Re-encode with scaled bitrate if output exceeds target size",
+    )
     trans_parser.add_argument("--two-pass", action="store_true", help="Force two-pass bitrate targeting mode")
     trans_parser.add_argument("--speed", type=float, default=None, help="Playback speed multiplier (e.g. 0.5, 1.5, 2.0)")
     trans_parser.add_argument("--scale", default=None, help="Output resolution (e.g. 1920x1080, 1280:-2, -2:720)")

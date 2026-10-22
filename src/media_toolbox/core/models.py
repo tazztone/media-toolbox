@@ -18,6 +18,11 @@ class MediaToolboxError(Exception):
     pass
 
 
+class InvalidOptionsError(MediaToolboxError, ValueError):
+    """Raised when options or parameters fail validation."""
+    pass
+
+
 class ProbeError(MediaToolboxError):
     """Raised when probing media fails or returns invalid metadata."""
     pass
@@ -281,6 +286,7 @@ class EncodeOptions:
     two_pass: bool = False
     preset: Optional[str] = None
     speed_preset: Optional[str] = None
+    strict_size: bool = False
     extra_args: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:

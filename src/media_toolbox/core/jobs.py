@@ -3,7 +3,7 @@ Headless transactional job execution and file lifecycle manager.
 
 Provides robust execution semantics:
 - Path validation (identical file, symlink, hard link, and collision detection)
-- Non-destructive execution via same-filesystem staging files (.tmp_<token>_<name>)
+- Non-destructive execution via same-filesystem staging files (.tmp_media_toolbox_*)
 - Private temporary directory isolation for multi-pass logfiles
 - Atomic publication (os.replace) only upon exit code 0 and non-empty output
 - Complete cleanup of job-owned staging artifacts without touching pre-existing files
@@ -13,6 +13,7 @@ INVARIANT: Strict zero GUI imports (gi, Gtk, Adw, Nautilus, tkinter, PyQt, PySid
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 import errno
 import os
@@ -20,6 +21,7 @@ from pathlib import Path
 import shutil
 import tempfile
 import threading
+import time
 from typing import Callable, Optional
 import uuid
 
@@ -62,6 +64,33 @@ class JobResult:
     output_path: Path
     file_size_bytes: int
     duration_seconds: Optional[float] = None
+    exceeded_target: bool = False
+    target_size_bytes: Optional[int] = None
+
+
+def cleanup_stale_staging_dirs(target_dir: Path | str, max_age_seconds: float = 86400.0) -> int:
+    """
+    Remove orphaned .tmp_media_toolbox_* staging directories older than max_age_seconds
+    within target_dir. Returns number of directories cleaned up.
+    """
+    cleaned = 0
+    p = Path(target_dir)
+    if not p.is_dir():
+        return 0
+    now = time.time()
+    try:
+        for entry in p.iterdir():
+            if entry.is_dir() and entry.name.startswith(".tmp_media_toolbox_"):
+                try:
+                    stat = entry.stat()
+                    if (now - stat.st_mtime) > max_age_seconds:
+                        shutil.rmtree(entry, ignore_errors=True)
+                        cleaned += 1
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    return cleaned
 
 
 def validate_job_paths(
@@ -313,6 +342,9 @@ def run_job(
                 "(hard links unsupported). Pass --allow-fallback-copy to permit non-atomic copy."
             )
 
+    # Sweep stale staging directories older than 24h
+    cleanup_stale_staging_dirs(out_path.parent)
+
     # Staging directory on the same filesystem ensures atomic publication
     staging_temp_dir = tempfile.TemporaryDirectory(
         dir=out_path.parent,
@@ -363,6 +395,62 @@ def run_job(
                 f"Encoded output file is empty (0 bytes): {staging_path}"
             )
 
+        target_size_bytes: Optional[int] = None
+        exceeded_target = False
+        if config.options.target_size_mb is not None:
+            target_size_bytes = int(config.options.target_size_mb * 1_000_000)
+            if file_size > target_size_bytes:
+                exceeded_target = True
+
+        if (
+            exceeded_target
+            and config.options.strict_size
+            and config.options.target_size_mb is not None
+            and target_size_bytes is not None
+        ):
+            scale_factor = (target_size_bytes / file_size) * 0.97
+            scaled_target_mb = config.options.target_size_mb * scale_factor
+            retry_options = dataclasses.replace(
+                config.options,
+                target_size_mb=scaled_target_mb,
+                strict_size=False,
+            )
+            try:
+                staging_path.unlink()
+            except OSError:
+                pass
+
+            retry_cmds = builder_fn(
+                str(in_path),
+                str(staging_path),
+                retry_options,
+                media_info=media_info,
+                pass_logfile=pass_logfile_prefix,
+                include_progress=True,
+            )
+            runner_fn(
+                retry_cmds,
+                total_duration_seconds=duration,
+                progress_callback=progress_callback,
+                pipeline_progress_callback=pipeline_progress_callback,
+                cancel_event=cancel_event,
+                sigterm_timeout=config.sigterm_timeout,
+            )
+
+            if cancel_event is not None and cancel_event.is_set():
+                raise RunnerCancelledError("Job cancelled before publication")
+
+            if not staging_path.exists():
+                raise OutputPublishError(
+                    f"Encoded output file was not produced on retry: {staging_path}"
+                )
+            file_size = staging_path.stat().st_size
+            if file_size == 0:
+                raise OutputPublishError(
+                    f"Encoded output file is empty (0 bytes) on retry: {staging_path}"
+                )
+            exceeded_target = file_size > target_size_bytes
+
         publish_output(
             staging_path,
             out_path,
@@ -375,6 +463,8 @@ def run_job(
             output_path=out_path,
             file_size_bytes=file_size,
             duration_seconds=duration,
+            exceeded_target=exceeded_target,
+            target_size_bytes=target_size_bytes,
         )
 
     finally:

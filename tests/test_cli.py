@@ -21,6 +21,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 import pytest
 
+from media_toolbox.core.jobs import JobConfig
 from media_toolbox.core.models import (
     AudioStream,
     EncodeOptions,
@@ -781,6 +782,49 @@ class TestCliTranscodeCommand:
         assert exit_code == 2
         err = capsys.readouterr().err
         assert "too small" in err
+
+    @patch("media_toolbox.cli.run_job")
+    @patch("media_toolbox.cli.validate_job_paths")
+    @patch("media_toolbox.cli.probe_media")
+    def test_transcode_target_size_warning_on_exceeded(
+        self,
+        mock_probe: MagicMock,
+        _mock_val: MagicMock,
+        mock_run_job: MagicMock,
+        mock_standard_video_info: MediaInfo,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """When output size exceeds target, CLI writes a warning to stderr."""
+        mock_probe.return_value = mock_standard_video_info
+        mock_run_job.return_value = MagicMock(
+            exceeded_target=True,
+            file_size_bytes=27_000_000,
+            target_size_bytes=25_000_000,
+            output_path=Path("out.mp4"),
+        )
+        exit_code = cli.main(["transcode", "in.mp4", "out.mp4", "--target-mb", "25.0"])
+        assert exit_code == 0
+        err = capsys.readouterr().err
+        assert "Warning: Output size" in err
+        assert "exceeded target" in err
+
+    @patch("media_toolbox.cli.run_job")
+    @patch("media_toolbox.cli.validate_job_paths")
+    @patch("media_toolbox.cli.probe_media")
+    def test_transcode_strict_size_flag_forwarded(
+        self,
+        mock_probe: MagicMock,
+        _mock_val: MagicMock,
+        mock_run_job: MagicMock,
+        mock_standard_video_info: MediaInfo,
+    ) -> None:
+        """--strict-size flag sets strict_size=True on EncodeOptions."""
+        mock_probe.return_value = mock_standard_video_info
+        mock_run_job.return_value = MagicMock(exceeded_target=False, output_path=Path("out.mp4"))
+        exit_code = cli.main(["transcode", "in.mp4", "out.mp4", "--target-mb", "25.0", "--strict-size"])
+        assert exit_code == 0
+        config: JobConfig = mock_run_job.call_args[0][0]
+        assert config.options.strict_size is True
 
     @patch("media_toolbox.cli.validate_job_paths")
     @patch("media_toolbox.cli.probe_media")
