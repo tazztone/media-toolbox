@@ -8,7 +8,6 @@ without initializing graphical environments.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 from media_toolbox.core.models import EncodeOptions
 from media_toolbox.core.presets import (
@@ -24,25 +23,25 @@ def build_encode_options_from_state(
     rate_mode: str,  # "crf" | "target_size"
     crf_value: int,
     target_size_mb: float,
-    scale: Optional[tuple[int, int]],
+    scale: tuple[int, int] | None,
     mute_audio: bool,
     normalize_audio: bool,
-    volume_boost_db: Optional[float],
+    volume_boost_db: float | None,
     audio_bitrate_kbps: int,
     speed_factor: float = 1.0,
-    fps: Optional[int] = None,
-    crop: Optional[str] = None,
-    speed_preset: Optional[str] = None,
+    fps: int | None = None,
+    crop: str | None = None,
+    speed_preset: str | None = None,
     is_extract_audio: bool = False,
-    audio_track_index: Optional[int] = None,
+    audio_track_index: int | None = None,
     keep_subtitles: bool = False,
 ) -> EncodeOptions:
     """
     Pure conversion of form widget states into an immutable EncodeOptions dataclass.
     """
     # Rate control resolution
-    crf: Optional[int] = None
-    target_size: Optional[float] = None
+    crf: int | None = None
+    target_size: float | None = None
     two_pass: bool = False
 
     if not is_extract_audio and preset not in ("gif", "prores"):
@@ -63,7 +62,9 @@ def build_encode_options_from_state(
         eff_mute = False
         eff_extract = is_extract_audio
         eff_norm = normalize_audio
-        eff_boost = volume_boost_db if volume_boost_db and abs(volume_boost_db) > 0.01 else None
+        eff_boost = (
+            volume_boost_db if volume_boost_db and abs(volume_boost_db) > 0.01 else None
+        )
         eff_audio_br = audio_bitrate_kbps
 
     # Speed resolution

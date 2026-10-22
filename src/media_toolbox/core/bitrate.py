@@ -11,7 +11,6 @@ INVARIANT: Strict zero GUI imports (gi, Gtk, Adw, Nautilus, tkinter, PyQt, PySid
 from __future__ import annotations
 
 import math
-from typing import Optional
 
 from media_toolbox.core.models import TargetSizeTooSmallError
 
@@ -21,12 +20,12 @@ DEFAULT_MIN_VIDEO_BITRATE_KBPS: int = 64  # Minimum video bitrate floor
 KBITS_PER_MB: float = 8000.0  # 1 MB = 1,000,000 bytes * 8 / 1000 = 8000 kbits (decimal)
 
 __all__ = [
-    "calculate_target_video_bitrate",
     "DEFAULT_AUDIO_BITRATE_KBPS",
-    "DEFAULT_MUX_OVERHEAD_MARGIN",
     "DEFAULT_MIN_VIDEO_BITRATE_KBPS",
+    "DEFAULT_MUX_OVERHEAD_MARGIN",
     "KBITS_PER_MB",
     "TargetSizeTooSmallError",
+    "calculate_target_video_bitrate",
 ]
 
 
@@ -36,7 +35,7 @@ def calculate_target_video_bitrate(
     audio_bitrate_kbps: int = DEFAULT_AUDIO_BITRATE_KBPS,
     mux_overhead_margin: float = DEFAULT_MUX_OVERHEAD_MARGIN,
     min_video_bitrate_kbps: int = DEFAULT_MIN_VIDEO_BITRATE_KBPS,
-    speed: Optional[float] = None,
+    speed: float | None = None,
     clamp_to_min: bool = False,
 ) -> int:
     """
@@ -66,13 +65,19 @@ def calculate_target_video_bitrate(
         TargetSizeTooSmallError: If net video bitrate is below min_video_bitrate_kbps and clamp_to_min is False.
     """
     if not math.isfinite(duration_seconds) or duration_seconds <= 0:
-        raise ValueError(f"duration_seconds must be a positive finite number, got {duration_seconds}")
+        raise ValueError(
+            f"duration_seconds must be a positive finite number, got {duration_seconds}"
+        )
 
     if not math.isfinite(target_size_mb) or target_size_mb <= 0:
-        raise ValueError(f"target_size_mb must be a positive finite number, got {target_size_mb}")
+        raise ValueError(
+            f"target_size_mb must be a positive finite number, got {target_size_mb}"
+        )
 
     if audio_bitrate_kbps < 0:
-        raise ValueError(f"audio_bitrate_kbps cannot be negative, got {audio_bitrate_kbps}")
+        raise ValueError(
+            f"audio_bitrate_kbps cannot be negative, got {audio_bitrate_kbps}"
+        )
 
     if not (0.0 <= mux_overhead_margin < 1.0):
         raise ValueError(
@@ -80,7 +85,9 @@ def calculate_target_video_bitrate(
         )
 
     if min_video_bitrate_kbps < 0:
-        raise ValueError(f"min_video_bitrate_kbps cannot be negative, got {min_video_bitrate_kbps}")
+        raise ValueError(
+            f"min_video_bitrate_kbps cannot be negative, got {min_video_bitrate_kbps}"
+        )
 
     eff_duration = duration_seconds
     if speed is not None:
@@ -98,7 +105,9 @@ def calculate_target_video_bitrate(
         if clamp_to_min:
             return int(min_video_bitrate_kbps)
 
-        min_kbits_needed = (float(min_video_bitrate_kbps) + float(audio_bitrate_kbps)) * float(eff_duration)
+        min_kbits_needed = (
+            float(min_video_bitrate_kbps) + float(audio_bitrate_kbps)
+        ) * float(eff_duration)
         min_required_total_kbits = min_kbits_needed / (1.0 - float(mux_overhead_margin))
         min_required_mb = round(min_required_total_kbits / KBITS_PER_MB, 2)
 
@@ -110,4 +119,4 @@ def calculate_target_video_bitrate(
             min_video_bitrate_kbps=min_video_bitrate_kbps,
         )
 
-    return int(round(net_video_bitrate_kbps))
+    return round(net_video_bitrate_kbps)

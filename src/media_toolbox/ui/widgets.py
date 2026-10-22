@@ -14,8 +14,8 @@ Features:
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, Callable, Optional, Sequence
+from collections.abc import Callable, Sequence
+from typing import Any, ClassVar
 
 import gi
 
@@ -23,13 +23,6 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk
 
-from media_toolbox.core.models import EncodeOptions, MediaInfo, ProgressEvent
-from media_toolbox.core.presets import (
-    get_audio_preset,
-    get_video_preset,
-    is_audio_preset,
-    is_video_preset,
-)
 from media_toolbox.core.formatters import (
     format_bitrate,
     format_channels,
@@ -37,12 +30,12 @@ from media_toolbox.core.formatters import (
     format_file_size,
     format_fps,
 )
-
+from media_toolbox.core.models import MediaInfo, ProgressEvent
 
 __all__ = [
+    "ProgressFooterWidget",
     "RateControlWidget",
     "ResolutionWidget",
-    "ProgressFooterWidget",
 ]
 
 
@@ -60,10 +53,12 @@ class RateControlWidget(Adw.PreferencesGroup):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(title="Rate Control & Quality", **kwargs)
 
-        self.mode_model = Gtk.StringList.new([
-            "Constant Rate Factor (CRF)",
-            "Target File Size (2-Pass)",
-        ])
+        self.mode_model = Gtk.StringList.new(
+            [
+                "Constant Rate Factor (CRF)",
+                "Target File Size (2-Pass)",
+            ]
+        )
         self.mode_row = Adw.ComboRow(
             title="Quality Mode",
             model=self.mode_model,
@@ -130,7 +125,9 @@ class RateControlWidget(Adw.PreferencesGroup):
         """Update sensitivity and revealers based on codec capabilities."""
         if preset in ("gif", "prores"):
             self.mode_row.set_sensitive(False)
-            self.mode_row.set_subtitle("Fixed quality profile (Rate control unavailable)")
+            self.mode_row.set_subtitle(
+                "Fixed quality profile (Rate control unavailable)"
+            )
             self.crf_revealer.set_reveal_child(False)
             self.target_size_revealer.set_reveal_child(False)
         else:
@@ -158,7 +155,7 @@ class ResolutionWidget(Adw.PreferencesGroup):
     Guarantees even dimension snapping.
     """
 
-    PRESETS = [
+    PRESETS: ClassVar[list[tuple[str, tuple[int, int] | str | None]]] = [
         ("Original (Source Resolution)", None),
         ("1080p Full HD (1920 × 1080)", (1920, 1080)),
         ("720p HD (1280 × 720)", (1280, 720)),
@@ -229,7 +226,7 @@ class ResolutionWidget(Adw.PreferencesGroup):
             self.width_row.set_value(width - (width % 2))
             self.height_row.set_value(height - (height % 2))
 
-    def get_scale(self) -> Optional[tuple[int, int]]:
+    def get_scale(self) -> tuple[int, int] | None:
         idx = self.res_row.get_selected()
         if idx == 0:
             return None
@@ -345,7 +342,7 @@ class AudioOptionsWidget(Adw.PreferencesGroup):
     def get_normalize(self) -> bool:
         return bool(self.norm_switch.get_active())
 
-    def get_volume_boost(self) -> Optional[float]:
+    def get_volume_boost(self) -> float | None:
         val = float(self.boost_row.get_value())
         return val if abs(val) > 0.01 else None
 
@@ -361,7 +358,9 @@ class AudioOptionsWidget(Adw.PreferencesGroup):
                 ch = getattr(s, "channels", 2)
                 rate = getattr(s, "sample_rate_khz", 48.0)
                 labels.append(f"Track {i + 1}: {codec} ({ch}ch, {rate:.1f}kHz)")
-            self.audio_tracks_model.splice(0, self.audio_tracks_model.get_n_items(), labels)
+            self.audio_tracks_model.splice(
+                0, self.audio_tracks_model.get_n_items(), labels
+            )
             self.audio_track_row.set_selected(0)
             self.audio_track_revealer.set_reveal_child(True)
         elif len(streams) == 1:
@@ -369,15 +368,21 @@ class AudioOptionsWidget(Adw.PreferencesGroup):
             codec = getattr(s, "codec_name", "") or "audio"
             ch = getattr(s, "channels", 2)
             rate = getattr(s, "sample_rate_khz", 48.0)
-            self.audio_tracks_model.splice(0, self.audio_tracks_model.get_n_items(), [f"Track 1: {codec} ({ch}ch, {rate:.1f}kHz)"])
+            self.audio_tracks_model.splice(
+                0,
+                self.audio_tracks_model.get_n_items(),
+                [f"Track 1: {codec} ({ch}ch, {rate:.1f}kHz)"],
+            )
             self.audio_track_row.set_selected(0)
             self.audio_track_revealer.set_reveal_child(False)
         else:
-            self.audio_tracks_model.splice(0, self.audio_tracks_model.get_n_items(), ["No audio tracks"])
+            self.audio_tracks_model.splice(
+                0, self.audio_tracks_model.get_n_items(), ["No audio tracks"]
+            )
             self.audio_track_row.set_selected(0)
             self.audio_track_revealer.set_reveal_child(False)
 
-    def get_audio_track_index(self) -> Optional[int]:
+    def get_audio_track_index(self) -> int | None:
         if getattr(self, "_num_audio_tracks", 0) > 1:
             return int(self.audio_track_row.get_selected())
         return None
@@ -394,7 +399,9 @@ class MetadataCard(Adw.PreferencesGroup):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(title="Source Media Specifications", **kwargs)
 
-        self.badge_row = Adw.ActionRow(title="Classification", subtitle="No media loaded")
+        self.badge_row = Adw.ActionRow(
+            title="Classification", subtitle="No media loaded"
+        )
         self.add(self.badge_row)
 
         self.video_row = Adw.ActionRow(title="Video Stream", subtitle="-")
@@ -428,7 +435,9 @@ class MetadataCard(Adw.PreferencesGroup):
             res_str = f"{pv.width} × {pv.height}"
             codec_str = pv.codec_name.upper()
             br_str = format_bitrate(pv.bit_rate) if pv.bit_rate else "-"
-            self.video_row.set_subtitle(f"{codec_str} | {res_str} @ {fps_str} | Bitrate: {br_str}")
+            self.video_row.set_subtitle(
+                f"{codec_str} | {res_str} @ {fps_str} | Bitrate: {br_str}"
+            )
         else:
             self.video_row.set_subtitle("No video stream")
 
@@ -439,7 +448,9 @@ class MetadataCard(Adw.PreferencesGroup):
             sr_str = f"{pa.sample_rate_khz:.1f} kHz"
             codec_str = pa.codec_name.upper()
             br_str = format_bitrate(pa.bit_rate) if pa.bit_rate else "-"
-            self.audio_row.set_subtitle(f"{codec_str} | {ch_str} | {sr_str} | Bitrate: {br_str}")
+            self.audio_row.set_subtitle(
+                f"{codec_str} | {ch_str} | {sr_str} | Bitrate: {br_str}"
+            )
         else:
             self.audio_row.set_subtitle("No audio stream")
 
@@ -447,7 +458,9 @@ class MetadataCard(Adw.PreferencesGroup):
         fmt = media_info.format
         dur_str = format_duration(media_info.duration)
         size_str = format_file_size(fmt.size_bytes)
-        self.format_row.set_subtitle(f"{fmt.format_name} | Duration: {dur_str} | Size: {size_str}")
+        self.format_row.set_subtitle(
+            f"{fmt.format_name} | Duration: {dur_str} | Size: {size_str}"
+        )
 
     def clear(self) -> None:
         self.badge_row.set_subtitle("No media loaded")
@@ -462,7 +475,9 @@ class ProgressFooterWidget(Gtk.Box):
     and a prominent Cancel button. Anchored inside a Gtk.Revealer.
     """
 
-    def __init__(self, on_cancel_callback: Optional[Callable[[], None]] = None, **kwargs: Any) -> None:
+    def __init__(
+        self, on_cancel_callback: Callable[[], None] | None = None, **kwargs: Any
+    ) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8, **kwargs)
         self.on_cancel_callback = on_cancel_callback
 
@@ -513,7 +528,7 @@ class ProgressFooterWidget(Gtk.Box):
         card_box.append(metrics_box)
 
         self._current_fraction: float = 0.0
-        self._last_pass_info: Optional[str] = None
+        self._last_pass_info: str | None = None
 
         self.revealer.set_child(card_box)
         self.append(self.revealer)
@@ -535,7 +550,9 @@ class ProgressFooterWidget(Gtk.Box):
         self.cancel_button.set_label("Cancel")
         self.revealer.set_reveal_child(True)
 
-    def update_progress(self, event: ProgressEvent, pass_info: Optional[str] = None) -> None:
+    def update_progress(
+        self, event: ProgressEvent, pass_info: str | None = None
+    ) -> None:
         if pass_info:
             self.status_label.set_text(pass_info)
             if event.speed_str:
@@ -545,7 +562,11 @@ class ProgressFooterWidget(Gtk.Box):
             return
 
         raw_fraction = max(0.0, min(1.0, event.percentage / 100.0))
-        curr_frac = self._current_fraction if isinstance(getattr(self, "_current_fraction", None), (int, float)) else 0.0
+        curr_frac = (
+            self._current_fraction
+            if isinstance(getattr(self, "_current_fraction", None), (int, float))
+            else 0.0
+        )
         fraction = max(curr_frac, raw_fraction)
         self._current_fraction = fraction
         self.progress_bar.set_fraction(fraction)
@@ -555,14 +576,16 @@ class ProgressFooterWidget(Gtk.Box):
         if event.eta_str:
             self.eta_label.set_text(f"ETA: {event.eta_str}")
         if event.total_size_bytes > 0:
-            self.size_label.set_text(f"Size: {format_file_size(event.total_size_bytes)}")
+            self.size_label.set_text(
+                f"Size: {format_file_size(event.total_size_bytes)}"
+            )
 
     def set_cancelling(self) -> None:
         self.cancel_button.set_sensitive(False)
         self.cancel_button.set_label("Cancelling...")
         self.status_label.set_text("Cancelling transcode...")
 
-    def finish(self, success: bool, message: Optional[str] = None) -> None:
+    def finish(self, success: bool, message: str | None = None) -> None:
         self.cancel_button.set_sensitive(False)
         if success:
             self.progress_bar.set_fraction(1.0)

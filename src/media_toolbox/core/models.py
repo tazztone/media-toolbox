@@ -10,37 +10,30 @@ INVARIANT: Must have ZERO imports from GUI toolkits (gi, Gtk, Adw, etc.).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 class MediaToolboxError(Exception):
     """Base exception for media_toolbox domain errors."""
-    pass
 
 
 class InvalidOptionsError(MediaToolboxError, ValueError):
     """Raised when options or parameters fail validation."""
-    pass
 
 
 class ProbeError(MediaToolboxError):
     """Raised when probing media fails or returns invalid metadata."""
-    pass
 
 
 class FileCollisionError(MediaToolboxError):
     """Raised when input and output resolve to the same underlying file."""
-    pass
 
 
 class DestinationExistsError(MediaToolboxError):
     """Raised when the target output file exists and overwrite was not permitted."""
-    pass
 
 
 class OutputPublishError(MediaToolboxError):
     """Raised when the finished output cannot be validated or published."""
-    pass
 
 
 class TargetSizeTooSmallError(MediaToolboxError):
@@ -76,10 +69,10 @@ class VideoStream:
     codec_name: str
     width: int
     height: int
-    fps: Optional[float] = None
-    bit_rate: Optional[int] = None
-    duration: Optional[float] = None
-    pix_fmt: Optional[str] = None
+    fps: float | None = None
+    bit_rate: int | None = None
+    duration: float | None = None
+    pix_fmt: str | None = None
     rotation: int = 0
     is_attached_pic: bool = False
 
@@ -115,12 +108,12 @@ class AudioStream:
     codec_name: str
     channels: int
     sample_rate: int
-    channel_layout: Optional[str] = None
-    bit_rate: Optional[int] = None
-    duration: Optional[float] = None
+    channel_layout: str | None = None
+    bit_rate: int | None = None
+    duration: float | None = None
 
     @property
-    def bit_rate_kbps(self) -> Optional[int]:
+    def bit_rate_kbps(self) -> int | None:
         """Bitrate in kbps (rounded), or None if unknown."""
         return round(self.bit_rate / 1000) if self.bit_rate is not None else None
 
@@ -136,17 +129,21 @@ class FormatInfo:
 
     filename: str
     format_name: str
-    duration: Optional[float] = None
-    size_bytes: Optional[int] = None
-    bit_rate: Optional[int] = None
+    duration: float | None = None
+    size_bytes: int | None = None
+    bit_rate: int | None = None
 
     @property
-    def size_mb(self) -> Optional[float]:
+    def size_mb(self) -> float | None:
         """Container size in mebibytes (MiB), or None if unknown."""
-        return round(self.size_bytes / (1024 * 1024), 2) if self.size_bytes is not None else None
+        return (
+            round(self.size_bytes / (1024 * 1024), 2)
+            if self.size_bytes is not None
+            else None
+        )
 
     @property
-    def bit_rate_kbps(self) -> Optional[int]:
+    def bit_rate_kbps(self) -> int | None:
         """Total container bitrate in kbps, or None if unknown."""
         return round(self.bit_rate / 1000) if self.bit_rate is not None else None
 
@@ -170,7 +167,7 @@ class MediaInfo:
             object.__setattr__(self, "audio_streams", tuple(self.audio_streams))
 
     @property
-    def primary_video(self) -> Optional[VideoStream]:
+    def primary_video(self) -> VideoStream | None:
         """
         First video stream that is not an attached picture (e.g. album cover art).
         Returns None for audio-only media or media with only cover art.
@@ -181,7 +178,7 @@ class MediaInfo:
         return None
 
     @property
-    def primary_audio(self) -> Optional[AudioStream]:
+    def primary_audio(self) -> AudioStream | None:
         """First audio stream in the media, or None if silent/video-only."""
         return self.audio_streams[0] if self.audio_streams else None
 
@@ -204,9 +201,17 @@ class MediaInfo:
         """
         if self.format.duration is not None and self.format.duration > 0:
             return self.format.duration
-        if self.primary_video and self.primary_video.duration is not None and self.primary_video.duration > 0:
+        if (
+            self.primary_video
+            and self.primary_video.duration is not None
+            and self.primary_video.duration > 0
+        ):
             return self.primary_video.duration
-        if self.primary_audio and self.primary_audio.duration is not None and self.primary_audio.duration > 0:
+        if (
+            self.primary_audio
+            and self.primary_audio.duration is not None
+            and self.primary_audio.duration > 0
+        ):
             return self.primary_audio.duration
         return 0.0
 
@@ -239,9 +244,9 @@ class ProgressEvent:
     fps: float = 0.0
     out_time_seconds: float = 0.0
     total_size_bytes: int = 0
-    speed: Optional[float] = None
+    speed: float | None = None
     percentage: float = 0.0
-    eta_seconds: Optional[float] = None
+    eta_seconds: float | None = None
     is_completed: bool = False
 
     @property
@@ -269,32 +274,32 @@ class EncodeOptions:
     Forward-compatible contract for Milestone 2.
     """
 
-    target_size_mb: Optional[float] = None
-    crf: Optional[int] = None
+    target_size_mb: float | None = None
+    crf: int | None = None
     video_codec: str = "libx264"
-    audio_codec: Optional[str] = None
+    audio_codec: str | None = None
     audio_bitrate_kbps: int = 128
-    scale: Optional[tuple[int, int]] = None
-    crop: Optional[str] = None
-    pad: Optional[str] = None
-    speed: Optional[float] = None
-    fps: Optional[int] = None
+    scale: tuple[int, int] | None = None
+    crop: str | None = None
+    pad: str | None = None
+    speed: float | None = None
+    fps: int | None = None
     mute_audio: bool = False
     extract_audio: bool = False
     normalize_audio: bool = False
-    volume_boost_db: Optional[float] = None
+    volume_boost_db: float | None = None
     two_pass: bool = False
-    preset: Optional[str] = None
-    speed_preset: Optional[str] = None
+    preset: str | None = None
+    speed_preset: str | None = None
     strict_size: bool = False
-    audio_track_index: Optional[int] = None
+    audio_track_index: int | None = None
     keep_subtitles: bool = False
     copy_metadata: bool = False
     copy_chapters: bool = False
     gif_max_colors: int = 256
     gif_dither: str = "sierra2_4a"
-    gif_stats_mode: Optional[str] = None
-    hwaccel: Optional[str] = None
+    gif_stats_mode: str | None = None
+    hwaccel: str | None = None
     extra_args: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
@@ -311,14 +316,13 @@ class ResolvedJobSpec:
 
     operation: str  # 'transcode' | 'extract_audio'
     rate_mode: str  # 'crf' | 'target_size' | 'prores' | 'gif' | 'extract_audio'
-    video_codec: Optional[str] = None
-    audio_codec: Optional[str] = None
-    video_preset_name: Optional[str] = None
-    audio_preset_name: Optional[str] = None
-    video_stream_index: Optional[int] = None
-    audio_stream_index: Optional[int] = None
-    container_extension: Optional[str] = None
-    crf: Optional[int] = None
-    target_size_mb: Optional[float] = None
+    video_codec: str | None = None
+    audio_codec: str | None = None
+    video_preset_name: str | None = None
+    audio_preset_name: str | None = None
+    video_stream_index: int | None = None
+    audio_stream_index: int | None = None
+    container_extension: str | None = None
+    crf: int | None = None
+    target_size_mb: float | None = None
     two_pass: bool = False
-

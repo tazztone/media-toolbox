@@ -15,12 +15,15 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
+
 import pytest
 
+import media_toolbox.__main__ as main_module
+from media_toolbox import cli
 from media_toolbox.core.jobs import JobConfig
 from media_toolbox.core.models import (
     AudioStream,
@@ -33,16 +36,15 @@ from media_toolbox.core.models import (
     VideoStream,
 )
 from media_toolbox.core.runner import RunnerCancelledError, RunnerError
-import media_toolbox.cli as cli
-import media_toolbox.__main__ as main_module
-
 
 # ---------------------------------------------------------------------------
 # Synthetic Test Fixtures
 # ---------------------------------------------------------------------------
 
 
-def _fake_builder(in_p: str, out_p: str, *_args: Any, **_kwargs: Any) -> list[list[str]]:
+def _fake_builder(
+    in_p: str, out_p: str, *_args: Any, **_kwargs: Any
+) -> list[list[str]]:
     return [["ffmpeg", "-i", str(in_p), str(out_p)]]
 
 
@@ -225,7 +227,9 @@ class TestCliSubcommandParsing:
         assert "--json" in captured
         assert "file" in captured.lower()
 
-    def test_transcode_subcommand_help(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_transcode_subcommand_help(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """transcode --help lists all encoding flags."""
         with pytest.raises(SystemExit) as exc_info:
             cli.main(["transcode", "--help"])
@@ -244,13 +248,21 @@ class TestCliSubcommandParsing:
         ):
             assert flag in captured
 
-    def test_extract_audio_subcommand_help(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_extract_audio_subcommand_help(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """extract-audio --help lists audio extraction flags."""
         with pytest.raises(SystemExit) as exc_info:
             cli.main(["extract-audio", "--help"])
         assert exc_info.value.code == 0
         captured = capsys.readouterr().out
-        for flag in ("--codec", "--bitrate", "--speed", "--normalize", "--allow-fallback-copy"):
+        for flag in (
+            "--codec",
+            "--bitrate",
+            "--speed",
+            "--normalize",
+            "--allow-fallback-copy",
+        ):
             assert flag in captured
 
     def test_unknown_subcommand_exits_nonzero(self) -> None:
@@ -478,17 +490,19 @@ class TestCliTranscodeCommand:
         mock_builder.side_effect = _fake_builder
         mock_runner.side_effect = _fake_runner
 
-        exit_code = cli.main([
-            "transcode",
-            "in.mp4",
-            "out.mp4",
-            "--preset",
-            "h265",
-            "--crf",
-            "28",
-            "--speed",
-            "1.5",
-        ])
+        exit_code = cli.main(
+            [
+                "transcode",
+                "in.mp4",
+                "out.mp4",
+                "--preset",
+                "h265",
+                "--crf",
+                "28",
+                "--speed",
+                "1.5",
+            ]
+        )
         assert exit_code == 0
 
         mock_builder.assert_called_once()
@@ -511,17 +525,22 @@ class TestCliTranscodeCommand:
     ) -> None:
         """--target-size-mb and --two-pass correctly configure EncodeOptions."""
         mock_probe.return_value = mock_standard_video_info
-        mock_builder.side_effect = lambda in_p, out_p, *a, **k: [["ffmpeg", "pass1"], ["ffmpeg", "pass2", str(out_p)]]
+        mock_builder.side_effect = lambda in_p, out_p, *a, **k: [
+            ["ffmpeg", "pass1"],
+            ["ffmpeg", "pass2", str(out_p)],
+        ]
         mock_runner.side_effect = _fake_runner
 
-        exit_code = cli.main([
-            "transcode",
-            "in.mp4",
-            "out.mp4",
-            "--target-size-mb",
-            "25",
-            "--two-pass",
-        ])
+        exit_code = cli.main(
+            [
+                "transcode",
+                "in.mp4",
+                "out.mp4",
+                "--target-size-mb",
+                "25",
+                "--two-pass",
+            ]
+        )
         assert exit_code == 0
 
         opts: EncodeOptions = mock_builder.call_args[0][2]
@@ -541,12 +560,14 @@ class TestCliTranscodeCommand:
         mock_probe.return_value = mock_standard_video_info
         mock_run_job.return_value = MagicMock(output_path=tmp_path / "out.mp4")
 
-        exit_code = cli.main([
-            "transcode",
-            "in.mp4",
-            str(tmp_path / "out.mp4"),
-            "--allow-fallback-copy",
-        ])
+        exit_code = cli.main(
+            [
+                "transcode",
+                "in.mp4",
+                str(tmp_path / "out.mp4"),
+                "--allow-fallback-copy",
+            ]
+        )
         assert exit_code == 0
         cfg = mock_run_job.call_args[0][0]
         assert cfg.allow_non_atomic_fallback is True
@@ -566,15 +587,17 @@ class TestCliTranscodeCommand:
         mock_builder.side_effect = _fake_builder
         mock_runner.side_effect = _fake_runner
 
-        exit_code = cli.main([
-            "transcode",
-            "in.mp4",
-            "out.mp4",
-            "--scale",
-            "1280:720",
-            "--crop",
-            "9:16",
-        ])
+        exit_code = cli.main(
+            [
+                "transcode",
+                "in.mp4",
+                "out.mp4",
+                "--scale",
+                "1280:720",
+                "--crop",
+                "9:16",
+            ]
+        )
         assert exit_code == 0
 
         opts: EncodeOptions = mock_builder.call_args[0][2]
@@ -617,7 +640,9 @@ class TestCliTranscodeCommand:
         mock_builder.side_effect = _fake_builder
         mock_runner.side_effect = _fake_runner
 
-        exit_code = cli.main(["transcode", "in.mp4", "out.mp4", "--audio-codec", "libopus"])
+        exit_code = cli.main(
+            ["transcode", "in.mp4", "out.mp4", "--audio-codec", "libopus"]
+        )
         assert exit_code == 0
 
         opts: EncodeOptions = mock_builder.call_args[0][2]
@@ -658,7 +683,9 @@ class TestCliTranscodeCommand:
         """RunnerError failure in transcode returns exit code 1 and writes to stderr."""
         mock_probe.return_value = mock_standard_video_info
         mock_builder.side_effect = _fake_builder
-        mock_runner.side_effect = RunnerError("FFmpeg transcode failed", returncode=1, stderr="Invalid CRF")
+        mock_runner.side_effect = RunnerError(
+            "FFmpeg transcode failed", returncode=1, stderr="Invalid CRF"
+        )
 
         exit_code = cli.main(["transcode", "in.mp4", "out.mp4"])
         assert exit_code != 0
@@ -747,17 +774,19 @@ class TestCliTranscodeCommand:
         mock_builder.side_effect = _fake_builder
         mock_runner.side_effect = _fake_runner
 
-        exit_code = cli.main([
-            "transcode",
-            "in.mp4",
-            "out.gif",
-            "--preset",
-            "gif",
-            "--gif-max-colors",
-            "128",
-            "--gif-dither",
-            "bayer",
-        ])
+        exit_code = cli.main(
+            [
+                "transcode",
+                "in.mp4",
+                "out.gif",
+                "--preset",
+                "gif",
+                "--gif-max-colors",
+                "128",
+                "--gif-dither",
+                "bayer",
+            ]
+        )
         assert exit_code == 0
 
         opts: EncodeOptions = mock_builder.call_args[0][2]
@@ -779,15 +808,17 @@ class TestCliTranscodeCommand:
         mock_builder.side_effect = _fake_builder
         mock_runner.side_effect = _fake_runner
 
-        exit_code = cli.main([
-            "transcode",
-            "in.mp4",
-            "out.mp4",
-            "--preset",
-            "h264",
-            "--hwaccel",
-            "auto",
-        ])
+        exit_code = cli.main(
+            [
+                "transcode",
+                "in.mp4",
+                "out.mp4",
+                "--preset",
+                "h264",
+                "--hwaccel",
+                "auto",
+            ]
+        )
         assert exit_code == 0
 
         opts: EncodeOptions = mock_builder.call_args[0][2]
@@ -808,16 +839,18 @@ class TestCliTranscodeCommand:
         mock_builder.side_effect = _fake_builder
         mock_runner.side_effect = _fake_runner
 
-        exit_code = cli.main([
-            "transcode",
-            "in.mp4",
-            "-o",
-            "flag_out.mp4",
-            "--target-mb",
-            "25.0",
-            "--preset",
-            "discord-h264",
-        ])
+        exit_code = cli.main(
+            [
+                "transcode",
+                "in.mp4",
+                "-o",
+                "flag_out.mp4",
+                "--target-mb",
+                "25.0",
+                "--preset",
+                "discord-h264",
+            ]
+        )
         assert exit_code == 0
         assert Path(mock_builder.call_args[0][1]).name == "flag_out.mp4"
         opts: EncodeOptions = mock_builder.call_args[0][2]
@@ -837,7 +870,9 @@ class TestCliTranscodeCommand:
     ) -> None:
         """Target size too small raises TargetSizeTooSmallError and exits with code 2."""
         mock_probe.return_value = mock_standard_video_info
-        mock_run_job.side_effect = TargetSizeTooSmallError(0.1, 60.0, 128, 1.5, message="Target size 0.1MB is too small")
+        mock_run_job.side_effect = TargetSizeTooSmallError(
+            0.1, 60.0, 128, 1.5, message="Target size 0.1MB is too small"
+        )
 
         exit_code = cli.main(["transcode", "in.mp4", "out.mp4", "--target-mb", "0.1"])
         assert exit_code == 2
@@ -881,8 +916,12 @@ class TestCliTranscodeCommand:
     ) -> None:
         """--strict-size flag sets strict_size=True on EncodeOptions."""
         mock_probe.return_value = mock_standard_video_info
-        mock_run_job.return_value = MagicMock(exceeded_target=False, output_path=Path("out.mp4"))
-        exit_code = cli.main(["transcode", "in.mp4", "out.mp4", "--target-mb", "25.0", "--strict-size"])
+        mock_run_job.return_value = MagicMock(
+            exceeded_target=False, output_path=Path("out.mp4")
+        )
+        exit_code = cli.main(
+            ["transcode", "in.mp4", "out.mp4", "--target-mb", "25.0", "--strict-size"]
+        )
         assert exit_code == 0
         config: JobConfig = mock_run_job.call_args[0][0]
         assert config.options.strict_size is True
@@ -899,14 +938,21 @@ class TestCliTranscodeCommand:
     ) -> None:
         """--audio-track, --keep-subs, --map-metadata, --map-chapters set options properly."""
         mock_probe.return_value = mock_standard_video_info
-        mock_run_job.return_value = MagicMock(exceeded_target=False, output_path=Path("out.mp4"))
-        exit_code = cli.main([
-            "transcode", "in.mp4", "out.mp4",
-            "--audio-track", "1",
-            "--keep-subs",
-            "--map-metadata",
-            "--map-chapters",
-        ])
+        mock_run_job.return_value = MagicMock(
+            exceeded_target=False, output_path=Path("out.mp4")
+        )
+        exit_code = cli.main(
+            [
+                "transcode",
+                "in.mp4",
+                "out.mp4",
+                "--audio-track",
+                "1",
+                "--keep-subs",
+                "--map-metadata",
+                "--map-chapters",
+            ]
+        )
         assert exit_code == 0
         config: JobConfig = mock_run_job.call_args[0][0]
         assert config.options.audio_track_index == 1
@@ -976,18 +1022,20 @@ class TestCliExtractAudioCommand:
         mock_builder.side_effect = _fake_builder
         mock_runner.side_effect = _fake_runner
 
-        exit_code = cli.main([
-            "extract-audio",
-            "in.mp4",
-            "out.opus",
-            "--codec",
-            "opus",
-            "--bitrate",
-            "160",
-            "--speed",
-            "1.25",
-            "--normalize",
-        ])
+        exit_code = cli.main(
+            [
+                "extract-audio",
+                "in.mp4",
+                "out.opus",
+                "--codec",
+                "opus",
+                "--bitrate",
+                "160",
+                "--speed",
+                "1.25",
+                "--normalize",
+            ]
+        )
         assert exit_code == 0
 
         opts: EncodeOptions = mock_builder.call_args[0][2]
@@ -1043,7 +1091,9 @@ class TestCliExtractAudioCommand:
         """Runner failure in extract-audio prints error and exits non-zero."""
         mock_probe.return_value = mock_standard_video_info
         mock_builder.side_effect = _fake_builder
-        mock_runner.side_effect = RunnerError("FFmpeg audio extract failed", returncode=1, stderr="No audio track")
+        mock_runner.side_effect = RunnerError(
+            "FFmpeg audio extract failed", returncode=1, stderr="No audio track"
+        )
 
         exit_code = cli.main(["extract-audio", "in.mp4", "out.mp3"])
         assert exit_code != 0
@@ -1060,7 +1110,9 @@ class TestMainRouter:
     """Verifies entrypoint routing in __main__.py."""
 
     @patch("media_toolbox.cli.main")
-    def test_main_routes_to_cli_when_args_present(self, mock_cli_main: MagicMock) -> None:
+    def test_main_routes_to_cli_when_args_present(
+        self, mock_cli_main: MagicMock
+    ) -> None:
         """Arguments passed route directly to cli.main()."""
         mock_cli_main.return_value = 0
         test_argv = ["media_toolbox", "inspect", "video.mp4"]
@@ -1071,26 +1123,38 @@ class TestMainRouter:
         mock_cli_main.assert_called_once_with(["inspect", "video.mp4"])
 
     @patch("importlib.import_module")
-    def test_main_routes_to_ui_when_display_present_and_no_args(self, mock_import: MagicMock) -> None:
+    def test_main_routes_to_ui_when_display_present_and_no_args(
+        self, mock_import: MagicMock
+    ) -> None:
         """Empty arguments in a graphical environment lazily import and launch UI."""
         mock_ui_module = MagicMock()
         mock_import.return_value = mock_ui_module
 
-        with patch.object(sys, "argv", ["media_toolbox"]):
-            with patch.dict(os.environ, {"DISPLAY": ":0"}, clear=False):
-                main_module.main()
+        with (
+            patch.object(sys, "argv", ["media_toolbox"]),
+            patch.dict(os.environ, {"DISPLAY": ":0"}, clear=False),
+        ):
+            main_module.main()
 
         mock_import.assert_called_once_with("media_toolbox.ui.app")
         mock_ui_module.main.assert_called_once()
 
     @patch("media_toolbox.cli.main")
-    def test_main_falls_back_to_cli_help_when_headless_and_no_args(self, mock_cli_main: MagicMock) -> None:
+    def test_main_falls_back_to_cli_help_when_headless_and_no_args(
+        self, mock_cli_main: MagicMock
+    ) -> None:
         """Empty arguments in a headless environment route to CLI help."""
-        clean_env = {k: v for k, v in os.environ.items() if k not in ("DISPLAY", "WAYLAND_DISPLAY")}
+        clean_env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in ("DISPLAY", "WAYLAND_DISPLAY")
+        }
 
-        with patch.object(sys, "argv", ["media_toolbox"]):
-            with patch.dict(os.environ, clean_env, clear=True):
-                main_module.main()
+        with (
+            patch.object(sys, "argv", ["media_toolbox"]),
+            patch.dict(os.environ, clean_env, clear=True),
+        ):
+            main_module.main()
 
         mock_cli_main.assert_called_once()
 

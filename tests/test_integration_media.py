@@ -10,6 +10,7 @@ import concurrent.futures
 import shutil
 import subprocess
 from pathlib import Path
+
 import pytest
 
 from media_toolbox.core.jobs import JobConfig, run_job
@@ -17,12 +18,13 @@ from media_toolbox.core.models import DestinationExistsError, EncodeOptions
 from media_toolbox.core.presets import check_encoder_available
 from media_toolbox.core.probe import probe_media
 
-
 has_ffmpeg = bool(shutil.which("ffmpeg"))
 has_ffprobe = bool(shutil.which("ffprobe"))
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.skipif(not (has_ffmpeg and has_ffprobe), reason="ffmpeg and ffprobe required"),
+    pytest.mark.skipif(
+        not (has_ffmpeg and has_ffprobe), reason="ffmpeg and ffprobe required"
+    ),
 ]
 
 
@@ -151,14 +153,21 @@ def test_real_two_pass_target_size(synthetic_av_clip: Path, tmp_path: Path) -> N
     assert actual_mb <= target_mb * 1.10
 
 
-def test_real_job_refuses_overwrite_without_flag(synthetic_av_clip: Path, tmp_path: Path) -> None:
+def test_real_job_refuses_overwrite_without_flag(
+    synthetic_av_clip: Path, tmp_path: Path
+) -> None:
     """Real job refuses to overwrite existing destination when overwrite=False."""
     existing_dest = tmp_path / "already_exists.mp4"
     existing_dest.write_text("pre-existing content", encoding="utf-8")
     original_mtime = existing_dest.stat().st_mtime_ns
 
     opts = EncodeOptions(preset="h264", crf=28)
-    config = JobConfig(input_path=synthetic_av_clip, output_path=existing_dest, options=opts, overwrite=False)
+    config = JobConfig(
+        input_path=synthetic_av_clip,
+        output_path=existing_dest,
+        options=opts,
+        overwrite=False,
+    )
 
     with pytest.raises(DestinationExistsError):
         run_job(config)
@@ -168,7 +177,9 @@ def test_real_job_refuses_overwrite_without_flag(synthetic_av_clip: Path, tmp_pa
     assert existing_dest.stat().st_mtime_ns == original_mtime
 
 
-def test_real_two_pass_h265_target_size(synthetic_av_clip: Path, tmp_path: Path) -> None:
+def test_real_two_pass_h265_target_size(
+    synthetic_av_clip: Path, tmp_path: Path
+) -> None:
     """Real H.265 two-pass transcode produces valid HEVC stream with isolated stats."""
     if not check_encoder_available("libx265"):
         pytest.skip("libx265 encoder not supported in installed ffmpeg")
@@ -198,7 +209,9 @@ def test_real_two_pass_h265_target_size(synthetic_av_clip: Path, tmp_path: Path)
     assert len(leaked_stats) == 0
 
 
-def test_real_concurrent_two_pass_h265_isolation(synthetic_av_clip: Path, tmp_path: Path) -> None:
+def test_real_concurrent_two_pass_h265_isolation(
+    synthetic_av_clip: Path, tmp_path: Path
+) -> None:
     """Concurrent H.265 two-pass jobs operate in private temporary directories without colliding."""
     if not check_encoder_available("libx265"):
         pytest.skip("libx265 encoder not supported in installed ffmpeg")
@@ -209,12 +222,16 @@ def test_real_concurrent_two_pass_h265_isolation(synthetic_av_clip: Path, tmp_pa
     cfg1 = JobConfig(
         input_path=synthetic_av_clip,
         output_path=out1,
-        options=EncodeOptions(preset="h265", two_pass=True, target_size_mb=0.4, audio_bitrate_kbps=64),
+        options=EncodeOptions(
+            preset="h265", two_pass=True, target_size_mb=0.4, audio_bitrate_kbps=64
+        ),
     )
     cfg2 = JobConfig(
         input_path=synthetic_av_clip,
         output_path=out2,
-        options=EncodeOptions(preset="h265", two_pass=True, target_size_mb=0.6, audio_bitrate_kbps=64),
+        options=EncodeOptions(
+            preset="h265", two_pass=True, target_size_mb=0.6, audio_bitrate_kbps=64
+        ),
     )
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
@@ -301,11 +318,15 @@ def test_real_audio_presets(
     assert info.has_audio is True
 
 
-def test_real_two_pass_target_size_budget(synthetic_av_clip: Path, tmp_path: Path) -> None:
+def test_real_two_pass_target_size_budget(
+    synthetic_av_clip: Path, tmp_path: Path
+) -> None:
     """Real two-pass encode adheres closely to requested target size budget."""
     out_file = tmp_path / "budget_output.mp4"
     target_mb = 0.35
-    opts = EncodeOptions(preset="h264", target_size_mb=target_mb, strict_size=True, audio_bitrate_kbps=64)
+    opts = EncodeOptions(
+        preset="h264", target_size_mb=target_mb, strict_size=True, audio_bitrate_kbps=64
+    )
     config = JobConfig(input_path=synthetic_av_clip, output_path=out_file, options=opts)
     result = run_job(config)
 
@@ -316,9 +337,12 @@ def test_real_two_pass_target_size_budget(synthetic_av_clip: Path, tmp_path: Pat
     assert result.exceeded_target is False
 
 
-def test_real_cancellation_cleans_staging_directory(synthetic_av_clip: Path, tmp_path: Path) -> None:
+def test_real_cancellation_cleans_staging_directory(
+    synthetic_av_clip: Path, tmp_path: Path
+) -> None:
     """Real FFmpeg pipeline cancelled mid-encode leaves zero residual staging files."""
     import threading
+
     from media_toolbox.core.runner import RunnerCancelledError
 
     out_file = tmp_path / "cancelled_output.mp4"
@@ -336,6 +360,3 @@ def test_real_cancellation_cleans_staging_directory(synthetic_av_clip: Path, tmp
     assert not out_file.exists()
     stale_dirs = list(tmp_path.glob(".tmp_media_toolbox_*"))
     assert len(stale_dirs) == 0
-
-
-

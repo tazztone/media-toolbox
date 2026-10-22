@@ -14,8 +14,27 @@ Only Python standard library and media_toolbox.core domain modules.
 from __future__ import annotations
 
 import sys
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
+from media_toolbox.cli.formatting import (
+    create_progress_reporter,
+    format_media_info_json,
+    media_info_to_dict,
+    parse_scale_arg,
+    render_media_info_text,
+)
+from media_toolbox.cli.handlers import (
+    handle_extract_audio,
+    handle_inspect,
+    handle_install_nautilus,
+    handle_status_nautilus,
+    handle_transcode,
+    handle_uninstall_nautilus,
+)
+from media_toolbox.cli.parser import (
+    build_parser,
+    normalize_argv,
+)
 from media_toolbox.core.builder import build_ffmpeg_commands
 from media_toolbox.core.formatters import (
     format_aspect_ratio,
@@ -30,56 +49,34 @@ from media_toolbox.core.jobs import run_job, validate_job_paths
 from media_toolbox.core.probe import probe_media
 from media_toolbox.core.runner import run_ffmpeg_pipeline
 
-from media_toolbox.cli.formatting import (
-    create_progress_reporter,
-    format_media_info_json,
-    media_info_to_dict,
-    parse_scale_arg,
-    render_media_info_text,
-    should_colorize,
-)
-from media_toolbox.cli.handlers import (
-    handle_extract_audio,
-    handle_inspect,
-    handle_install_nautilus,
-    handle_status_nautilus,
-    handle_transcode,
-    handle_uninstall_nautilus,
-)
-from media_toolbox.cli.parser import (
-    build_parser,
-    is_file_like,
-    normalize_argv,
-)
-
 __all__ = [
-    "parse_scale_arg",
+    "build_ffmpeg_commands",
+    "build_parser",
+    "create_progress_reporter",
+    "format_aspect_ratio",
+    "format_bitrate",
+    "format_channels",
+    "format_decimal_size",
     "format_duration",
     "format_file_size",
-    "format_decimal_size",
-    "format_bitrate",
-    "format_aspect_ratio",
     "format_fps",
-    "format_channels",
-    "render_media_info_text",
     "format_media_info_json",
-    "media_info_to_dict",
-    "create_progress_reporter",
-    "build_parser",
-    "normalize_argv",
+    "handle_install_nautilus",
+    "handle_status_nautilus",
+    "handle_uninstall_nautilus",
     "main",
+    "media_info_to_dict",
+    "normalize_argv",
+    "parse_scale_arg",
     "probe_media",
-    "build_ffmpeg_commands",
+    "render_media_info_text",
     "run_ffmpeg_pipeline",
     "run_job",
     "validate_job_paths",
-    "handle_install_nautilus",
-    "handle_uninstall_nautilus",
-    "handle_status_nautilus",
 ]
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """CLI execution entrypoint. Returns integer exit code."""
     raw_args = list(sys.argv[1:] if argv is None else argv)
     parser = build_parser()
@@ -91,11 +88,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return handle_inspect(args)
     elif args.subcommand == "transcode":
         if not (args.output or args.output_opt):
-            parser.error("the following arguments are required: output (positional or -o/--output)")
+            parser.error(
+                "the following arguments are required: output (positional or -o/--output)"
+            )
         return handle_transcode(args)
     elif args.subcommand == "extract-audio":
         if not (args.output or args.output_opt):
-            parser.error("the following arguments are required: output (positional or -o/--output)")
+            parser.error(
+                "the following arguments are required: output (positional or -o/--output)"
+            )
         return handle_extract_audio(args)
     elif args.subcommand == "install-nautilus":
         return handle_install_nautilus(args)

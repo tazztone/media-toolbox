@@ -11,8 +11,9 @@ Zero GUI imports (gi, Gtk, Adw, Nautilus, tkinter, PyQt, PySide, wx) across:
 from __future__ import annotations
 
 import ast
-from pathlib import Path
 import sys
+from pathlib import Path
+
 import pytest
 
 FORBIDDEN_ROOTS = {
@@ -97,7 +98,10 @@ def scan_ast_for_gui_violations(source_code: str, file_label: str) -> list[str]:
                 if (
                     root_pkg in FORBIDDEN_ROOTS
                     or any(k.lower() == root_pkg for k in FORBIDDEN_KEYWORDS)
-                    or any(k.lower() in alias.name.lower() for k in ("pyqt", "pyside", "tkinter", "nautilus", "wx"))
+                    or any(
+                        k.lower() in alias.name.lower()
+                        for k in ("pyqt", "pyside", "tkinter", "nautilus", "wx")
+                    )
                 ):
                     violations.append(
                         f"{file_label}:{node.lineno}: Forbidden import 'import {alias.name}'"
@@ -114,7 +118,10 @@ def scan_ast_for_gui_violations(source_code: str, file_label: str) -> list[str]:
             # Check module path: `from gi.repository import ...`
             if not is_internal_installer and (
                 any(p in FORBIDDEN_ROOTS for p in parts)
-                or any(k.lower() in mod.lower() for k in ("pyqt", "pyside", "tkinter", "nautilus", "wx"))
+                or any(
+                    k.lower() in mod.lower()
+                    for k in ("pyqt", "pyside", "tkinter", "nautilus", "wx")
+                )
                 or (parts and parts[0] in ("gi", "gtk", "adw"))
             ):
                 names_str = ", ".join(a.name for a in node.names)
@@ -128,7 +135,10 @@ def scan_ast_for_gui_violations(source_code: str, file_label: str) -> list[str]:
                     if (
                         sym_lower in FORBIDDEN_ROOTS
                         or any(k.lower() == sym_lower for k in FORBIDDEN_KEYWORDS)
-                        or any(k.lower() in sym_lower for k in ("gtk", "adw", "pyqt", "pyside"))
+                        or any(
+                            k.lower() in sym_lower
+                            for k in ("gtk", "adw", "pyqt", "pyside")
+                        )
                     ):
                         violations.append(
                             f"{file_label}:{node.lineno}: Forbidden symbol import 'from {mod} import {alias.name}'"
@@ -142,20 +152,33 @@ def scan_ast_for_gui_violations(source_code: str, file_label: str) -> list[str]:
             elif isinstance(node.func, ast.Attribute):
                 func_name = node.func.attr
 
-            if func_name in ("__import__", "import_module"):
-                if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
-                    target = node.args[0].value
-                    if target == "media_toolbox.nautilus.installer":
-                        continue
-                    target_lower = target.lower()
-                    parts = [p for p in target_lower.split(".") if p]
-                    if (
-                        any(p in FORBIDDEN_ROOTS for p in parts)
-                        or any(k.lower() in target_lower for k in ("gi", "gtk", "adw", "nautilus", "tkinter", "pyqt", "pyside", "wx"))
-                    ):
-                        violations.append(
-                            f"{file_label}:{node.lineno}: Forbidden dynamic import call to '{target}'"
-                        )
+            if (
+                func_name in ("__import__", "import_module")
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and isinstance(node.args[0].value, str)
+            ):
+                target = node.args[0].value
+                if target == "media_toolbox.nautilus.installer":
+                    continue
+                target_lower = target.lower()
+                parts = [p for p in target_lower.split(".") if p]
+                if any(p in FORBIDDEN_ROOTS for p in parts) or any(
+                    k.lower() in target_lower
+                    for k in (
+                        "gi",
+                        "gtk",
+                        "adw",
+                        "nautilus",
+                        "tkinter",
+                        "pyqt",
+                        "pyside",
+                        "wx",
+                    )
+                ):
+                    violations.append(
+                        f"{file_label}:{node.lineno}: Forbidden dynamic import call to '{target}'"
+                    )
 
     return violations
 
@@ -166,7 +189,9 @@ class TestHeadlessASTInvariant:
     def test_file_discovery_guard(self) -> None:
         """Ensure discovery found at least 8 core/cli files (prevent false positive passes)."""
         files = discover_headless_source_files()
-        assert len(files) >= 8, f"Expected at least 8 headless files, found {len(files)}: {files}"
+        assert len(files) >= 8, (
+            f"Expected at least 8 headless files, found {len(files)}: {files}"
+        )
 
     @pytest.mark.parametrize(
         "source_file",
@@ -202,12 +227,15 @@ class TestMainRouterAST:
                 for alias in node.names:
                     root = alias.name.split(".")[0].lower()
                     if root in FORBIDDEN_ROOTS or root.startswith("ui"):
-                        top_level_violations.append(f"Line {node.lineno}: import {alias.name}")
-            elif isinstance(node, ast.ImportFrom):
-                if node.module:
-                    root = node.module.split(".")[0].lower()
-                    if root in FORBIDDEN_ROOTS or "ui" in node.module:
-                        top_level_violations.append(f"Line {node.lineno}: from {node.module} import ...")
+                        top_level_violations.append(
+                            f"Line {node.lineno}: import {alias.name}"
+                        )
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                root = node.module.split(".")[0].lower()
+                if root in FORBIDDEN_ROOTS or "ui" in node.module:
+                    top_level_violations.append(
+                        f"Line {node.lineno}: from {node.module} import ..."
+                    )
 
         assert not top_level_violations, (
             "Forbidden top-level GUI/UI imports found in __main__.py:\n"
@@ -238,8 +266,11 @@ class TestMainRouterAST:
             capture_output=True,
             text=True,
             env=env,
+            check=False,
         )
-        assert proc.returncode == 0, f"Headless execution failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+        assert proc.returncode == 0, (
+            f"Headless execution failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+        )
 
 
 class TestASTScannerIntegrity:

@@ -15,7 +15,7 @@ import sys
 import threading
 from typing import Any
 
-import media_toolbox.cli as cli
+from media_toolbox import cli
 from media_toolbox.cli.formatting import (
     create_progress_reporter,
     format_media_info_json,
@@ -46,14 +46,16 @@ def handle_inspect(args: argparse.Namespace) -> int:
     """Handle 'inspect' subcommand."""
     file_arg = args.file
     try:
-        info = cli.probe_media(file_arg, ffprobe_bin=getattr(args, "ffprobe_bin", "ffprobe"))
+        info = cli.probe_media(
+            file_arg, ffprobe_bin=getattr(args, "ffprobe_bin", "ffprobe")
+        )
     except FileNotFoundError as err:
         sys.stderr.write(f"Error: File not found: {err}\n")
         return 1
     except ProbeError as err:
         sys.stderr.write(f"Error probing media: {err}\n")
         return 1
-    except Exception as err:
+    except Exception as err:  # noqa: BLE001
         sys.stderr.write(f"Unexpected error probing media: {err}\n")
         return 1
 
@@ -81,16 +83,22 @@ def _run_cli_job(
 
     output_path = args.output or args.output_opt
     if not output_path:
-        sys.stderr.write("Error: Output path is required (pass positional argument or via -o/--output)\n")
+        sys.stderr.write(
+            "Error: Output path is required (pass positional argument or via -o/--output)\n"
+        )
         return 2
 
     if args.speed is not None and args.speed <= 0:
-        sys.stderr.write(f"Error: Speed multiplier must be positive, got {args.speed}\n")
+        sys.stderr.write(
+            f"Error: Speed multiplier must be positive, got {args.speed}\n"
+        )
         return 2
 
     # Validate paths early before expensive probing
     try:
-        cli.validate_job_paths(args.input, output_path, overwrite=getattr(args, "overwrite", False))
+        cli.validate_job_paths(
+            args.input, output_path, overwrite=getattr(args, "overwrite", False)
+        )
     except DestinationExistsError as err:
         sys.stderr.write(f"Error: {err}\n")
         return 1
@@ -110,7 +118,7 @@ def _run_cli_job(
     except ProbeError as err:
         sys.stderr.write(f"Error probing media: {err}\n")
         return 1
-    except Exception as err:
+    except Exception as err:  # noqa: BLE001
         sys.stderr.write(f"Error probing media: {err}\n")
         return 1
 
@@ -147,7 +155,11 @@ def _run_cli_job(
         if getattr(result, "exceeded_target", False) is True:
             actual_mb = getattr(result, "file_size_bytes", 0) / 1_000_000
             target_bytes = getattr(result, "target_size_bytes", None)
-            target_mb = (target_bytes / 1_000_000) if target_bytes else (args.target_size_mb or 0)
+            target_mb = (
+                (target_bytes / 1_000_000)
+                if target_bytes
+                else (args.target_size_mb or 0)
+            )
             sys.stderr.write(
                 f"Warning: Output size ({actual_mb:.2f} MB) exceeded target ({target_mb:.2f} MB) due to container overhead.\n"
             )
@@ -234,7 +246,9 @@ def handle_extract_audio(args: argparse.Namespace) -> int:
         audio_track_index=getattr(args, "audio_track", None),
         copy_metadata=getattr(args, "map_metadata", False),
     )
-    return _run_cli_job(args, options, label="Audio extraction", error_prefix="audio extraction")
+    return _run_cli_job(
+        args, options, label="Audio extraction", error_prefix="audio extraction"
+    )
 
 
 def handle_install_nautilus(args: argparse.Namespace) -> int:
@@ -251,9 +265,11 @@ def handle_install_nautilus(args: argparse.Namespace) -> int:
             for p in installed:
                 sys.stdout.write(f"  ✓ {p}\n")
             if not dry_run:
-                sys.stdout.write("Tip: Run 'nautilus -q' to reload Nautilus extensions.\n")
+                sys.stdout.write(
+                    "Tip: Run 'nautilus -q' to reload Nautilus extensions.\n"
+                )
         return 0
-    except Exception as err:
+    except Exception as err:  # noqa: BLE001
         sys.stderr.write(f"Error installing Nautilus integration: {err}\n")
         return 1
 
@@ -268,7 +284,11 @@ def handle_uninstall_nautilus(args: argparse.Namespace) -> int:
         removed = uninstall_nautilus(dest_dir=dest_dir, dry_run=dry_run)
         if not quiet:
             if not removed:
-                label = "Dry-run: no files found to remove." if dry_run else "No installed Nautilus components were found to remove."
+                label = (
+                    "Dry-run: no files found to remove."
+                    if dry_run
+                    else "No installed Nautilus components were found to remove."
+                )
                 sys.stdout.write(f"{label}\n")
             else:
                 label = "Would remove" if dry_run else "Successfully removed"
@@ -276,9 +296,11 @@ def handle_uninstall_nautilus(args: argparse.Namespace) -> int:
                 for p in removed:
                     sys.stdout.write(f"  ✓ {p}\n")
                 if not dry_run:
-                    sys.stdout.write("Tip: Run 'nautilus -q' to reload Nautilus extensions.\n")
+                    sys.stdout.write(
+                        "Tip: Run 'nautilus -q' to reload Nautilus extensions.\n"
+                    )
         return 0
-    except Exception as err:
+    except Exception as err:  # noqa: BLE001
         sys.stderr.write(f"Error uninstalling Nautilus integration: {err}\n")
         return 1
 
@@ -300,11 +322,19 @@ def handle_status_nautilus(args: argparse.Namespace) -> int:
             launcher_label = "Installed" if status["launcher"] else "Not installed"
             ext_label = "Installed" if status["extension"] else "Not installed"
             desk_label = "Installed" if status["desktop"] else "Not installed"
-            all_label = "Installed" if status["installed"] else "Incomplete / Not installed"
+            all_label = (
+                "Installed" if status["installed"] else "Incomplete / Not installed"
+            )
 
-            sys.stdout.write(f"  Launcher Script:   {launcher_label} ({paths['launcher']})\n")
-            sys.stdout.write(f"  Python Extension:  {ext_label} ({paths['extension']})\n")
-            sys.stdout.write(f"  Desktop Entry:     {desk_label} ({paths['desktop']})\n")
+            sys.stdout.write(
+                f"  Launcher Script:   {launcher_label} ({paths['launcher']})\n"
+            )
+            sys.stdout.write(
+                f"  Python Extension:  {ext_label} ({paths['extension']})\n"
+            )
+            sys.stdout.write(
+                f"  Desktop Entry:     {desk_label} ({paths['desktop']})\n"
+            )
             sys.stdout.write(f"Overall Status:      {all_label}\n")
 
             if not shutil.which("media-toolbox-gui"):
@@ -323,6 +353,6 @@ def handle_status_nautilus(args: argparse.Namespace) -> int:
         if check_mode and not status["installed"]:
             return 1
         return 0
-    except Exception as err:
+    except Exception as err:  # noqa: BLE001
         sys.stderr.write(f"Error querying Nautilus status: {err}\n")
         return 1

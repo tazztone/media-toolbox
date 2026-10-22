@@ -12,13 +12,11 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+
 import pytest
 
 from media_toolbox.core.filtergraph import (
-    ASPECT_RATIO_CROPS,
     EBU_R128_LOUDNORM,
-    VALID_GIF_DITHERS,
-    VALID_GIF_STATS_MODES,
     build_atempo_chain,
     build_audio_filter,
     build_audio_filter_args,
@@ -31,7 +29,6 @@ from media_toolbox.core.filtergraph import (
     build_setpts_filter,
     build_video_filter,
     build_video_filter_args,
-    join_filter_chain,
 )
 
 
@@ -87,7 +84,9 @@ def test_atempo_0_125x() -> None:
     assert build_atempo_chain(0.125) == ["atempo=0.5", "atempo=0.5", "atempo=0.5"]
 
 
-@pytest.mark.parametrize("invalid_speed", [-2.0, -0.5, 0.0, float("nan"), float("inf"), float("-inf")])
+@pytest.mark.parametrize(
+    "invalid_speed", [-2.0, -0.5, 0.0, float("nan"), float("inf"), float("-inf")]
+)
 def test_atempo_invalid_values(invalid_speed: float) -> None:
     """Non-positive or non-finite speed values raise ValueError."""
     with pytest.raises(ValueError):
@@ -121,7 +120,10 @@ def test_video_filter_scale_auto_dimensions() -> None:
     assert build_scale_filter((-1, 481)) == "scale=-2:480"
 
 
-@pytest.mark.parametrize("invalid_scale", [(0, 0), (1920, 0), (0, 1080), (-1, -1), (-2, -2), (-3, 720), (720, -3)])
+@pytest.mark.parametrize(
+    "invalid_scale",
+    [(0, 0), (1920, 0), (0, 1080), (-1, -1), (-2, -2), (-3, 720), (720, -3)],
+)
 def test_video_filter_scale_invalid(invalid_scale: tuple[int, int]) -> None:
     """Invalid scale dimensions raise ValueError."""
     with pytest.raises(ValueError):
@@ -130,16 +132,33 @@ def test_video_filter_scale_invalid(invalid_scale: tuple[int, int]) -> None:
 
 def test_video_filter_crop_aspect_ratios() -> None:
     """Standard aspect ratio crops use correct center-crop formulas with comma escaping."""
-    assert build_crop_filter("9:16") == "crop=min(iw\\,ih*(9/16)):min(ih\\,iw*(16/9)):(iw-ow)/2:(ih-oh)/2"
-    assert build_crop_filter("16:9") == "crop=min(iw\\,ih*(16/9)):min(ih\\,iw*(9/16)):(iw-ow)/2:(ih-oh)/2"
-    assert build_crop_filter("1:1") == "crop=min(iw\\,ih):min(iw\\,ih):(iw-ow)/2:(ih-oh)/2"
-    assert build_crop_filter("4:3") == "crop=min(iw\\,ih*(4/3)):min(ih\\,iw*(3/4)):(iw-ow)/2:(ih-oh)/2"
-    assert build_crop_filter("21:9") == "crop=min(iw\\,ih*(21/9)):min(ih\\,iw*(9/21)):(iw-ow)/2:(ih-oh)/2"
+    assert (
+        build_crop_filter("9:16")
+        == "crop=min(iw\\,ih*(9/16)):min(ih\\,iw*(16/9)):(iw-ow)/2:(ih-oh)/2"
+    )
+    assert (
+        build_crop_filter("16:9")
+        == "crop=min(iw\\,ih*(16/9)):min(ih\\,iw*(9/16)):(iw-ow)/2:(ih-oh)/2"
+    )
+    assert (
+        build_crop_filter("1:1") == "crop=min(iw\\,ih):min(iw\\,ih):(iw-ow)/2:(ih-oh)/2"
+    )
+    assert (
+        build_crop_filter("4:3")
+        == "crop=min(iw\\,ih*(4/3)):min(ih\\,iw*(3/4)):(iw-ow)/2:(ih-oh)/2"
+    )
+    assert (
+        build_crop_filter("21:9")
+        == "crop=min(iw\\,ih*(21/9)):min(ih\\,iw*(9/21)):(iw-ow)/2:(ih-oh)/2"
+    )
 
 
 def test_video_filter_crop_custom_ratio() -> None:
     """Arbitrary ratio (e.g. 3:2) dynamically generates orientation-agnostic centering crop."""
-    assert build_crop_filter("3:2") == "crop=min(iw\\,ih*(3/2)):min(ih\\,iw*(2/3)):(iw-ow)/2:(ih-oh)/2"
+    assert (
+        build_crop_filter("3:2")
+        == "crop=min(iw\\,ih*(3/2)):min(ih\\,iw*(2/3)):(iw-ow)/2:(ih-oh)/2"
+    )
 
 
 def test_video_filter_crop_custom() -> None:
@@ -158,11 +177,26 @@ def test_video_filter_pad() -> None:
 
 def test_video_filter_pad_aspect_ratios() -> None:
     """Aspect ratio pads generate center-padding filters with correct aspect ratio expressions."""
-    assert build_pad_filter("16:9") == "pad=max(iw\\,ih*(16/9)):max(ih\\,iw*(9/16)):(ow-iw)/2:(oh-ih)/2:black"
-    assert build_pad_filter("9:16") == "pad=max(iw\\,ih*(9/16)):max(ih\\,iw*(16/9)):(ow-iw)/2:(oh-ih)/2:black"
-    assert build_pad_filter("1:1") == "pad=max(iw\\,ih):max(ih\\,iw):(ow-iw)/2:(oh-ih)/2:black"
-    assert build_pad_filter("4:3") == "pad=max(iw\\,ih*(4/3)):max(ih\\,iw*(3/4)):(ow-iw)/2:(oh-ih)/2:black"
-    assert build_pad_filter("21:9") == "pad=max(iw\\,ih*(21/9)):max(ih\\,iw*(9/21)):(ow-iw)/2:(oh-ih)/2:black"
+    assert (
+        build_pad_filter("16:9")
+        == "pad=max(iw\\,ih*(16/9)):max(ih\\,iw*(9/16)):(ow-iw)/2:(oh-ih)/2:black"
+    )
+    assert (
+        build_pad_filter("9:16")
+        == "pad=max(iw\\,ih*(9/16)):max(ih\\,iw*(16/9)):(ow-iw)/2:(oh-ih)/2:black"
+    )
+    assert (
+        build_pad_filter("1:1")
+        == "pad=max(iw\\,ih):max(ih\\,iw):(ow-iw)/2:(oh-ih)/2:black"
+    )
+    assert (
+        build_pad_filter("4:3")
+        == "pad=max(iw\\,ih*(4/3)):max(ih\\,iw*(3/4)):(ow-iw)/2:(oh-ih)/2:black"
+    )
+    assert (
+        build_pad_filter("21:9")
+        == "pad=max(iw\\,ih*(21/9)):max(ih\\,iw*(9/21)):(ow-iw)/2:(oh-ih)/2:black"
+    )
 
 
 def test_video_filter_speed() -> None:
@@ -187,7 +221,7 @@ def test_video_filter_fps() -> None:
 
 
 @pytest.mark.parametrize("invalid_fps", [-1, 0, float("nan")])
-def test_video_filter_fps_invalid(invalid_fps: int | float) -> None:
+def test_video_filter_fps_invalid(invalid_fps: float) -> None:
     """Invalid FPS raises ValueError."""
     with pytest.raises(ValueError):
         build_fps_filter(invalid_fps)
@@ -260,7 +294,10 @@ def test_build_palettegen_filter_defaults() -> None:
 def test_build_palettegen_filter_custom_colors_and_stats() -> None:
     """Custom max_colors and stats_mode format properly."""
     assert build_palettegen_filter(max_colors=128) == "palettegen=max_colors=128"
-    assert build_palettegen_filter(max_colors=64, stats_mode="diff") == "palettegen=max_colors=64:stats_mode=diff"
+    assert (
+        build_palettegen_filter(max_colors=64, stats_mode="diff")
+        == "palettegen=max_colors=64:stats_mode=diff"
+    )
     assert build_palettegen_filter(stats_mode="full") == "palettegen=stats_mode=full"
 
 
@@ -283,7 +320,10 @@ def test_build_paletteuse_filter_defaults() -> None:
 def test_build_paletteuse_filter_custom() -> None:
     """Non-default dither algorithms format properly."""
     assert build_paletteuse_filter(dither="bayer") == "paletteuse=dither=bayer"
-    assert build_paletteuse_filter(dither="floyd_steinberg") == "paletteuse=dither=floyd_steinberg"
+    assert (
+        build_paletteuse_filter(dither="floyd_steinberg")
+        == "paletteuse=dither=floyd_steinberg"
+    )
     assert build_paletteuse_filter(dither="none") == "paletteuse=dither=none"
 
 
@@ -295,7 +335,13 @@ def test_build_paletteuse_filter_invalid() -> None:
 
 def test_filtergraph_zero_gui() -> None:
     """Filtergraph module must have zero imports from GUI toolkits."""
-    target_path = Path(__file__).resolve().parent.parent / "src" / "media_toolbox" / "core" / "filtergraph.py"
+    target_path = (
+        Path(__file__).resolve().parent.parent
+        / "src"
+        / "media_toolbox"
+        / "core"
+        / "filtergraph.py"
+    )
     with open(target_path, "r", encoding="utf-8") as f:
         tree = ast.parse(f.read(), filename=str(target_path))
 
@@ -306,5 +352,13 @@ def test_filtergraph_zero_gui() -> None:
                 full_name = f"{mod}.{alias.name}" if mod else alias.name
                 assert not any(
                     gui_pkg in full_name
-                    for gui_pkg in ("gi", "Gtk", "Adw", "Nautilus", "tkinter", "PyQt", "PySide")
+                    for gui_pkg in (
+                        "gi",
+                        "Gtk",
+                        "Adw",
+                        "Nautilus",
+                        "tkinter",
+                        "PyQt",
+                        "PySide",
+                    )
                 ), f"Forbidden GUI import found in filtergraph.py: {full_name}"

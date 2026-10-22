@@ -11,12 +11,10 @@ Uses real Python child processes to verify:
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
 import sys
 import threading
 import time
-from typing import Optional
+from pathlib import Path
 
 import pytest
 
@@ -40,7 +38,7 @@ class TestRunnerSubprocessLifecycle:
             "sys.stdout.write('frame=10\\nprogress=continue\\n')\n"
             "sys.stdout.flush()\n"
             "sys.stdout.close()\n"  # Closes stdout pipe
-            "time.sleep(0.3)\n"     # Remains alive after EOF
+            "time.sleep(0.3)\n"  # Remains alive after EOF
             "sys.exit(0)\n"
         )
 
@@ -79,16 +77,16 @@ class TestRunnerSubprocessLifecycle:
         # No event emitted should claim is_completed == True
         assert not any(e.is_completed for e in events)
 
-    def test_repeated_successful_jobs_leave_no_watcher_threads(self, tmp_path: Path) -> None:
+    def test_repeated_successful_jobs_leave_no_watcher_threads(
+        self, tmp_path: Path
+    ) -> None:
         """
         Verify cancellation watcher threads are terminated and joined upon completion,
         leaving no leaked threads.
         """
         script = tmp_path / "quick_job.py"
         script.write_text(
-            "import sys\n"
-            "sys.stdout.write('frame=1\\nprogress=end\\n')\n"
-            "sys.exit(0)\n"
+            "import sys\nsys.stdout.write('frame=1\\nprogress=end\\n')\nsys.exit(0)\n"
         )
 
         cancel_event = threading.Event()
@@ -102,7 +100,8 @@ class TestRunnerSubprocessLifecycle:
 
         # Check that no ffmpeg-cancel-watch threads are still alive
         active_watchers = [
-            t.name for t in threading.enumerate()
+            t.name
+            for t in threading.enumerate()
             if "ffmpeg-cancel-watch" in t.name and t.is_alive()
         ]
         assert active_watchers == []
@@ -118,7 +117,7 @@ class TestRunnerSubprocessLifecycle:
         script.write_text(
             "import signal, sys, time\n"
             "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
-            f"open({repr(str(ready_file))}, 'w').write('ready')\n"
+            f"open({str(ready_file)!r}, 'w').write('ready')\n"
             "while True:\n"
             "    time.sleep(0.05)\n"
         )

@@ -7,10 +7,10 @@ Background worker thread lifecycle, GLib idle synchronization, and overwrite con
 from __future__ import annotations
 
 import dataclasses
-from pathlib import Path
 import threading
-from typing import Any, Optional
 import warnings
+from pathlib import Path
+from typing import Any
 
 import gi
 
@@ -23,7 +23,6 @@ from media_toolbox.core.models import ProgressEvent
 from media_toolbox.core.runner import (
     RunnerCancelledError,
     RunnerError,
-    run_ffmpeg_pipeline,
 )
 from media_toolbox.ui.constants import WindowState
 
@@ -32,9 +31,9 @@ class WindowWorkerMixin:
     """Mixin managing worker thread execution, process cancellation, and GLib idle UI updates."""
 
     state: WindowState
-    cancel_event: Optional[threading.Event]
+    cancel_event: threading.Event | None
     is_transcoding: bool
-    input_file: Optional[Path] = None
+    input_file: Path | None = None
     view_stack: Any = None
     transcode_btn: Any = None
     extract_btn: Any = None
@@ -44,7 +43,7 @@ class WindowWorkerMixin:
     destroy: Any = None
     load_media_file: Any = None
     _pending_confirmation: bool = False
-    _active_worker: Optional[threading.Thread] = None
+    _active_worker: threading.Thread | None = None
     _job_generation: int = 0
     _close_after_cleanup: bool = False
 
@@ -67,7 +66,11 @@ class WindowWorkerMixin:
             self._pending_confirmation = True
             if hasattr(self, "_set_ui_controls_sensitive"):
                 self._set_ui_controls_sensitive(False)
-            if hasattr(self, "open_btn") and self.open_btn is not None and hasattr(self.open_btn, "set_sensitive"):
+            if (
+                hasattr(self, "open_btn")
+                and self.open_btn is not None
+                and hasattr(self.open_btn, "set_sensitive")
+            ):
                 self.open_btn.set_sensitive(False)
 
             current_input = getattr(self, "input_file", None)
@@ -78,10 +81,17 @@ class WindowWorkerMixin:
                     return
 
                 if response_id == "replace":
-                    if getattr(self, "state", None) != WindowState.READY or getattr(self, "input_file", None) != current_input:
+                    if (
+                        getattr(self, "state", None) != WindowState.READY
+                        or getattr(self, "input_file", None) != current_input
+                    ):
                         if hasattr(self, "_set_ui_controls_sensitive"):
                             self._set_ui_controls_sensitive(True)
-                        if hasattr(self, "open_btn") and self.open_btn is not None and hasattr(self.open_btn, "set_sensitive"):
+                        if (
+                            hasattr(self, "open_btn")
+                            and self.open_btn is not None
+                            and hasattr(self.open_btn, "set_sensitive")
+                        ):
                             self.open_btn.set_sensitive(True)
                         return
                     confirmed_config = dataclasses.replace(config, overwrite=True)
@@ -89,7 +99,11 @@ class WindowWorkerMixin:
                 else:
                     if hasattr(self, "_set_ui_controls_sensitive"):
                         self._set_ui_controls_sensitive(True)
-                    if hasattr(self, "open_btn") and self.open_btn is not None and hasattr(self.open_btn, "set_sensitive"):
+                    if (
+                        hasattr(self, "open_btn")
+                        and self.open_btn is not None
+                        and hasattr(self.open_btn, "set_sensitive")
+                    ):
                         self.open_btn.set_sensitive(True)
 
             alert_dialog_cls = getattr(Adw, "AlertDialog", None)
@@ -100,14 +114,18 @@ class WindowWorkerMixin:
                 )
                 dialog.add_response("cancel", "Cancel")
                 dialog.add_response("replace", "Replace")
-                dialog.set_response_appearance("replace", Adw.ResponseAppearance.DESTRUCTIVE)
+                dialog.set_response_appearance(
+                    "replace", Adw.ResponseAppearance.DESTRUCTIVE
+                )
                 dialog.set_default_response("cancel")
                 dialog.set_close_response("cancel")
 
-                def _on_alert_response(_dialog_obj: Any, result: Any, *_user_data: Any) -> None:
+                def _on_alert_response(
+                    _dialog_obj: Any, result: Any, *_user_data: Any
+                ) -> None:
                     try:
                         resp = dialog.choose_finish(result)
-                    except Exception:
+                    except Exception:  # noqa: BLE001
                         resp = "cancel"
                     _handle_response(resp)
 
@@ -121,7 +139,9 @@ class WindowWorkerMixin:
                 )
                 dialog.add_response("cancel", "Cancel")
                 dialog.add_response("replace", "Replace")
-                dialog.set_response_appearance("replace", Adw.ResponseAppearance.DESTRUCTIVE)
+                dialog.set_response_appearance(
+                    "replace", Adw.ResponseAppearance.DESTRUCTIVE
+                )
                 dialog.set_default_response("cancel")
                 dialog.set_close_response("cancel")
 
@@ -189,7 +209,9 @@ class WindowWorkerMixin:
             if getattr(self, "_job_generation", 0) == current_gen:
                 GLib.idle_add(self._on_progress_idle, evt)
 
-        def _on_pass_progress(pass_num: int, total_passes: int, evt: ProgressEvent) -> None:
+        def _on_pass_progress(
+            pass_num: int, total_passes: int, evt: ProgressEvent
+        ) -> None:
             if getattr(self, "_job_generation", 0) == current_gen:
                 GLib.idle_add(self._on_pass_progress_idle, pass_num, total_passes, evt)
 
@@ -209,7 +231,7 @@ class WindowWorkerMixin:
             err_msg = err.last_error_line or str(err)
             if getattr(self, "_job_generation", 0) == current_gen:
                 GLib.idle_add(self._on_error_idle, err_msg)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             if getattr(self, "_job_generation", 0) == current_gen:
                 GLib.idle_add(self._on_error_idle, str(exc))
 
@@ -219,10 +241,16 @@ class WindowWorkerMixin:
         self.progress_footer.update_progress(event)
         return GLib.SOURCE_REMOVE
 
-    def _on_pass_progress_idle(self, pass_num: int, total_passes: int, event: ProgressEvent) -> bool:
+    def _on_pass_progress_idle(
+        self, pass_num: int, total_passes: int, event: ProgressEvent
+    ) -> bool:
         if getattr(self, "state", None) in (WindowState.CLOSED, WindowState.CANCELLING):
             return GLib.SOURCE_REMOVE
-        pass_info = f"Pass {pass_num} of {total_passes} ({event.percentage:.1f}%)" if total_passes > 1 else None
+        pass_info = (
+            f"Pass {pass_num} of {total_passes} ({event.percentage:.1f}%)"
+            if total_passes > 1
+            else None
+        )
         self.progress_footer.update_progress(event, pass_info=pass_info)
         return GLib.SOURCE_REMOVE
 
@@ -251,13 +279,19 @@ class WindowWorkerMixin:
             if isinstance(queue, list) and next_idx < len(queue):
                 self.batch_index = next_idx
                 next_file = queue[next_idx]
-                if self.progress_footer is not None and hasattr(self.progress_footer, "finish"):
+                if self.progress_footer is not None and hasattr(
+                    self.progress_footer, "finish"
+                ):
                     self.progress_footer.finish(True, footer_msg)
-                if self.toast_overlay is not None and hasattr(self.toast_overlay, "add_toast"):
+                if self.toast_overlay is not None and hasattr(
+                    self.toast_overlay, "add_toast"
+                ):
                     self.toast_overlay.add_toast(Adw.Toast(title=toast_msg))
+
                 def _trigger_next_load() -> bool:
                     self.load_media_file(next_file)
                     return False
+
                 GLib.idle_add(_trigger_next_load)
                 return GLib.SOURCE_REMOVE
             else:
@@ -274,20 +308,28 @@ class WindowWorkerMixin:
             self.toast_overlay.add_toast(Adw.Toast(title=toast_msg))
         return GLib.SOURCE_REMOVE
 
-    def _on_success_idle(self, output_path: Path, result: Optional[JobResult] = None) -> bool:
+    def _on_success_idle(
+        self, output_path: Path, result: JobResult | None = None
+    ) -> bool:
         toast_msg = f"Completed successfully: {output_path.name}"
         if result is not None and getattr(result, "exceeded_target", False) is True:
             actual_mb = getattr(result, "file_size_bytes", 0) / 1_000_000
             target_bytes = getattr(result, "target_size_bytes", None)
             target_mb = (target_bytes / 1_000_000) if target_bytes else 0
             toast_msg = f"Saved with warning: size exceeded target ({actual_mb:.1f} MB > {target_mb:.1f} MB)"
-        return WindowWorkerMixin._finish(self, True, f"Saved: {output_path.name}", toast_msg)
+        return WindowWorkerMixin._finish(
+            self, True, f"Saved: {output_path.name}", toast_msg
+        )
 
     def _on_cancelled_idle(self, _output_path: Path) -> bool:
-        return WindowWorkerMixin._finish(self, False, "Operation cancelled", "Operation cancelled by user.")
+        return WindowWorkerMixin._finish(
+            self, False, "Operation cancelled", "Operation cancelled by user."
+        )
 
     def _on_error_idle(self, error_message: str) -> bool:
-        return WindowWorkerMixin._finish(self, False, f"Failed: {error_message}", f"Encoding failed: {error_message}")
+        return WindowWorkerMixin._finish(
+            self, False, f"Failed: {error_message}", f"Encoding failed: {error_message}"
+        )
 
     def _on_cancel_clicked(self) -> None:
         self.is_batch_running = False
@@ -306,7 +348,9 @@ class WindowWorkerMixin:
             cancel_event = self.cancel_event
             if cancel_event is not None:
                 cancel_event.set()
-            if hasattr(self, "progress_footer") and hasattr(self.progress_footer, "set_cancelling"):
+            if hasattr(self, "progress_footer") and hasattr(
+                self.progress_footer, "set_cancelling"
+            ):
                 self.progress_footer.set_cancelling()
             return True
         self.state = WindowState.CLOSED

@@ -4,8 +4,9 @@ Unit tests for domain models (core/models.py).
 
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError
 import sys
+from dataclasses import FrozenInstanceError
+
 import pytest
 
 from media_toolbox.core.models import (
@@ -87,13 +88,19 @@ class TestModelsDefaultsAndHelpers:
         assert stream.effective_dimensions == (1920, 1080)
 
     def test_video_stream_rotation_effective_dimensions(self) -> None:
-        stream90 = VideoStream(index=0, codec_name="h264", width=1920, height=1080, rotation=90)
+        stream90 = VideoStream(
+            index=0, codec_name="h264", width=1920, height=1080, rotation=90
+        )
         assert stream90.effective_dimensions == (1080, 1920)
 
-        stream270 = VideoStream(index=0, codec_name="h264", width=1920, height=1080, rotation=-90)
+        stream270 = VideoStream(
+            index=0, codec_name="h264", width=1920, height=1080, rotation=-90
+        )
         assert stream270.effective_dimensions == (1080, 1920)
 
-        stream180 = VideoStream(index=0, codec_name="h264", width=1920, height=1080, rotation=180)
+        stream180 = VideoStream(
+            index=0, codec_name="h264", width=1920, height=1080, rotation=180
+        )
         assert stream180.effective_dimensions == (1920, 1080)
 
     def test_video_stream_zero_height_aspect_ratio(self) -> None:
@@ -109,7 +116,9 @@ class TestModelsDefaultsAndHelpers:
         assert stream.bit_rate_kbps == 192
         assert stream.sample_rate_khz == 48.0
 
-        stream_no_br = AudioStream(index=1, codec_name="flac", channels=2, sample_rate=44100)
+        stream_no_br = AudioStream(
+            index=1, codec_name="flac", channels=2, sample_rate=44100
+        )
         assert stream_no_br.bit_rate_kbps is None
 
     def test_format_info_defaults_and_properties(self) -> None:
@@ -141,8 +150,12 @@ class TestMediaInfoProperties:
     """Test MediaInfo composite properties and fallback hierarchy."""
 
     def test_media_info_standard_video_audio(self) -> None:
-        v = VideoStream(index=0, codec_name="h264", width=1920, height=1080, duration=60.0)
-        a = AudioStream(index=1, codec_name="aac", channels=2, sample_rate=48000, duration=60.0)
+        v = VideoStream(
+            index=0, codec_name="h264", width=1920, height=1080, duration=60.0
+        )
+        a = AudioStream(
+            index=1, codec_name="aac", channels=2, sample_rate=48000, duration=60.0
+        )
         fmt = FormatInfo(filename="test.mp4", format_name="mp4", duration=60.0)
         media = MediaInfo(format=fmt, video_streams=(v,), audio_streams=(a,))
 
@@ -156,7 +169,9 @@ class TestMediaInfoProperties:
         assert media.is_image is False
 
     def test_media_info_silent_video(self) -> None:
-        v = VideoStream(index=0, codec_name="h264", width=1280, height=720, duration=15.0)
+        v = VideoStream(
+            index=0, codec_name="h264", width=1280, height=720, duration=15.0
+        )
         fmt = FormatInfo(filename="silent.mp4", format_name="mp4", duration=15.0)
         media = MediaInfo(format=fmt, video_streams=(v,))
 
@@ -167,7 +182,9 @@ class TestMediaInfoProperties:
         assert media.is_video_only is True
 
     def test_media_info_audio_only_with_album_art(self) -> None:
-        a = AudioStream(index=0, codec_name="mp3", channels=2, sample_rate=44100, duration=180.0)
+        a = AudioStream(
+            index=0, codec_name="mp3", channels=2, sample_rate=44100, duration=180.0
+        )
         cover = VideoStream(
             index=1, codec_name="png", width=500, height=500, is_attached_pic=True
         )
@@ -184,7 +201,12 @@ class TestMediaInfoProperties:
 
     def test_media_info_still_image(self) -> None:
         img = VideoStream(
-            index=0, codec_name="png", width=800, height=600, duration=None, is_attached_pic=False
+            index=0,
+            codec_name="png",
+            width=800,
+            height=600,
+            duration=None,
+            is_attached_pic=False,
         )
         fmt = FormatInfo(filename="photo.png", format_name="image2", duration=None)
         media = MediaInfo(format=fmt, video_streams=(img,))
@@ -208,14 +230,24 @@ class TestMediaInfoProperties:
         assert media_v_dur.duration == 99.0
 
         # Primary audio duration used when format and video durations are None
-        v_no_dur = VideoStream(index=0, codec_name="h264", width=10, height=10, duration=None)
-        a = AudioStream(index=1, codec_name="aac", channels=2, sample_rate=48000, duration=50.0)
-        media_a_dur = MediaInfo(format=fmt_no_dur, video_streams=(v_no_dur,), audio_streams=(a,))
+        v_no_dur = VideoStream(
+            index=0, codec_name="h264", width=10, height=10, duration=None
+        )
+        a = AudioStream(
+            index=1, codec_name="aac", channels=2, sample_rate=48000, duration=50.0
+        )
+        media_a_dur = MediaInfo(
+            format=fmt_no_dur, video_streams=(v_no_dur,), audio_streams=(a,)
+        )
         assert media_a_dur.duration == 50.0
 
         # Default 0.0 when all are None
-        a_no_dur = AudioStream(index=1, codec_name="aac", channels=2, sample_rate=48000, duration=None)
-        media_zero = MediaInfo(format=fmt_no_dur, video_streams=(v_no_dur,), audio_streams=(a_no_dur,))
+        a_no_dur = AudioStream(
+            index=1, codec_name="aac", channels=2, sample_rate=48000, duration=None
+        )
+        media_zero = MediaInfo(
+            format=fmt_no_dur, video_streams=(v_no_dur,), audio_streams=(a_no_dur,)
+        )
         assert media_zero.duration == 0.0
 
     def test_media_info_list_coercion_to_tuple(self) -> None:
@@ -260,8 +292,8 @@ class TestHeadlessInvariant:
 
     def test_zero_gui_imports_in_models(self) -> None:
         import os
-        from pathlib import Path
         import subprocess
+        from pathlib import Path
 
         python_root = Path(__file__).resolve().parent.parent / "src"
         env = os.environ.copy()
@@ -273,5 +305,11 @@ class TestHeadlessInvariant:
             "for mod in ('gi', 'gi.repository', 'gi.repository.Gtk', 'gi.repository.Adw'):\n"
             "    assert mod not in sys.modules, f'Forbidden GUI module {mod} loaded in core models test!'\n"
         )
-        proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env)
+        proc = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
         assert proc.returncode == 0, f"Core models triggered GUI import:\n{proc.stderr}"

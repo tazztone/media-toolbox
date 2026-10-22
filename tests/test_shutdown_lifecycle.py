@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import threading
+from pathlib import Path
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 pytest.importorskip("gi")
 
 from media_toolbox.core.jobs import JobConfig
 from media_toolbox.core.models import EncodeOptions, ProgressEvent
-from media_toolbox.core.runner import RunnerCancelledError
 
 pytestmark = [pytest.mark.desktop]
 
@@ -81,7 +81,9 @@ def test_progress_events_discarded_when_closed() -> None:
     win.state = WindowState.CLOSED
     win._job_generation = 1
 
-    evt = ProgressEvent(frame=10, fps=30.0, total_size_bytes=100000, out_time_seconds=1.0)
+    evt = ProgressEvent(
+        frame=10, fps=30.0, total_size_bytes=100000, out_time_seconds=1.0
+    )
     ret = win._on_progress_idle(evt)
     assert ret is False
     win.progress_footer.update_progress.assert_not_called()
@@ -95,7 +97,9 @@ def test_progress_events_discarded_when_cancelling() -> None:
     win.state = WindowState.CANCELLING
     win._job_generation = 1
 
-    evt = ProgressEvent(frame=10, fps=30.0, total_size_bytes=100000, out_time_seconds=1.0)
+    evt = ProgressEvent(
+        frame=10, fps=30.0, total_size_bytes=100000, out_time_seconds=1.0
+    )
     ret = win._on_progress_idle(evt)
     assert ret is False
     win.progress_footer.update_progress.assert_not_called()
@@ -118,9 +122,15 @@ def test_worker_generation_guards_stale_callbacks(tmp_path: Path) -> None:
         win._job_generation = 2
         return MagicMock(output_path=tmp_path / "out.mp4")
 
-    with patch("media_toolbox.ui.window_worker.run_job", side_effect=fake_run_job), \
-         patch("media_toolbox.ui.window_worker.GLib.idle_add") as mock_idle_add:
-        config = JobConfig(input_path="in.mp4", output_path=str(tmp_path / "out.mp4"), options=EncodeOptions())
+    with (
+        patch("media_toolbox.ui.window_worker.run_job", side_effect=fake_run_job),
+        patch("media_toolbox.ui.window_worker.GLib.idle_add") as mock_idle_add,
+    ):
+        config = JobConfig(
+            input_path="in.mp4",
+            output_path=str(tmp_path / "out.mp4"),
+            options=EncodeOptions(),
+        )
         cancel_evt = threading.Event()
         win._worker_thread_entry(config, cancel_evt)
 

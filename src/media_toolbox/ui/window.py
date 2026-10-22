@@ -16,9 +16,9 @@ Features:
 
 from __future__ import annotations
 
-from pathlib import Path
 import threading
-from typing import Any, Optional
+from pathlib import Path
+from typing import Any
 
 import gi
 
@@ -47,16 +47,14 @@ from media_toolbox.ui.widgets import (
     ResolutionWidget,
 )
 from media_toolbox.ui.window_builder import (
-    build_extract_audio_page,
-    build_transcode_page,
     build_window_layout,
 )
 from media_toolbox.ui.window_probing import WindowProbingMixin
 from media_toolbox.ui.window_worker import WindowWorkerMixin
 
 __all__ = [
-    "WindowState",
     "MainWindow",
+    "WindowState",
 ]
 
 
@@ -99,18 +97,18 @@ class MainWindow(Adw.ApplicationWindow, WindowProbingMixin, WindowWorkerMixin):
         self.set_size_request(640, 500)
 
         self.state: WindowState = WindowState.EMPTY
-        self.input_file: Optional[Path] = None
-        self.media_info: Optional[MediaInfo] = None
-        self.video_output_path: Optional[Path] = None
-        self.audio_output_path: Optional[Path] = None
+        self.input_file: Path | None = None
+        self.media_info: MediaInfo | None = None
+        self.video_output_path: Path | None = None
+        self.audio_output_path: Path | None = None
         self._video_output_custom: bool = False
         self._audio_output_custom: bool = False
-        self.cancel_event: Optional[threading.Event] = None
+        self.cancel_event: threading.Event | None = None
         self.is_transcoding: bool = False
-        self.open_btn: Optional[Gtk.Button] = None
+        self.open_btn: Gtk.Button | None = None
         self._probe_request_id: int = 0
         self._pending_confirmation: bool = False
-        self._active_worker: Optional[threading.Thread] = None
+        self._active_worker: threading.Thread | None = None
         self.batch_queue: list[Path] = []
         self.batch_index: int = 0
         self.is_batch_active: bool = False
@@ -226,8 +224,14 @@ class MainWindow(Adw.ApplicationWindow, WindowProbingMixin, WindowWorkerMixin):
     # -----------------------------------------------------------------------
 
     def _start_transcode(self) -> None:
-        if self.state != WindowState.READY or not self.input_file or not self.media_info:
-            self.toast_overlay.add_toast(Adw.Toast(title="Please open a media file first."))
+        if (
+            self.state != WindowState.READY
+            or not self.input_file
+            or not self.media_info
+        ):
+            self.toast_overlay.add_toast(
+                Adw.Toast(title="Please open a media file first.")
+            )
             return
 
         if self.is_batch_active:
@@ -237,7 +241,9 @@ class MainWindow(Adw.ApplicationWindow, WindowProbingMixin, WindowWorkerMixin):
         options = self.get_transcode_options()
         out_path = self.video_output_path
         if not out_path:
-            out_path = resolve_default_output_path(self.input_file, options.preset or "h264")
+            out_path = resolve_default_output_path(
+                self.input_file, options.preset or "h264"
+            )
             self.video_output_path = out_path
 
         config = JobConfig(
@@ -256,8 +262,14 @@ class MainWindow(Adw.ApplicationWindow, WindowProbingMixin, WindowWorkerMixin):
         self._confirm_overwrite_and_start(config, title)
 
     def _start_extract_audio(self) -> None:
-        if self.state != WindowState.READY or not self.input_file or not self.media_info:
-            self.toast_overlay.add_toast(Adw.Toast(title="Please open a media file first."))
+        if (
+            self.state != WindowState.READY
+            or not self.input_file
+            or not self.media_info
+        ):
+            self.toast_overlay.add_toast(
+                Adw.Toast(title="Please open a media file first.")
+            )
             return
 
         if self.is_batch_active:
@@ -267,7 +279,9 @@ class MainWindow(Adw.ApplicationWindow, WindowProbingMixin, WindowWorkerMixin):
         options = self.get_extract_audio_options()
         out_path = self.audio_output_path
         if not out_path:
-            out_path = resolve_default_output_path(self.input_file, options.preset or "mp3", is_extract_audio=True)
+            out_path = resolve_default_output_path(
+                self.input_file, options.preset or "mp3", is_extract_audio=True
+            )
             self.audio_output_path = out_path
 
         config = JobConfig(

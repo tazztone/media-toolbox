@@ -11,7 +11,7 @@ INVARIANT: Must have ZERO imports from GUI toolkits (gi, Gtk, Adw, etc.).
 from __future__ import annotations
 
 import math
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 ASPECT_RATIO_CROPS: dict[str, str] = {
     "9:16": "crop=min(iw\\,ih*(9/16)):min(ih\\,iw*(16/9)):(iw-ow)/2:(ih-oh)/2",
@@ -64,7 +64,7 @@ def build_scale_filter(scale: tuple[int, int]) -> str:
         raise ValueError(f"Invalid scale dimensions: {scale}")
 
 
-def _parse_ratio_dims(ratio_str: str) -> Optional[tuple[float, float, str, str]]:
+def _parse_ratio_dims(ratio_str: str) -> tuple[float, float, str, str] | None:
     """Parse 'rw:rh' string into (rw, rh, w_str, h_str) tuple if valid."""
     if ":" in ratio_str and ratio_str.count(":") == 1:
         parts = ratio_str.split(":")
@@ -135,22 +135,26 @@ def build_setpts_filter(speed: float) -> str:
     return f"setpts=(1.0/{s_str})*PTS"
 
 
-def build_fps_filter(fps: int | float) -> str:
+def build_fps_filter(fps: float) -> str:
     """
     Generate fps filter: fps=fps={rate}.
     """
     if not math.isfinite(fps) or fps <= 0:
         raise ValueError(f"Frame rate must be positive and finite, got {fps}")
-    fps_str = str(int(fps)) if isinstance(fps, int) or (isinstance(fps, float) and fps.is_integer()) else f"{fps:g}"
+    fps_str = (
+        str(int(fps))
+        if isinstance(fps, int) or (isinstance(fps, float) and fps.is_integer())
+        else f"{fps:g}"
+    )
     return f"fps=fps={fps_str}"
 
 
 def build_video_filter(
-    scale: Optional[tuple[int, int]] = None,
-    crop: Optional[str] = None,
-    pad: Optional[str | tuple[int, int]] = None,
-    speed: Optional[float] = None,
-    fps: Optional[int | float] = None,
+    scale: tuple[int, int] | None = None,
+    crop: str | None = None,
+    pad: str | tuple[int, int] | None = None,
+    speed: float | None = None,
+    fps: float | None = None,
 ) -> list[str]:
     """
     Construct ordered video filter chain:
@@ -201,9 +205,9 @@ def build_atempo_chain(speed: float) -> list[str]:
 
 
 def build_audio_filter(
-    speed: Optional[float] = None,
+    speed: float | None = None,
     normalize_loudness: bool = False,
-    volume_boost_db: Optional[float] = None,
+    volume_boost_db: float | None = None,
 ) -> list[str]:
     """
     Construct ordered audio filter chain:
@@ -225,11 +229,11 @@ def join_filter_chain(filters: Sequence[str]) -> str:
 
 
 def build_video_filter_args(
-    scale: Optional[tuple[int, int]] = None,
-    crop: Optional[str] = None,
-    pad: Optional[str | tuple[int, int]] = None,
-    speed: Optional[float] = None,
-    fps: Optional[int | float] = None,
+    scale: tuple[int, int] | None = None,
+    crop: str | None = None,
+    pad: str | tuple[int, int] | None = None,
+    speed: float | None = None,
+    fps: float | None = None,
 ) -> list[str]:
     """Return ['-vf', chain] if filters present, else []."""
     filters = build_video_filter(scale=scale, crop=crop, pad=pad, speed=speed, fps=fps)
@@ -237,9 +241,9 @@ def build_video_filter_args(
 
 
 def build_audio_filter_args(
-    speed: Optional[float] = None,
+    speed: float | None = None,
     normalize_loudness: bool = False,
-    volume_boost_db: Optional[float] = None,
+    volume_boost_db: float | None = None,
 ) -> list[str]:
     """Return ['-af', chain] if filters present, else []."""
     filters = build_audio_filter(
@@ -250,25 +254,29 @@ def build_audio_filter_args(
     return ["-af", join_filter_chain(filters)] if filters else []
 
 
-VALID_GIF_DITHERS: frozenset[str] = frozenset({
-    "bayer",
-    "heckbert",
-    "floyd_steinberg",
-    "sierra2",
-    "sierra2_4a",
-    "none",
-})
+VALID_GIF_DITHERS: frozenset[str] = frozenset(
+    {
+        "bayer",
+        "heckbert",
+        "floyd_steinberg",
+        "sierra2",
+        "sierra2_4a",
+        "none",
+    }
+)
 
-VALID_GIF_STATS_MODES: frozenset[str] = frozenset({
-    "full",
-    "diff",
-    "single",
-})
+VALID_GIF_STATS_MODES: frozenset[str] = frozenset(
+    {
+        "full",
+        "diff",
+        "single",
+    }
+)
 
 
 def build_palettegen_filter(
     max_colors: int = 256,
-    stats_mode: Optional[str] = None,
+    stats_mode: str | None = None,
 ) -> str:
     """
     Generate palettegen filter with max_colors and optional stats_mode.
@@ -282,7 +290,9 @@ def build_palettegen_filter(
     if stats_mode is not None:
         sm = stats_mode.strip().lower()
         if sm not in VALID_GIF_STATS_MODES:
-            raise ValueError(f"Invalid stats_mode '{stats_mode}', valid: {sorted(VALID_GIF_STATS_MODES)}")
+            raise ValueError(
+                f"Invalid stats_mode '{stats_mode}', valid: {sorted(VALID_GIF_STATS_MODES)}"
+            )
         opts.append(f"stats_mode={sm}")
     return f"palettegen={':'.join(opts)}" if opts else "palettegen"
 
@@ -295,6 +305,7 @@ def build_paletteuse_filter(
     """
     d = dither.strip().lower()
     if d not in VALID_GIF_DITHERS:
-        raise ValueError(f"Invalid dither '{dither}', valid: {sorted(VALID_GIF_DITHERS)}")
+        raise ValueError(
+            f"Invalid dither '{dither}', valid: {sorted(VALID_GIF_DITHERS)}"
+        )
     return "paletteuse" if d == "sierra2_4a" else f"paletteuse=dither={d}"
-

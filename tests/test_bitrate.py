@@ -5,11 +5,9 @@ Unit tests for bitrate calculation engine (core/bitrate.py).
 from __future__ import annotations
 
 import pytest
+
 from media_toolbox.core.bitrate import (
-    DEFAULT_AUDIO_BITRATE_KBPS,
     DEFAULT_MIN_VIDEO_BITRATE_KBPS,
-    DEFAULT_MUX_OVERHEAD_MARGIN,
-    KBITS_PER_MB,
     TargetSizeTooSmallError,
     calculate_target_video_bitrate,
 )
@@ -36,7 +34,12 @@ class TestBitrateCalculation:
         ],
     )
     def test_bitrate_standard_scenarios(
-        self, target_mb: float, duration_s: float, audio_kbps: int, margin: float, expected_kbps: int
+        self,
+        target_mb: float,
+        duration_s: float,
+        audio_kbps: int,
+        margin: float,
+        expected_kbps: int,
     ) -> None:
         result = calculate_target_video_bitrate(
             target_size_mb=target_mb,
@@ -122,15 +125,21 @@ class TestBitrateCalculation:
         [0, 0.0, -1, -60.0, float("nan"), float("inf"), float("-inf")],
     )
     def test_invalid_duration_raises_value_error(self, invalid_duration: float) -> None:
-        with pytest.raises(ValueError, match="duration_seconds must be a positive finite number"):
+        with pytest.raises(
+            ValueError, match="duration_seconds must be a positive finite number"
+        ):
             calculate_target_video_bitrate(25.0, invalid_duration)
 
     @pytest.mark.parametrize(
         "invalid_target_size",
         [0, 0.0, -1, -25.0, float("nan"), float("inf"), float("-inf")],
     )
-    def test_invalid_target_size_raises_value_error(self, invalid_target_size: float) -> None:
-        with pytest.raises(ValueError, match="target_size_mb must be a positive finite number"):
+    def test_invalid_target_size_raises_value_error(
+        self, invalid_target_size: float
+    ) -> None:
+        with pytest.raises(
+            ValueError, match="target_size_mb must be a positive finite number"
+        ):
             calculate_target_video_bitrate(invalid_target_size, 60.0)
 
     def test_negative_audio_bitrate_raises_value_error(self) -> None:
@@ -140,8 +149,12 @@ class TestBitrateCalculation:
     @pytest.mark.parametrize("invalid_margin", [-0.01, -1.0, 1.0, 1.05, 2.0])
     def test_invalid_margin_raises_value_error(self, invalid_margin: float) -> None:
         with pytest.raises(ValueError, match="mux_overhead_margin must be in range"):
-            calculate_target_video_bitrate(25.0, 60.0, mux_overhead_margin=invalid_margin)
+            calculate_target_video_bitrate(
+                25.0, 60.0, mux_overhead_margin=invalid_margin
+            )
 
     def test_negative_min_video_bitrate_raises_value_error(self) -> None:
-        with pytest.raises(ValueError, match="min_video_bitrate_kbps cannot be negative"):
+        with pytest.raises(
+            ValueError, match="min_video_bitrate_kbps cannot be negative"
+        ):
             calculate_target_video_bitrate(25.0, 60.0, min_video_bitrate_kbps=-1)

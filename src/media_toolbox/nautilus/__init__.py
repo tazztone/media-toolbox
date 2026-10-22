@@ -12,10 +12,10 @@ from media_toolbox.nautilus.installer import (
 
 __all__ = [
     "MediaToolboxExtension",
-    "is_media_file",
     "install_nautilus",
-    "uninstall_nautilus",
+    "is_media_file",
     "status_nautilus",
+    "uninstall_nautilus",
 ]
 
 

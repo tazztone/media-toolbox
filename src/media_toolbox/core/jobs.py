@@ -14,16 +14,17 @@ INVARIANT: Strict zero GUI imports (gi, Gtk, Adw, Nautilus, tkinter, PyQt, PySid
 from __future__ import annotations
 
 import dataclasses
-from dataclasses import dataclass
 import errno
 import os
-from pathlib import Path
 import shutil
 import tempfile
 import threading
 import time
-from typing import Any, Callable, Optional
 import uuid
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 from media_toolbox.core.builder import build_ffmpeg_commands
 from media_toolbox.core.models import (
@@ -49,7 +50,7 @@ class JobConfig:
     input_path: Path | str
     output_path: Path | str
     options: EncodeOptions
-    media_info: Optional[MediaInfo] = None
+    media_info: MediaInfo | None = None
     overwrite: bool = False
     sigterm_timeout: float = 2.0
     allow_unprobed: bool = False
@@ -64,12 +65,14 @@ class JobResult:
     input_path: Path
     output_path: Path
     file_size_bytes: int
-    duration_seconds: Optional[float] = None
+    duration_seconds: float | None = None
     exceeded_target: bool = False
-    target_size_bytes: Optional[int] = None
+    target_size_bytes: int | None = None
 
 
-def cleanup_stale_staging_dirs(target_dir: Path | str, max_age_seconds: float = 86400.0) -> int:
+def cleanup_stale_staging_dirs(
+    target_dir: Path | str, max_age_seconds: float = 86400.0
+) -> int:
     """
     Remove orphaned .tmp_media_toolbox_* staging directories older than max_age_seconds
     within target_dir. Returns number of directories cleaned up.
@@ -267,11 +270,11 @@ def publish_output(
 
 def run_job(
     config: JobConfig,
-    progress_callback: Optional[Callable[[ProgressEvent], None]] = None,
-    pipeline_progress_callback: Optional[Callable[[int, int, ProgressEvent], None]] = None,
-    cancel_event: Optional[threading.Event] = None,
-    builder: Optional[Callable[..., list[list[str]]]] = None,
-    runner: Optional[Callable[..., None]] = None,
+    progress_callback: Callable[[ProgressEvent], None] | None = None,
+    pipeline_progress_callback: Callable[[int, int, ProgressEvent], None] | None = None,
+    cancel_event: threading.Event | None = None,
+    builder: Callable[..., list[list[str]]] | None = None,
+    runner: Callable[..., None] | None = None,
 ) -> JobResult:
     """
     Execute a media transcode or extraction job transactionally.
@@ -328,7 +331,11 @@ def run_job(
     raw_duration = media_info.duration if media_info else None
     duration = (
         raw_duration / config.options.speed
-        if (raw_duration is not None and config.options.speed and config.options.speed > 0)
+        if (
+            raw_duration is not None
+            and config.options.speed
+            and config.options.speed > 0
+        )
         else raw_duration
     )
 
@@ -336,12 +343,15 @@ def run_job(
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Pre-flight verify atomic publication capability before beginning potentially expensive encode
-    if not config.overwrite and not config.allow_non_atomic_fallback:
-        if not check_atomic_publish_supported(out_path.parent):
-            raise OutputPublishError(
-                f"Underlying filesystem for '{out_path}' does not support atomic no-clobber publication "
-                "(hard links unsupported). Pass --allow-fallback-copy to permit non-atomic copy."
-            )
+    if (
+        not config.overwrite
+        and not config.allow_non_atomic_fallback
+        and not check_atomic_publish_supported(out_path.parent)
+    ):
+        raise OutputPublishError(
+            f"Underlying filesystem for '{out_path}' does not support atomic no-clobber publication "
+            "(hard links unsupported). Pass --allow-fallback-copy to permit non-atomic copy."
+        )
 
     # Sweep stale staging directories older than 24h
     cleanup_stale_staging_dirs(out_path.parent)
@@ -354,12 +364,14 @@ def run_job(
     staging_path = Path(staging_temp_dir.name) / out_path.name
 
     # Isolated temporary directory for multi-pass logs
-    pass_tmp_dir: Optional[tempfile.TemporaryDirectory[str]] = None
-    pass_logfile_prefix: Optional[str] = None
+    pass_tmp_dir: tempfile.TemporaryDirectory[str] | None = None
+    pass_logfile_prefix: str | None = None
 
     if config.options.two_pass or config.options.target_size_mb is not None:
         pass_tmp_dir = tempfile.TemporaryDirectory(prefix="media_toolbox_2pass_")
-        pass_logfile_prefix = str(Path(pass_tmp_dir.name) / f"pass_{uuid.uuid4().hex[:8]}")
+        pass_logfile_prefix = str(
+            Path(pass_tmp_dir.name) / f"pass_{uuid.uuid4().hex[:8]}"
+        )
 
     builder_kwargs: dict[str, Any] = {
         "media_info": media_info,
@@ -411,7 +423,7 @@ def run_job(
                 f"Encoded output file is empty (0 bytes): {staging_path}"
             )
 
-        target_size_bytes: Optional[int] = None
+        target_size_bytes: int | None = None
         exceeded_target = False
         if config.options.target_size_mb is not None:
             target_size_bytes = int(config.options.target_size_mb * 1_000_000)

@@ -12,16 +12,11 @@ Tests:
 from __future__ import annotations
 
 import importlib
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 from unittest.mock import MagicMock, patch
-import pytest
 
-from media_toolbox.ui.constants import (
-    AUDIO_PRESETS,
-    CROP_PRESETS,
-    SPEED_PRESETS,
-    VIDEO_PRESETS,
-)
+import pytest
 
 pytestmark = [pytest.mark.desktop]
 
@@ -144,7 +139,9 @@ class TestWindowBuilder:
         assert win.view_stack is not None
         assert win.view_switcher is not None
         assert win.view_stack.add_titled_with_icon.call_count == 2
-        tab_names = [call[0][1] for call in win.view_stack.add_titled_with_icon.call_args_list]
+        tab_names = [
+            call[0][1] for call in win.view_stack.add_titled_with_icon.call_args_list
+        ]
         assert "transcode" in tab_names
         assert "extract" in tab_names
 

@@ -7,20 +7,19 @@ INVARIANT: Must have ZERO imports from GUI toolkits (gi, Gtk, Adw, etc.).
 from __future__ import annotations
 
 import math
-from typing import Optional
 
 __all__ = [
+    "format_aspect_ratio",
+    "format_bitrate",
+    "format_channels",
+    "format_decimal_size",
     "format_duration",
     "format_file_size",
-    "format_decimal_size",
-    "format_bitrate",
-    "format_aspect_ratio",
     "format_fps",
-    "format_channels",
 ]
 
 
-def format_duration(seconds: Optional[float]) -> str:
+def format_duration(seconds: float | None) -> str:
     """Format duration in seconds as HH:MM:SS.ff, or 'N/A' if unknown."""
     if seconds is None or seconds < 0:
         return "N/A"
@@ -29,7 +28,7 @@ def format_duration(seconds: Optional[float]) -> str:
     return f"{hours:02d}:{mins:02d}:{secs:05.2f}"
 
 
-def format_file_size(size_bytes: Optional[int], binary: bool = True) -> str:
+def format_file_size(size_bytes: int | None, binary: bool = True) -> str:
     """
     Format byte size into scaled units with exact byte count.
 
@@ -55,12 +54,12 @@ def format_file_size(size_bytes: Optional[int], binary: bool = True) -> str:
     return f"{val:.2f} {units[idx]} ({size_bytes:,} bytes)"
 
 
-def format_decimal_size(size_bytes: Optional[int]) -> str:
+def format_decimal_size(size_bytes: int | None) -> str:
     """Format byte size using decimal SI units (KB, MB, GB; base 1000)."""
     return format_file_size(size_bytes, binary=False)
 
 
-def format_bitrate(bps: Optional[int]) -> str:
+def format_bitrate(bps: int | None) -> str:
     """Format bitrate in bps to kbps (and Mbps if >= 1,000,000 bps)."""
     if bps is None or bps <= 0:
         return "N/A"
@@ -82,7 +81,7 @@ def format_aspect_ratio(width: int, height: int) -> str:
     return f"{ratio:.2f}:1"
 
 
-def format_fps(fps: Optional[float], is_attached_pic: bool = False) -> str:
+def format_fps(fps: float | None, is_attached_pic: bool = False) -> str:
     """Format frame rate in fps, handling still pictures and fractional fps."""
     if is_attached_pic:
         return "N/A (still picture)"
@@ -93,7 +92,7 @@ def format_fps(fps: Optional[float], is_attached_pic: bool = False) -> str:
     return f"{fps:.2f} fps"
 
 
-def format_channels(layout: Optional[str], channels: int) -> str:
+def format_channels(layout: str | None, channels: int) -> str:
     """Format channel count and layout with proper pluralization."""
     ch_word = "channel" if channels == 1 else "channels"
     if layout:

@@ -11,15 +11,16 @@ INVARIANT: Must have ZERO imports from GUI toolkits (gi, Gtk, Adw, etc.).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import Enum
 import shutil
 import subprocess
-from typing import Any, Optional
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any
 
 
 class PresetName(str, Enum):
     """Canonical preset keys."""
+
     # Video
     H264 = "h264"
     H265 = "h265"
@@ -46,33 +47,34 @@ class VideoPreset:
     """
     Video codec preset specification and CLI argument generator.
     """
+
     name: str
     display_name: str
     codec_name: str
     default_extension: str
     compatible_extensions: tuple[str, ...]
-    default_crf: Optional[int] = None
-    crf_range: Optional[tuple[int, int]] = None
-    default_speed_preset: Optional[str] = None
-    default_pix_fmt: Optional[str] = "yuv420p"
-    default_audio_codec: Optional[str] = "aac"
+    default_crf: int | None = None
+    crf_range: tuple[int, int] | None = None
+    default_speed_preset: str | None = None
+    default_pix_fmt: str | None = "yuv420p"
+    default_audio_codec: str | None = "aac"
     compatible_audio_codecs: tuple[str, ...] = ("aac", "libmp3lame", "libopus", "flac")
     supports_two_pass: bool = True
     supports_crf: bool = True
-    apple_tag: Optional[str] = None
-    prores_profile: Optional[int] = None
+    apple_tag: str | None = None
+    prores_profile: int | None = None
     extra_video_args: tuple[str, ...] = ()
     description: str = ""
     crf_arg: str = "-crf"
 
     def build_video_args(
         self,
-        crf: Optional[int] = None,
-        bitrate_kbps: Optional[int] = None,
-        pass_num: Optional[int] = None,
-        pass_logfile: Optional[str] = None,
-        speed_preset: Optional[str] = None,
-        pix_fmt: Optional[str] = None,
+        crf: int | None = None,
+        bitrate_kbps: int | None = None,
+        pass_num: int | None = None,
+        pass_logfile: str | None = None,
+        speed_preset: str | None = None,
+        pix_fmt: str | None = None,
     ) -> list[str]:
         """
         Build deterministic FFmpeg video codec arguments.
@@ -88,7 +90,9 @@ class VideoPreset:
         # Codec selection
         args.extend(["-c:v", self.codec_name])
 
-        if (pass_num is not None or bitrate_kbps is not None) and not self.supports_two_pass:
+        if (
+            pass_num is not None or bitrate_kbps is not None
+        ) and not self.supports_two_pass:
             raise ValueError(
                 f"Preset '{self.name}' ({self.codec_name}) does not support two-pass bitrate encoding"
             )
@@ -172,23 +176,24 @@ class AudioPreset:
     """
     Audio codec preset specification and CLI argument generator.
     """
+
     name: str
     display_name: str
     codec_name: str
     default_extension: str
     compatible_extensions: tuple[str, ...]
-    default_bitrate_kbps: Optional[int] = 192
-    bitrate_range_kbps: Optional[tuple[int, int]] = (64, 320)
+    default_bitrate_kbps: int | None = 192
+    bitrate_range_kbps: tuple[int, int] | None = (64, 320)
     is_lossless: bool = False
-    default_vbr_quality: Optional[int] = None
-    compression_level: Optional[int] = None
+    default_vbr_quality: int | None = None
+    compression_level: int | None = None
     description: str = ""
 
     def build_audio_args(
         self,
-        bitrate_kbps: Optional[int] = None,
+        bitrate_kbps: int | None = None,
         extract_audio: bool = False,
-        vbr_quality: Optional[int] = None,
+        vbr_quality: int | None = None,
     ) -> list[str]:
         """
         Build deterministic FFmpeg audio codec arguments.
@@ -205,13 +210,17 @@ class AudioPreset:
             return args
 
         # VBR quality mode (e.g. MP3 -q:a 2)
-        if vbr_quality is not None or (self.default_vbr_quality is not None and bitrate_kbps is None):
+        if vbr_quality is not None or (
+            self.default_vbr_quality is not None and bitrate_kbps is None
+        ):
             q = vbr_quality if vbr_quality is not None else self.default_vbr_quality
             args.extend(["-q:a", str(q)])
             return args
 
         # CBR/ABR bitrate mode
-        effective_kbps = bitrate_kbps if bitrate_kbps is not None else self.default_bitrate_kbps
+        effective_kbps = (
+            bitrate_kbps if bitrate_kbps is not None else self.default_bitrate_kbps
+        )
         if effective_kbps is not None:
             args.extend(["-b:a", f"{int(effective_kbps)}k"])
 
@@ -522,25 +531,27 @@ AUDIO_PRESETS: dict[str, AudioPreset] = {
     "flac": FLAC_PRESET,
 }
 
-VALID_SPEED_PRESETS: frozenset[str] = frozenset({
-    "ultrafast",
-    "superfast",
-    "veryfast",
-    "faster",
-    "fast",
-    "medium",
-    "slow",
-    "slower",
-    "veryslow",
-    "placebo",
-    "p1",
-    "p2",
-    "p3",
-    "p4",
-    "p5",
-    "p6",
-    "p7",
-})
+VALID_SPEED_PRESETS: frozenset[str] = frozenset(
+    {
+        "ultrafast",
+        "superfast",
+        "veryfast",
+        "faster",
+        "fast",
+        "medium",
+        "slow",
+        "slower",
+        "veryslow",
+        "placebo",
+        "p1",
+        "p2",
+        "p3",
+        "p4",
+        "p5",
+        "p6",
+        "p7",
+    }
+)
 
 
 def is_speed_preset(name: str | Enum | None) -> bool:
@@ -625,7 +636,9 @@ def get_video_preset(name: str | PresetName) -> VideoPreset:
     resolved = _normalize_preset_key(name)
     if resolved in VIDEO_PRESETS:
         return VIDEO_PRESETS[resolved]
-    raise KeyError(f"Unknown video preset '{name}'. Available: {list(VIDEO_PRESETS.keys())}")
+    raise KeyError(
+        f"Unknown video preset '{name}'. Available: {list(VIDEO_PRESETS.keys())}"
+    )
 
 
 def get_audio_preset(name: str | PresetName) -> AudioPreset:
@@ -633,7 +646,9 @@ def get_audio_preset(name: str | PresetName) -> AudioPreset:
     resolved = _normalize_preset_key(name)
     if resolved in AUDIO_PRESETS:
         return AUDIO_PRESETS[resolved]
-    raise KeyError(f"Unknown audio preset '{name}'. Available: {list(AUDIO_PRESETS.keys())}")
+    raise KeyError(
+        f"Unknown audio preset '{name}'. Available: {list(AUDIO_PRESETS.keys())}"
+    )
 
 
 def get_preset(name: str | PresetName) -> VideoPreset | AudioPreset:
@@ -671,7 +686,7 @@ def list_audio_presets() -> list[AudioPreset]:
     return list(AUDIO_PRESETS.values())
 
 
-def get_available_encoders(executable: Optional[str] = None) -> set[str]:
+def get_available_encoders(executable: str | None = None) -> set[str]:
     """
     Return all available encoder names supported by the host FFmpeg installation.
     """
@@ -690,11 +705,11 @@ def get_available_encoders(executable: Optional[str] = None) -> set[str]:
             if len(parts) >= 2 and len(parts[0]) == 6:
                 encoders.add(parts[1])
         return encoders
-    except Exception:
+    except Exception:  # noqa: BLE001
         return set()
 
 
-def check_encoder_available(codec_name: str, executable: Optional[str] = None) -> bool:
+def check_encoder_available(codec_name: str, executable: str | None = None) -> bool:
     """
     Detect if the host FFmpeg installation has support for the requested encoder.
 
@@ -708,8 +723,8 @@ def check_encoder_available(codec_name: str, executable: Optional[str] = None) -
 def resolve_hardware_preset(
     base_preset: str,
     hwaccel: str = "auto",
-    available_encoders: Optional[set[str]] = None,
-    executable: Optional[str] = None,
+    available_encoders: set[str] | None = None,
+    executable: str | None = None,
 ) -> VideoPreset:
     """
     Resolve requested base preset (e.g. 'h264', 'h265') to a hardware-accelerated preset
@@ -731,12 +746,14 @@ def resolve_hardware_preset(
 
     # Auto backend: probe available encoders with priority nvenc -> vaapi -> qsv
     if mode == "auto":
-        encoders = available_encoders if available_encoders is not None else get_available_encoders(executable)
+        encoders = (
+            available_encoders
+            if available_encoders is not None
+            else get_available_encoders(executable)
+        )
         for backend in ("nvenc", "vaapi", "qsv"):
             cand = f"{prefix}_{backend}"
             if cand in encoders and cand in VIDEO_PRESETS:
                 return VIDEO_PRESETS[cand]
 
     return get_video_preset(base_preset)
-
-

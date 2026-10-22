@@ -11,12 +11,11 @@ from __future__ import annotations
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 from tests.ui_test_helpers import (
     get_gi_modules,
-    gi_env,
-    isolate_gi_sys_modules,
 )
 
 pytestmark = [pytest.mark.desktop]
@@ -30,7 +29,9 @@ pytestmark = [pytest.mark.desktop]
 class TestDisplayEnvironment:
     """Tests display detection, headless fallback, and CLI router coordination."""
 
-    def test_has_graphical_display_true_when_display_connected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_has_graphical_display_true_when_display_connected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Verify has_graphical_display returns True when valid display is found."""
         _, _, Gdk, _, _, _ = get_gi_modules()
         from media_toolbox.ui.app import has_graphical_display
@@ -39,7 +40,9 @@ class TestDisplayEnvironment:
         with patch.object(Gdk.Display, "get_default", return_value=MagicMock()):
             assert has_graphical_display() is True
 
-    def test_has_graphical_display_false_when_no_display_vars(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_has_graphical_display_false_when_no_display_vars(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Verify has_graphical_display returns False if neither DISPLAY nor WAYLAND_DISPLAY are set."""
         from media_toolbox.ui.app import has_graphical_display
 
@@ -47,7 +50,9 @@ class TestDisplayEnvironment:
         monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
         assert has_graphical_display() is False
 
-    def test_has_graphical_display_false_when_gdk_display_is_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_has_graphical_display_false_when_gdk_display_is_none(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Verify has_graphical_display returns False if env vars exist but Gdk.Display is None (e.g. sandbox)."""
         _, _, Gdk, _, _, _ = get_gi_modules()
         from media_toolbox.ui.app import has_graphical_display
@@ -56,7 +61,9 @@ class TestDisplayEnvironment:
         with patch.object(Gdk.Display, "get_default", return_value=None):
             assert has_graphical_display() is False
 
-    def test_app_main_cli_fallback_when_headless(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+    def test_app_main_cli_fallback_when_headless(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
         """Verify media_toolbox.ui.app.main exits with 1 and prints warning when headless."""
         from media_toolbox.ui import app
 
@@ -66,7 +73,9 @@ class TestDisplayEnvironment:
         captured = capsys.readouterr()
         assert "No graphical display" in captured.err
 
-    def test_app_main_exits_when_gui_libraries_missing(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
+    def test_app_main_exits_when_gui_libraries_missing(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
         """Verify media_toolbox.ui.app.main exits with 1 and prints friendly warning when PyGObject is missing."""
         from media_toolbox.ui import app
 
@@ -77,7 +86,9 @@ class TestDisplayEnvironment:
         captured = capsys.readouterr()
         assert "Desktop GUI requirements not satisfied" in captured.err
 
-    def test_app_main_launches_when_display_available(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_app_main_launches_when_display_available(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Verify media_toolbox.ui.app.main calls app.run when display is available."""
         from media_toolbox.ui import app
 
@@ -164,7 +175,9 @@ class TestMediaToolboxApp:
         app.do_open([], 0, "")
         mock_win.load_media_files.assert_not_called()
 
-    def test_app_do_open_multiple_files_delegates_to_batch_queue(self, gi_env, tmp_path: Path) -> None:
+    def test_app_do_open_multiple_files_delegates_to_batch_queue(
+        self, gi_env, tmp_path: Path
+    ) -> None:
         """Verify passing multiple files passes full sequence to load_media_files."""
         _, _, _, _, Gio, _ = gi_env
         from media_toolbox.ui.app import MediaToolboxApp
@@ -188,8 +201,8 @@ class TestMediaToolboxApp:
     @pytest.mark.usefixtures("gi_env")
     def test_app_action_about_dialog(self) -> None:
         """Verify _on_action_about presents AboutDialog with parent window."""
-        from media_toolbox.ui.app import MediaToolboxApp
         import media_toolbox.ui.app as app_mod
+        from media_toolbox.ui.app import MediaToolboxApp
 
         app = MediaToolboxApp()
         mock_win = MagicMock()
@@ -205,8 +218,8 @@ class TestMediaToolboxApp:
     @pytest.mark.usefixtures("gi_env")
     def test_app_action_about_window_fallback(self) -> None:
         """Verify _on_action_about fallback presents AboutWindow transient for parent."""
-        from media_toolbox.ui.app import MediaToolboxApp
         import media_toolbox.ui.app as app_mod
+        from media_toolbox.ui.app import MediaToolboxApp
 
         app = MediaToolboxApp()
         mock_win = MagicMock()
@@ -216,9 +229,10 @@ class TestMediaToolboxApp:
         mock_window_cls = MagicMock(return_value=mock_window_instance)
 
         # Ensure AboutDialog is absent to trigger AboutWindow fallback
-        with patch.object(app_mod.Adw, "AboutDialog", None, create=True), \
-             patch.object(app_mod.Adw, "AboutWindow", mock_window_cls, create=True):
+        with (
+            patch.object(app_mod.Adw, "AboutDialog", None, create=True),
+            patch.object(app_mod.Adw, "AboutWindow", mock_window_cls, create=True),
+        ):
             app._on_action_about(MagicMock(), None)
             mock_window_instance.set_transient_for.assert_called_once_with(mock_win)
             mock_window_instance.present.assert_called_once_with()
-

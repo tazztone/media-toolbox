@@ -16,27 +16,25 @@ Uses standard library exclusively (os, pathlib, shutil, subprocess, sys).
 from __future__ import annotations
 
 import os
-from pathlib import Path
-import shlex
 import shutil
 import subprocess
 import sys
-from typing import Optional
 import uuid
+from pathlib import Path
 
 __all__ = [
+    "check_desktop_environment",
     "get_data_home",
     "get_nautilus_paths",
-    "run_update_desktop_database",
-    "check_desktop_environment",
-    "resolve_desktop_inspect_exec",
     "install_nautilus",
-    "uninstall_nautilus",
+    "resolve_desktop_inspect_exec",
+    "run_update_desktop_database",
     "status_nautilus",
+    "uninstall_nautilus",
 ]
 
 
-def get_data_home(dest_dir: Optional[str | Path] = None) -> Path:
+def get_data_home(dest_dir: str | Path | None = None) -> Path:
     """
     Resolve base XDG data directory.
 
@@ -53,13 +51,18 @@ def get_data_home(dest_dir: Optional[str | Path] = None) -> Path:
     return (Path.home() / ".local" / "share").resolve()
 
 
-def get_nautilus_paths(dest_dir: Optional[str | Path] = None) -> dict[str, Path]:
+def get_nautilus_paths(dest_dir: str | Path | None = None) -> dict[str, Path]:
     """Return dictionary of target component paths under resolved data home."""
     data_home = get_data_home(dest_dir)
     return {
         "launcher": data_home / "nautilus" / "scripts" / "Media-Toolbox",
-        "extension": data_home / "nautilus-python" / "extensions" / "media_toolbox_nautilus.py",
-        "desktop": data_home / "applications" / "io.github.tazztone.MediaToolbox.desktop",
+        "extension": data_home
+        / "nautilus-python"
+        / "extensions"
+        / "media_toolbox_nautilus.py",
+        "desktop": data_home
+        / "applications"
+        / "io.github.tazztone.MediaToolbox.desktop",
     }
 
 
@@ -122,10 +125,13 @@ def check_desktop_environment(python_bin: str = sys.executable) -> tuple[bool, s
         if proc.returncode == 2:
             return False, "GTK version is older than required 4.10"
         if proc.returncode == 3:
-            return False, "Libadwaita is missing required widgets (AboutDialog/SpinRow/SwitchRow)"
+            return (
+                False,
+                "Libadwaita is missing required widgets (AboutDialog/SpinRow/SwitchRow)",
+            )
         err = proc.stderr.strip() or "PyGObject / GTK4 / Libadwaita not found"
         return False, err
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         return False, str(exc)
 
 
@@ -151,7 +157,12 @@ def resolve_desktop_inspect_exec() -> str:
 
 def _escape_shell_double_quotes(s: str) -> str:
     r"""Escape special shell characters (\, ", $, `) inside double-quoted string."""
-    return s.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$").replace("`", "\\`")
+    return (
+        s.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("$", "\\$")
+        .replace("`", "\\`")
+    )
 
 
 def _escape_python_double_quotes(s: str) -> str:
@@ -163,7 +174,11 @@ def _is_toolbox_owned(path: Path) -> bool:
     """Verify that file is owned by media-toolbox before unlinking."""
     try:
         content = path.read_text(encoding="utf-8", errors="ignore")
-        return "media_toolbox" in content or "MediaToolbox" in content or "Media-Toolbox" in content
+        return (
+            "media_toolbox" in content
+            or "MediaToolbox" in content
+            or "Media-Toolbox" in content
+        )
     except OSError:
         return False
 
@@ -184,7 +199,7 @@ def _atomic_write_file(target: Path, content: str, mode: int) -> None:
 
 
 def install_nautilus(
-    dest_dir: Optional[str | Path] = None,
+    dest_dir: str | Path | None = None,
     dry_run: bool = False,
 ) -> list[Path]:
     """
@@ -252,7 +267,10 @@ def install_nautilus(
     # Read extension content
     if src_ext.is_file():
         ext_content = src_ext.read_text(encoding="utf-8")
-        if 'INSTALLED_PYTHON: str = ""' in ext_content or 'INSTALLED_PYTHON = ""' in ext_content:
+        if (
+            'INSTALLED_PYTHON: str = ""' in ext_content
+            or 'INSTALLED_PYTHON = ""' in ext_content
+        ):
             ext_content = ext_content.replace(
                 'INSTALLED_PYTHON: str = ""',
                 f'INSTALLED_PYTHON: str = "{escaped_py_python}"',
@@ -287,7 +305,7 @@ def install_nautilus(
 
 
 def uninstall_nautilus(
-    dest_dir: Optional[str | Path] = None,
+    dest_dir: str | Path | None = None,
     dry_run: bool = False,
 ) -> list[Path]:
     """
@@ -302,7 +320,9 @@ def uninstall_nautilus(
         List of Path objects representing removed files.
     """
     paths = get_nautilus_paths(dest_dir)
-    existing_targets = [p for p in paths.values() if p.is_file() and _is_toolbox_owned(p)]
+    existing_targets = [
+        p for p in paths.values() if p.is_file() and _is_toolbox_owned(p)
+    ]
 
     if dry_run:
         return existing_targets
@@ -337,7 +357,7 @@ def uninstall_nautilus(
     return removed
 
 
-def status_nautilus(dest_dir: Optional[str | Path] = None) -> dict[str, bool]:
+def status_nautilus(dest_dir: str | Path | None = None) -> dict[str, bool]:
     """
     Query installation status of each Nautilus integration component.
 

@@ -7,9 +7,8 @@ Tests:
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
-import pytest
+from pathlib import Path
 
 from media_toolbox.ui.forms import (
     build_encode_options_from_state,
@@ -20,7 +19,9 @@ from media_toolbox.ui.forms import (
 def test_forms_zero_gui_imports() -> None:
     """Verify forms.py imports zero GUI modules."""
     for mod in ("gi", "gi.repository", "gi.repository.Gtk", "gi.repository.Adw"):
-        assert mod not in sys.modules or "media_toolbox.ui.forms" not in getattr(sys.modules.get(mod), "__file__", "")
+        assert mod not in sys.modules or "media_toolbox.ui.forms" not in getattr(
+            sys.modules.get(mod), "__file__", ""
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -33,7 +34,6 @@ class TestWidgetStateToEncodeOptions:
 
     def test_crf_mode_defaults_h264(self) -> None:
         """Verify standard CRF mode creates single-pass EncodeOptions with crf=23."""
-        from media_toolbox.ui.forms import build_encode_options_from_state
 
         opts = build_encode_options_from_state(
             preset="h264",
@@ -56,20 +56,24 @@ class TestWidgetStateToEncodeOptions:
 
     def test_crf_mode_codec_specific_bounds(self) -> None:
         """Verify CRF values map correctly for h265, av1, and vp9."""
-        from media_toolbox.ui.forms import build_encode_options_from_state
 
-        opts_h265 = build_encode_options_from_state("h265", "crf", 28, 25.0, None, False, False, None, 128)
+        opts_h265 = build_encode_options_from_state(
+            "h265", "crf", 28, 25.0, None, False, False, None, 128
+        )
         assert opts_h265.crf == 28
 
-        opts_av1 = build_encode_options_from_state("av1", "crf", 30, 25.0, None, False, False, None, 128)
+        opts_av1 = build_encode_options_from_state(
+            "av1", "crf", 30, 25.0, None, False, False, None, 128
+        )
         assert opts_av1.crf == 30
 
-        opts_vp9 = build_encode_options_from_state("vp9", "crf", 32, 25.0, None, False, False, None, 128)
+        opts_vp9 = build_encode_options_from_state(
+            "vp9", "crf", 32, 25.0, None, False, False, None, 128
+        )
         assert opts_vp9.crf == 32
 
     def test_target_size_mode_two_pass(self) -> None:
         """Verify target size mode activates two_pass and sets target_size_mb."""
-        from media_toolbox.ui.forms import build_encode_options_from_state
 
         opts = build_encode_options_from_state(
             preset="h264",
@@ -88,30 +92,66 @@ class TestWidgetStateToEncodeOptions:
 
     def test_resolution_original_scale_is_none(self) -> None:
         """Verify original resolution passes scale=None."""
-        from media_toolbox.ui.forms import build_encode_options_from_state
 
-        opts = build_encode_options_from_state("h264", "crf", 23, 25.0, scale=None, mute_audio=False, normalize_audio=False, volume_boost_db=None, audio_bitrate_kbps=128)
+        opts = build_encode_options_from_state(
+            "h264",
+            "crf",
+            23,
+            25.0,
+            scale=None,
+            mute_audio=False,
+            normalize_audio=False,
+            volume_boost_db=None,
+            audio_bitrate_kbps=128,
+        )
         assert opts.scale is None
 
     def test_resolution_preset_1080p(self) -> None:
         """Verify 1080p scale preset (1920, 1080)."""
-        from media_toolbox.ui.forms import build_encode_options_from_state
 
-        opts = build_encode_options_from_state("h264", "crf", 23, 25.0, scale=(1920, 1080), mute_audio=False, normalize_audio=False, volume_boost_db=None, audio_bitrate_kbps=128)
+        opts = build_encode_options_from_state(
+            "h264",
+            "crf",
+            23,
+            25.0,
+            scale=(1920, 1080),
+            mute_audio=False,
+            normalize_audio=False,
+            volume_boost_db=None,
+            audio_bitrate_kbps=128,
+        )
         assert opts.scale == (1920, 1080)
 
     def test_resolution_preset_720p(self) -> None:
         """Verify 720p scale preset (1280, 720)."""
-        from media_toolbox.ui.forms import build_encode_options_from_state
 
-        opts = build_encode_options_from_state("h264", "crf", 23, 25.0, scale=(1280, 720), mute_audio=False, normalize_audio=False, volume_boost_db=None, audio_bitrate_kbps=128)
+        opts = build_encode_options_from_state(
+            "h264",
+            "crf",
+            23,
+            25.0,
+            scale=(1280, 720),
+            mute_audio=False,
+            normalize_audio=False,
+            volume_boost_db=None,
+            audio_bitrate_kbps=128,
+        )
         assert opts.scale == (1280, 720)
 
     def test_resolution_preset_480p(self) -> None:
         """Verify 480p scale preset (854, 480)."""
-        from media_toolbox.ui.forms import build_encode_options_from_state
 
-        opts = build_encode_options_from_state("h264", "crf", 23, 25.0, scale=(854, 480), mute_audio=False, normalize_audio=False, volume_boost_db=None, audio_bitrate_kbps=128)
+        opts = build_encode_options_from_state(
+            "h264",
+            "crf",
+            23,
+            25.0,
+            scale=(854, 480),
+            mute_audio=False,
+            normalize_audio=False,
+            volume_boost_db=None,
+            audio_bitrate_kbps=128,
+        )
         assert opts.scale == (854, 480)
 
     def test_resolution_custom_even_dimension_snapping(self) -> None:
@@ -119,27 +159,40 @@ class TestWidgetStateToEncodeOptions:
         custom_w, custom_h = 1921, 1079
         snapped_w = custom_w - (custom_w % 2)
         snapped_h = custom_h - (custom_h % 2)
-        from media_toolbox.ui.forms import build_encode_options_from_state
 
-        opts = build_encode_options_from_state("h264", "crf", 23, 25.0, scale=(snapped_w, snapped_h), mute_audio=False, normalize_audio=False, volume_boost_db=None, audio_bitrate_kbps=128)
+        opts = build_encode_options_from_state(
+            "h264",
+            "crf",
+            23,
+            25.0,
+            scale=(snapped_w, snapped_h),
+            mute_audio=False,
+            normalize_audio=False,
+            volume_boost_db=None,
+            audio_bitrate_kbps=128,
+        )
         assert opts.scale == (1920, 1078)
 
     def test_speed_factor_normal_and_multiplier(self) -> None:
         """Verify 1.0x maps to None, while other multipliers are preserved."""
-        from media_toolbox.ui.forms import build_encode_options_from_state
 
-        opts_1 = build_encode_options_from_state("h264", "crf", 23, 25.0, None, False, False, None, 128, speed_factor=1.0)
+        opts_1 = build_encode_options_from_state(
+            "h264", "crf", 23, 25.0, None, False, False, None, 128, speed_factor=1.0
+        )
         assert opts_1.speed is None
 
-        opts_2 = build_encode_options_from_state("h264", "crf", 23, 25.0, None, False, False, None, 128, speed_factor=2.0)
+        opts_2 = build_encode_options_from_state(
+            "h264", "crf", 23, 25.0, None, False, False, None, 128, speed_factor=2.0
+        )
         assert opts_2.speed == 2.0
 
-        opts_half = build_encode_options_from_state("h264", "crf", 23, 25.0, None, False, False, None, 128, speed_factor=0.5)
+        opts_half = build_encode_options_from_state(
+            "h264", "crf", 23, 25.0, None, False, False, None, 128, speed_factor=0.5
+        )
         assert opts_half.speed == 0.5
 
     def test_audio_mute_strips_audio_and_resets_volume(self) -> None:
         """Verify mute_audio=True clears loudness normalization and volume boost."""
-        from media_toolbox.ui.forms import build_encode_options_from_state
 
         opts = build_encode_options_from_state(
             preset="h264",
@@ -158,7 +211,6 @@ class TestWidgetStateToEncodeOptions:
 
     def test_audio_adjustments_loudness_and_boost(self) -> None:
         """Verify unmuted audio retains normalization and boost values."""
-        from media_toolbox.ui.forms import build_encode_options_from_state
 
         opts = build_encode_options_from_state(
             preset="h264",
@@ -178,7 +230,6 @@ class TestWidgetStateToEncodeOptions:
 
     def test_extract_audio_mode_options(self) -> None:
         """Verify extract_audio mode sets extract_audio=True and scale=None."""
-        from media_toolbox.ui.forms import build_encode_options_from_state
 
         opts = build_encode_options_from_state(
             preset="mp3",
@@ -200,19 +251,21 @@ class TestWidgetStateToEncodeOptions:
 
     def test_gif_and_prores_incompatible_rate_control_ignored(self) -> None:
         """Verify GIF and ProRes presets omit CRF and two-pass rate control."""
-        from media_toolbox.ui.forms import build_encode_options_from_state
 
-        opts_gif = build_encode_options_from_state("gif", "crf", 23, 10.0, None, False, False, None, 128)
+        opts_gif = build_encode_options_from_state(
+            "gif", "crf", 23, 10.0, None, False, False, None, 128
+        )
         assert opts_gif.crf is None
         assert opts_gif.two_pass is False
 
-        opts_prores = build_encode_options_from_state("prores", "target_size", 23, 50.0, None, False, False, None, 128)
+        opts_prores = build_encode_options_from_state(
+            "prores", "target_size", 23, 50.0, None, False, False, None, 128
+        )
         assert opts_prores.two_pass is False
         assert opts_prores.target_size_mb is None
 
     def test_build_encode_options_with_crop(self) -> None:
         """Verify crop string is passed to EncodeOptions."""
-        from media_toolbox.ui.forms import build_encode_options_from_state
 
         opts = build_encode_options_from_state(
             preset="h264",
@@ -231,7 +284,6 @@ class TestWidgetStateToEncodeOptions:
 
     def test_build_encode_options_crop_ignored_on_audio_extract(self) -> None:
         """Verify crop is reset to None when extracting audio."""
-        from media_toolbox.ui.forms import build_encode_options_from_state
 
         opts = build_encode_options_from_state(
             preset="mp3",
@@ -251,7 +303,6 @@ class TestWidgetStateToEncodeOptions:
 
     def test_build_encode_options_audio_track_and_subtitles(self) -> None:
         """Verify audio_track_index and keep_subtitles pass to EncodeOptions."""
-        from media_toolbox.ui.forms import build_encode_options_from_state
 
         opts = build_encode_options_from_state(
             preset="h264",
@@ -271,7 +322,6 @@ class TestWidgetStateToEncodeOptions:
 
     def test_build_encode_options_muted_clears_audio_track_index(self) -> None:
         """When mute_audio is True, audio_track_index is reset to None."""
-        from media_toolbox.ui.forms import build_encode_options_from_state
 
         opts = build_encode_options_from_state(
             preset="h264",
@@ -290,7 +340,6 @@ class TestWidgetStateToEncodeOptions:
         assert opts.keep_subtitles is True
 
 
-
 # ---------------------------------------------------------------------------
 # 4. Default Output Path Resolution Tests
 # ---------------------------------------------------------------------------
@@ -301,7 +350,6 @@ class TestDefaultOutputPathResolution:
 
     def test_output_path_transcode_video_preset(self, tmp_path: Path) -> None:
         """Verify default video transcode output path has _transcoded.mp4."""
-        from media_toolbox.ui.forms import resolve_default_output_path
 
         inp = tmp_path / "movie.mkv"
         out = resolve_default_output_path(inp, preset_name="h264")
@@ -309,7 +357,6 @@ class TestDefaultOutputPathResolution:
 
     def test_output_path_target_size_compressed_tag(self, tmp_path: Path) -> None:
         """Verify target size mode produces _compressed.mp4 tag."""
-        from media_toolbox.ui.forms import resolve_default_output_path
 
         inp = tmp_path / "movie.mkv"
         out = resolve_default_output_path(inp, preset_name="h264", is_target_size=True)
@@ -317,18 +364,20 @@ class TestDefaultOutputPathResolution:
 
     def test_output_path_extract_audio_extension(self, tmp_path: Path) -> None:
         """Verify audio extraction uses audio extension and _audio tag."""
-        from media_toolbox.ui.forms import resolve_default_output_path
 
         inp = tmp_path / "clip.mp4"
-        out_mp3 = resolve_default_output_path(inp, preset_name="mp3", is_extract_audio=True)
+        out_mp3 = resolve_default_output_path(
+            inp, preset_name="mp3", is_extract_audio=True
+        )
         assert out_mp3 == tmp_path / "clip_audio.mp3"
 
-        out_flac = resolve_default_output_path(inp, preset_name="flac", is_extract_audio=True)
+        out_flac = resolve_default_output_path(
+            inp, preset_name="flac", is_extract_audio=True
+        )
         assert out_flac == tmp_path / "clip_audio.flac"
 
     def test_output_path_collision_avoidance_increments(self, tmp_path: Path) -> None:
         """Verify existing candidate files cause numeric suffix increment (_1, _2)."""
-        from media_toolbox.ui.forms import resolve_default_output_path
 
         inp = tmp_path / "test.mp4"
         (tmp_path / "test_transcoded.mp4").touch()
@@ -342,7 +391,6 @@ class TestDefaultOutputPathResolution:
 
     def test_output_path_never_overwrites_source_input(self, tmp_path: Path) -> None:
         """Verify output path is never identical to the input path."""
-        from media_toolbox.ui.forms import resolve_default_output_path
 
         inp = tmp_path / "video_transcoded.mp4"
         inp.touch()

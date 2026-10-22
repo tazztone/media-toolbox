@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import inspect
 import sys
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
+
 import pytest
 
 from media_toolbox.core.models import (
@@ -83,8 +85,7 @@ def isolate_gi_sys_modules():
             is_mock_gi
             and (
                 k == "gi"
-                or k.startswith("gi.")
-                or k.startswith("gi_")
+                or k.startswith(("gi.", "gi_"))
                 or k in ("gobject", "glib", "gio", "gtk", "gtk.gdk")
             )
         )
@@ -96,15 +97,28 @@ def isolate_gi_sys_modules():
 @pytest.fixture
 def sample_video_media_info() -> MediaInfo:
     """Standard 1080p video with AAC audio fixture."""
-    v = VideoStream(index=0, codec_name="h264", width=1920, height=1080, fps=30.0, duration=60.0)
-    a = AudioStream(index=1, codec_name="aac", channels=2, sample_rate=48000, duration=60.0)
-    fmt = FormatInfo(filename="sample.mp4", format_name="mov,mp4,m4a,3gp,3g2,mj2", duration=60.0, size_bytes=15_000_000)
+    v = VideoStream(
+        index=0, codec_name="h264", width=1920, height=1080, fps=30.0, duration=60.0
+    )
+    a = AudioStream(
+        index=1, codec_name="aac", channels=2, sample_rate=48000, duration=60.0
+    )
+    fmt = FormatInfo(
+        filename="sample.mp4",
+        format_name="mov,mp4,m4a,3gp,3g2,mj2",
+        duration=60.0,
+        size_bytes=15_000_000,
+    )
     return MediaInfo(format=fmt, video_streams=(v,), audio_streams=(a,))
 
 
 @pytest.fixture
 def sample_silent_media_info() -> MediaInfo:
     """Silent video with no audio stream."""
-    v = VideoStream(index=0, codec_name="h264", width=1280, height=720, fps=24.0, duration=30.0)
-    fmt = FormatInfo(filename="silent.mp4", format_name="mp4", duration=30.0, size_bytes=5_000_000)
+    v = VideoStream(
+        index=0, codec_name="h264", width=1280, height=720, fps=24.0, duration=30.0
+    )
+    fmt = FormatInfo(
+        filename="silent.mp4", format_name="mp4", duration=30.0, size_bytes=5_000_000
+    )
     return MediaInfo(format=fmt, video_streams=(v,), audio_streams=())

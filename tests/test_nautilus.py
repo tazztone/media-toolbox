@@ -17,15 +17,16 @@ from __future__ import annotations
 import ast
 import configparser
 import os
-from pathlib import Path
 import shutil
-import stat
 import subprocess
 import sys
 import time
 import types
-from typing import Any, Callable, Generator, Optional
-from unittest.mock import MagicMock, call, patch
+from collections.abc import Callable, Generator
+from pathlib import Path
+from typing import Any
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from media_toolbox import cli
@@ -53,10 +54,8 @@ def isolate_gi_sys_modules() -> Generator[None, None, None]:
         if k not in initial
         and (
             k == "gi"
-            or k.startswith("gi.")
-            or k.startswith("gi_")
+            or k.startswith(("gi.", "gi_", "media_toolbox.nautilus.extension"))
             or k in ("gobject", "glib", "gio", "gtk", "nautilus")
-            or k.startswith("media_toolbox.nautilus.extension")
         )
     ]
     for k in to_delete:
@@ -115,13 +114,15 @@ class MockMenuItem:
         self.label = label
         self.tip = tip
         self.icon = icon
-        self.submenu: Optional[MockMenu] = None
+        self.submenu: MockMenu | None = None
         self._signals: dict[str, list[tuple[Callable[..., Any], tuple[Any, ...]]]] = {}
 
     def set_submenu(self, menu: MockMenu) -> None:
         self.submenu = menu
 
-    def connect(self, signal_name: str, handler: Callable[..., Any], *args: Any) -> None:
+    def connect(
+        self, signal_name: str, handler: Callable[..., Any], *args: Any
+    ) -> None:
         if signal_name not in self._signals:
             self._signals[signal_name] = []
         self._signals[signal_name].append((handler, args))
@@ -147,16 +148,16 @@ class MockMenu:
 
 class MockMenuProvider:
     """Base dummy for Nautilus.MenuProvider interface."""
-    pass
 
 
 class MockGObject:
     """Base dummy for GObject.GObject."""
-    pass
 
 
 @pytest.fixture
-def mock_nautilus_env(monkeypatch: pytest.MonkeyPatch) -> Generator[dict[str, Any], None, None]:
+def mock_nautilus_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Generator[dict[str, Any], None, None]:
     """
     Headless environment fixture injecting mock Nautilus and GObject modules into sys.modules.
     Loads and provides media_toolbox.nautilus.extension without requiring system typelibs.
@@ -209,7 +210,13 @@ class TestLauncherScript:
 
     @pytest.fixture
     def launcher_path(self) -> Path:
-        p = Path(__file__).resolve().parent.parent / "src" / "media_toolbox" / "nautilus" / "launcher.sh"
+        p = (
+            Path(__file__).resolve().parent.parent
+            / "src"
+            / "media_toolbox"
+            / "nautilus"
+            / "launcher.sh"
+        )
         assert p.is_file(), f"launcher.sh not found at expected path: {p}"
         return p
 
@@ -232,7 +239,9 @@ class TestLauncherScript:
         header = "\n".join(lines[:10])
         assert "set -e" in header or "set -euo pipefail" in header
 
-    def test_launcher_exits_nonzero_when_no_files_provided(self, launcher_path: Path) -> None:
+    def test_launcher_exits_nonzero_when_no_files_provided(
+        self, launcher_path: Path
+    ) -> None:
         """Assert launcher exits with non-zero code and error message when no files given."""
         env = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
@@ -247,7 +256,9 @@ class TestLauncherScript:
         )
         assert proc.returncode != 0
         combined = proc.stdout + proc.stderr
-        assert any(k in combined.lower() for k in ("no files", "error", "usage", "selected"))
+        assert any(
+            k in combined.lower() for k in ("no files", "error", "usage", "selected")
+        )
 
     def test_launcher_execution_with_cli_arguments(
         self, launcher_path: Path, tmp_path: Path
@@ -306,7 +317,9 @@ class TestLauncherScript:
         env = os.environ.copy()
         env["PATH"] = f"{mock_bin_dir}:{env.get('PATH', '')}"
         env["MEDIA_TOOLBOX_PYTHON"] = str(fake_python)
-        env["NAUTILUS_SCRIPT_SELECTED_FILE_PATHS"] = "/media/video_a.mp4\n/media/video_b.mkv\n"
+        env["NAUTILUS_SCRIPT_SELECTED_FILE_PATHS"] = (
+            "/media/video_a.mp4\n/media/video_b.mkv\n"
+        )
 
         proc = subprocess.run(
             ["bash", str(launcher_path)],
@@ -337,7 +350,7 @@ class TestLauncherScript:
         fake_python = mock_bin_dir / "python3"
         # Script writes each argument on its own line
         fake_python.write_text(
-            f"#!/usr/bin/env bash\nfor arg in \"$@\"; do echo \"$arg\" >> '{log_file}'; done\nexit 0\n",
+            f'#!/usr/bin/env bash\nfor arg in "$@"; do echo "$arg" >> \'{log_file}\'; done\nexit 0\n',
             encoding="utf-8",
         )
         fake_python.chmod(0o755)
@@ -364,7 +377,9 @@ class TestLauncherScript:
 
         assert log_file.is_file()
         lines = log_file.read_text(encoding="utf-8").splitlines()
-        assert special_path in lines, f"Filename was split incorrectly. Recorded: {lines}"
+        assert special_path in lines, (
+            f"Filename was split incorrectly. Recorded: {lines}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -375,7 +390,9 @@ class TestLauncherScript:
 class TestNautilusExtensionHeadless:
     """Validates python/media_toolbox/nautilus/extension.py menu logic and callbacks."""
 
-    def test_get_file_items_returns_menu_for_video(self, mock_nautilus_env: dict[str, Any]) -> None:
+    def test_get_file_items_returns_menu_for_video(
+        self, mock_nautilus_env: dict[str, Any]
+    ) -> None:
         """Assert get_file_items returns root Menu item with submenus for video file."""
         ext = mock_nautilus_env["ext"]
         provider = ext.MediaToolboxExtension()
@@ -395,7 +412,9 @@ class TestNautilusExtensionHeadless:
         assert any("Transcode" in lbl for lbl in labels)
         assert any("Extract Audio" in lbl for lbl in labels)
 
-    def test_get_file_items_returns_menu_for_audio(self, mock_nautilus_env: dict[str, Any]) -> None:
+    def test_get_file_items_returns_menu_for_audio(
+        self, mock_nautilus_env: dict[str, Any]
+    ) -> None:
         """Assert get_file_items returns root Menu item for audio file."""
         ext = mock_nautilus_env["ext"]
         provider = ext.MediaToolboxExtension()
@@ -407,7 +426,19 @@ class TestNautilusExtensionHeadless:
 
     @pytest.mark.parametrize(
         "ext_name",
-        [".mp4", ".mkv", ".mov", ".avi", ".webm", ".mp3", ".wav", ".flac", ".opus", ".m4a", ".aac"],
+        [
+            ".mp4",
+            ".mkv",
+            ".mov",
+            ".avi",
+            ".webm",
+            ".mp3",
+            ".wav",
+            ".flac",
+            ".opus",
+            ".m4a",
+            ".aac",
+        ],
     )
     def test_get_file_items_matches_container_extensions_with_generic_mime(
         self, mock_nautilus_env: dict[str, Any], ext_name: str
@@ -418,9 +449,13 @@ class TestNautilusExtensionHeadless:
         f = MockFileInfo(f"/tmp/file{ext_name}", mime_type="application/octet-stream")
 
         items = provider.get_file_items([f])
-        assert len(items) == 1, f"Failed to match extension {ext_name} with generic MIME"
+        assert len(items) == 1, (
+            f"Failed to match extension {ext_name} with generic MIME"
+        )
 
-    def test_get_file_items_ignores_non_media_files(self, mock_nautilus_env: dict[str, Any]) -> None:
+    def test_get_file_items_ignores_non_media_files(
+        self, mock_nautilus_env: dict[str, Any]
+    ) -> None:
         """Assert get_file_items returns empty list for text, pdf, and non-media archives."""
         ext = mock_nautilus_env["ext"]
         provider = ext.MediaToolboxExtension()
@@ -433,11 +468,15 @@ class TestNautilusExtensionHeadless:
         items = provider.get_file_items(files)
         assert items == []
 
-    def test_get_file_items_ignores_directories(self, mock_nautilus_env: dict[str, Any]) -> None:
+    def test_get_file_items_ignores_directories(
+        self, mock_nautilus_env: dict[str, Any]
+    ) -> None:
         """Assert directories are excluded even if named like media files."""
         ext = mock_nautilus_env["ext"]
         provider = ext.MediaToolboxExtension()
-        f = MockFileInfo("/tmp/movies.mp4", mime_type="inode/directory", is_directory=True)
+        f = MockFileInfo(
+            "/tmp/movies.mp4", mime_type="inode/directory", is_directory=True
+        )
 
         items = provider.get_file_items([f])
         assert items == []
@@ -465,7 +504,10 @@ class TestNautilusExtensionHeadless:
         assert len(items) == 1
         sub_items = items[0].submenu.get_items()
 
-        with patch("subprocess.Popen") as mock_popen, patch("subprocess.run") as mock_run:
+        with (
+            patch("subprocess.Popen") as mock_popen,
+            patch("subprocess.run") as mock_run,
+        ):
             for item in sub_items:
                 mock_popen.reset_mock()
                 mock_run.reset_mock()
@@ -476,7 +518,9 @@ class TestNautilusExtensionHeadless:
                 # Assert non-blocking Popen was called
                 assert mock_popen.call_count == 1, f"Popen not called for {item.label}"
                 # Assert blocking subprocess.run was NEVER called
-                assert mock_run.call_count == 0, f"Blocking subprocess.run was called for {item.label}"
+                assert mock_run.call_count == 0, (
+                    f"Blocking subprocess.run was called for {item.label}"
+                )
 
                 # Verify command line includes target file
                 cmd = mock_popen.call_args[0][0]
@@ -485,9 +529,14 @@ class TestNautilusExtensionHeadless:
 
                 # Verify detached process flags (start_new_session=True or close_fds=True)
                 kwargs = mock_popen.call_args[1]
-                assert kwargs.get("start_new_session") is True or kwargs.get("close_fds") is True
+                assert (
+                    kwargs.get("start_new_session") is True
+                    or kwargs.get("close_fds") is True
+                )
 
-    def test_find_python_interpreter_prioritizes_baked_and_override(self, mock_nautilus_env: dict[str, Any], tmp_path: Path) -> None:
+    def test_find_python_interpreter_prioritizes_baked_and_override(
+        self, mock_nautilus_env: dict[str, Any], tmp_path: Path
+    ) -> None:
         """find_python_interpreter respects MEDIA_TOOLBOX_PYTHON override and baked INSTALLED_PYTHON."""
         ext = mock_nautilus_env["ext"]
 
@@ -501,9 +550,11 @@ class TestNautilusExtensionHeadless:
         # 2. Baked INSTALLED_PYTHON
         py_baked = tmp_path / "baked_python"
         py_baked.touch(mode=0o755)
-        with patch.object(ext, "INSTALLED_PYTHON", str(py_baked)):
-            with patch.dict(os.environ, {}, clear=True):
-                assert ext.find_python_interpreter() == str(py_baked)
+        with (
+            patch.object(ext, "INSTALLED_PYTHON", str(py_baked)),
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            assert ext.find_python_interpreter() == str(py_baked)
 
 
 # ---------------------------------------------------------------------------
@@ -520,7 +571,9 @@ class TestNautilusInstaller:
         assert len(installed) == 3
 
         launcher = tmp_path / "nautilus" / "scripts" / "Media-Toolbox"
-        extension = tmp_path / "nautilus-python" / "extensions" / "media_toolbox_nautilus.py"
+        extension = (
+            tmp_path / "nautilus-python" / "extensions" / "media_toolbox_nautilus.py"
+        )
         desktop = tmp_path / "applications" / "io.github.tazztone.MediaToolbox.desktop"
 
         assert launcher.is_file()
@@ -571,28 +624,55 @@ class TestNautilusInstaller:
         """Assert resolve_desktop_inspect_exec maps available terminal binaries properly."""
         with patch("shutil.which") as mock_which:
             # 1. x-terminal-emulator present
-            mock_which.side_effect = lambda bin: "/usr/bin/x-terminal-emulator" if bin == "x-terminal-emulator" else None
-            assert installer.resolve_desktop_inspect_exec() == "x-terminal-emulator -e media-toolbox inspect %f"
+            mock_which.side_effect = lambda bin: (
+                "/usr/bin/x-terminal-emulator" if bin == "x-terminal-emulator" else None
+            )
+            assert (
+                installer.resolve_desktop_inspect_exec()
+                == "x-terminal-emulator -e media-toolbox inspect %f"
+            )
 
             # 2. x-terminal-emulator missing, ptyxis present
-            mock_which.side_effect = lambda bin: "/usr/bin/ptyxis" if bin == "ptyxis" else None
-            assert installer.resolve_desktop_inspect_exec() == "ptyxis -- media-toolbox inspect %f"
+            mock_which.side_effect = lambda bin: (
+                "/usr/bin/ptyxis" if bin == "ptyxis" else None
+            )
+            assert (
+                installer.resolve_desktop_inspect_exec()
+                == "ptyxis -- media-toolbox inspect %f"
+            )
 
             # 3. gnome-terminal present
-            mock_which.side_effect = lambda bin: "/usr/bin/gnome-terminal" if bin == "gnome-terminal" else None
-            assert installer.resolve_desktop_inspect_exec() == "gnome-terminal -- media-toolbox inspect %f"
+            mock_which.side_effect = lambda bin: (
+                "/usr/bin/gnome-terminal" if bin == "gnome-terminal" else None
+            )
+            assert (
+                installer.resolve_desktop_inspect_exec()
+                == "gnome-terminal -- media-toolbox inspect %f"
+            )
 
             # 4. xterm present
-            mock_which.side_effect = lambda bin: "/usr/bin/xterm" if bin == "xterm" else None
-            assert installer.resolve_desktop_inspect_exec() == "xterm -e media-toolbox inspect %f"
+            mock_which.side_effect = lambda bin: (
+                "/usr/bin/xterm" if bin == "xterm" else None
+            )
+            assert (
+                installer.resolve_desktop_inspect_exec()
+                == "xterm -e media-toolbox inspect %f"
+            )
 
             # 5. None present fallback
             mock_which.side_effect = lambda bin: None
-            assert installer.resolve_desktop_inspect_exec() == "x-terminal-emulator -e media-toolbox inspect %f"
+            assert (
+                installer.resolve_desktop_inspect_exec()
+                == "x-terminal-emulator -e media-toolbox inspect %f"
+            )
 
-    def test_desktop_action_inspect_substitutes_resolved_terminal(self, tmp_path: Path) -> None:
+    def test_desktop_action_inspect_substitutes_resolved_terminal(
+        self, tmp_path: Path
+    ) -> None:
         """Assert install_nautilus substitutes non-default resolved terminal into desktop action."""
-        with patch("media_toolbox.nautilus.installer.resolve_desktop_inspect_exec") as mock_resolve:
+        with patch(
+            "media_toolbox.nautilus.installer.resolve_desktop_inspect_exec"
+        ) as mock_resolve:
             mock_resolve.return_value = "ptyxis -- media-toolbox inspect %f"
             installer.install_nautilus(dest_dir=tmp_path)
 
@@ -601,14 +681,26 @@ class TestNautilusInstaller:
         config.read_string(desktop.read_text(encoding="utf-8"))
 
         assert "Desktop Action Inspect" in config.sections()
-        assert config["Desktop Action Inspect"].get("Exec") == "ptyxis -- media-toolbox inspect %f"
+        assert (
+            config["Desktop Action Inspect"].get("Exec")
+            == "ptyxis -- media-toolbox inspect %f"
+        )
 
         mimes = config["Desktop Entry"].get("MimeType", "")
-        for m in ("video/x-msvideo", "audio/opus", "audio/x-m4a", "audio/aac", "video/mp2t"):
+        for m in (
+            "video/x-msvideo",
+            "audio/opus",
+            "audio/x-m4a",
+            "audio/aac",
+            "video/mp2t",
+        ):
             assert m in mimes
 
     def test_install_nautilus_warns_when_gui_not_in_path(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Installer emits warning on stderr if media-toolbox-gui or ffmpeg/ffprobe are absent from PATH."""
         monkeypatch.setattr(shutil, "which", lambda bin: None)
@@ -627,14 +719,18 @@ class TestNautilusInstaller:
         launcher = tmp_path / "nautilus" / "scripts" / "Media-Toolbox"
         assert (launcher.stat().st_mode & 0o777) == 0o755
 
-    def test_install_nautilus_bakes_current_python_interpreter(self, tmp_path: Path) -> None:
+    def test_install_nautilus_bakes_current_python_interpreter(
+        self, tmp_path: Path
+    ) -> None:
         """Assert installer bakes sys.executable into installed launcher script and extension."""
         installer.install_nautilus(dest_dir=tmp_path)
         launcher = tmp_path / "nautilus" / "scripts" / "Media-Toolbox"
         content = launcher.read_text(encoding="utf-8")
         assert f'INSTALLED_PYTHON="{sys.executable}"' in content
 
-        extension = tmp_path / "nautilus-python" / "extensions" / "media_toolbox_nautilus.py"
+        extension = (
+            tmp_path / "nautilus-python" / "extensions" / "media_toolbox_nautilus.py"
+        )
         ext_content = extension.read_text(encoding="utf-8")
         assert f'INSTALLED_PYTHON: str = "{sys.executable}"' in ext_content
 
@@ -736,7 +832,9 @@ class TestNautilusInstaller:
         assert (tmp_path / "applications").is_dir()
         assert pycache_dir.is_dir()
 
-    def test_uninstall_nautilus_removes_pycache_dir_when_empty(self, tmp_path: Path) -> None:
+    def test_uninstall_nautilus_removes_pycache_dir_when_empty(
+        self, tmp_path: Path
+    ) -> None:
         """Assert uninstall_nautilus removes __pycache__ directory when only toolbox pyc files existed."""
         installer.install_nautilus(dest_dir=tmp_path)
         pycache_dir = tmp_path / "nautilus-python" / "extensions" / "__pycache__"
@@ -760,29 +858,46 @@ class TestNautilusInstaller:
         assert paths["extension"].is_file()
         assert paths["desktop"].is_file()
 
-    def test_uninstall_nautilus_idempotent_when_already_absent(self, tmp_path: Path) -> None:
+    def test_uninstall_nautilus_idempotent_when_already_absent(
+        self, tmp_path: Path
+    ) -> None:
         """Assert uninstall on an empty/uninstalled directory succeeds returning empty list."""
         removed = installer.uninstall_nautilus(dest_dir=tmp_path)
         assert removed == []
 
-    def test_installer_escapes_paths_with_spaces_and_special_chars(self, tmp_path: Path) -> None:
+    def test_installer_escapes_paths_with_spaces_and_special_chars(
+        self, tmp_path: Path
+    ) -> None:
         """Installer quotes paths with spaces, quotes, and dollars safely for bash and python."""
         weird_python = '/opt/weird "path"/with $dollars/python3'
         with patch("sys.executable", weird_python):
             installer.install_nautilus(dest_dir=tmp_path)
 
         paths = installer.get_nautilus_paths(dest_dir=tmp_path)
-        launcher_text = paths["launcher"].read_text(encoding="utf-8")
         ext_text = paths["extension"].read_text(encoding="utf-8")
 
         # Bash syntax check
-        proc = subprocess.run(["bash", "-n", str(paths["launcher"])], capture_output=True, text=True)
-        assert proc.returncode == 0, f"Generated launcher has invalid bash syntax: {proc.stderr}"
-        # Bash expands INSTALLED_PYTHON back to exact unescaped weird_python
-        check_proc = subprocess.run(
-            ["bash", "-c", 'eval "$(grep "^INSTALLED_PYTHON=" "$1")"; echo -n "$INSTALLED_PYTHON"', "_", str(paths["launcher"])],
+        proc = subprocess.run(
+            ["bash", "-n", str(paths["launcher"])],
             capture_output=True,
             text=True,
+            check=False,
+        )
+        assert proc.returncode == 0, (
+            f"Generated launcher has invalid bash syntax: {proc.stderr}"
+        )
+        # Bash expands INSTALLED_PYTHON back to exact unescaped weird_python
+        check_proc = subprocess.run(
+            [
+                "bash",
+                "-c",
+                'eval "$(grep "^INSTALLED_PYTHON=" "$1")"; echo -n "$INSTALLED_PYTHON"',
+                "_",
+                str(paths["launcher"]),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
         )
         assert check_proc.stdout == weird_python
 
@@ -791,7 +906,10 @@ class TestNautilusInstaller:
         assert tree is not None
         assigned_val = None
         for node in tree.body:
-            if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", None) == "INSTALLED_PYTHON":
+            if (
+                isinstance(node, ast.AnnAssign)
+                and getattr(node.target, "id", None) == "INSTALLED_PYTHON"
+            ):
                 assigned_val = node.value.value  # type: ignore[attr-defined]
         assert assigned_val == weird_python
 
@@ -799,7 +917,10 @@ class TestNautilusInstaller:
         """uninstall_nautilus verifies application ownership and skips unrelated user files."""
         paths = installer.get_nautilus_paths(dest_dir=tmp_path)
         paths["launcher"].parent.mkdir(parents=True, exist_ok=True)
-        paths["launcher"].write_text("#!/bin/bash\n# Unrelated custom user script\necho hello\n", encoding="utf-8")
+        paths["launcher"].write_text(
+            "#!/bin/bash\n# Unrelated custom user script\necho hello\n",
+            encoding="utf-8",
+        )
 
         removed = installer.uninstall_nautilus(dest_dir=tmp_path)
         assert paths["launcher"] not in removed
@@ -814,7 +935,9 @@ class TestNautilusInstaller:
 class TestNautilusCLISubcommands:
     """Validates CLI integration for install-nautilus, uninstall-nautilus, and status-nautilus."""
 
-    def test_cli_install_nautilus_dry_run(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_cli_install_nautilus_dry_run(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Assert 'media_toolbox install-nautilus --dry-run' succeeds without modifying system."""
         exit_code = cli.main(["install-nautilus", "--dry-run"])
         assert exit_code == 0
@@ -822,17 +945,21 @@ class TestNautilusCLISubcommands:
         combined = captured.out + captured.err
         assert "dry-run" in combined.lower() or "would install" in combined.lower()
 
-    def test_cli_uninstall_nautilus_dry_run(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_cli_uninstall_nautilus_dry_run(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Assert 'media_toolbox uninstall-nautilus --dry-run' succeeds without deleting files."""
         exit_code = cli.main(["uninstall-nautilus", "--dry-run"])
         assert exit_code == 0
         captured = capsys.readouterr()
         combined = captured.out + captured.err
-        assert "dry-run" in combined.lower() or "would remove" in combined.lower() or "no files" in combined.lower()
+        assert (
+            "dry-run" in combined.lower()
+            or "would remove" in combined.lower()
+            or "no files" in combined.lower()
+        )
 
-    def test_cli_install_and_uninstall_with_dest_dir(
-        self, tmp_path: Path
-    ) -> None:
+    def test_cli_install_and_uninstall_with_dest_dir(self, tmp_path: Path) -> None:
         """Assert CLI subcommands correctly pass --dest-dir to installer module."""
         # 1. Install via CLI
         code = cli.main(["install-nautilus", "--dest-dir", str(tmp_path)])
@@ -854,7 +981,10 @@ class TestNautilusCLISubcommands:
         assert not paths["desktop"].exists()
 
     def test_cli_status_nautilus_reports_path_warning(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         """Assert status-nautilus console output notes when media-toolbox-gui or ffmpeg/ffprobe is not in PATH."""
         monkeypatch.setattr(shutil, "which", lambda bin: None)
@@ -902,7 +1032,9 @@ class TestNautilusCLISubcommands:
             env=env,
             check=False,
         )
-        assert proc.returncode == 0, f"Headless check failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+        assert proc.returncode == 0, (
+            f"Headless check failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -928,11 +1060,12 @@ class TestNautilusModuleInvariants:
                     root = alias.name.split(".")[0].lower()
                     if root in forbidden:
                         violations.append(f"Line {node.lineno}: import {alias.name}")
-            elif isinstance(node, ast.ImportFrom):
-                if node.module:
-                    root = node.module.split(".")[0].lower()
-                    if root in forbidden:
-                        violations.append(f"Line {node.lineno}: from {node.module} import ...")
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                root = node.module.split(".")[0].lower()
+                if root in forbidden:
+                    violations.append(
+                        f"Line {node.lineno}: from {node.module} import ..."
+                    )
 
         assert not violations, (
             "Forbidden module-scope GUI imports found in test_nautilus.py:\n"
@@ -943,7 +1076,13 @@ class TestNautilusModuleInvariants:
         """Assert media_toolbox/nautilus/installer.py has zero GUI imports using AST scanner."""
         from tests.test_headless_ast import scan_ast_for_gui_violations
 
-        installer_file = Path(__file__).resolve().parent.parent / "src" / "media_toolbox" / "nautilus" / "installer.py"
+        installer_file = (
+            Path(__file__).resolve().parent.parent
+            / "src"
+            / "media_toolbox"
+            / "nautilus"
+            / "installer.py"
+        )
         if not installer_file.is_file():
             pytest.skip("installer.py not implemented yet")
 
@@ -954,7 +1093,9 @@ class TestNautilusModuleInvariants:
             + "\n".join(f"  - {v}" for v in violations)
         )
 
-    def test_extension_fallback_imports_without_type_error_when_gi_unavailable(self) -> None:
+    def test_extension_fallback_imports_without_type_error_when_gi_unavailable(
+        self,
+    ) -> None:
         """Assert extension module can be imported without TypeError when gi/Nautilus is unavailable."""
         import importlib
 

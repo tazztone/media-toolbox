@@ -9,12 +9,12 @@ INVARIANT: Must have ZERO imports from GUI toolkits (gi, Gtk, Adw, etc.).
 
 from __future__ import annotations
 
-from fractions import Fraction
 import json
 import math
-from pathlib import Path
 import subprocess
-from typing import Any, Optional
+from fractions import Fraction
+from pathlib import Path
+from typing import Any
 
 from media_toolbox.core.models import (
     AudioStream,
@@ -25,19 +25,19 @@ from media_toolbox.core.models import (
 )
 
 __all__ = [
-    "probe_media",
-    "parse_probe_json",
+    "ProbeError",
+    "is_attached_pic",
     "parse_frame_rate",
-    "parse_stream_fps",
     "parse_optional_float",
     "parse_optional_int",
+    "parse_probe_json",
     "parse_rotation",
-    "is_attached_pic",
-    "ProbeError",
+    "parse_stream_fps",
+    "probe_media",
 ]
 
 
-def parse_optional_float(val: Any) -> Optional[float]:
+def parse_optional_float(val: Any) -> float | None:
     """
     Safely parse float values from ffprobe metadata.
 
@@ -55,7 +55,7 @@ def parse_optional_float(val: Any) -> Optional[float]:
         return None
 
 
-def parse_optional_int(val: Any) -> Optional[int]:
+def parse_optional_int(val: Any) -> int | None:
     """
     Safely parse integer values from ffprobe metadata.
 
@@ -72,7 +72,7 @@ def parse_optional_int(val: Any) -> Optional[int]:
         return None
 
 
-def parse_frame_rate(val: Any) -> Optional[float]:
+def parse_frame_rate(val: Any) -> float | None:
     """
     Safely evaluate fractional frame rates (e.g. '24000/1001', '30/1').
 
@@ -93,7 +93,7 @@ def parse_frame_rate(val: Any) -> Optional[float]:
         return None
 
 
-def parse_stream_fps(stream: dict[str, Any]) -> Optional[float]:
+def parse_stream_fps(stream: dict[str, Any]) -> float | None:
     """
     Extract frame rate from a stream dictionary.
 
@@ -159,7 +159,9 @@ def parse_probe_json(data: dict[str, Any]) -> MediaInfo:
         raise ProbeError("Probe data missing required 'format' section")
 
     if "streams" not in data or not isinstance(data["streams"], list):
-        raise ProbeError("Probe data missing required 'streams' section or streams is not a list")
+        raise ProbeError(
+            "Probe data missing required 'streams' section or streams is not a list"
+        )
 
     format_data = data["format"]
     raw_streams = data["streams"]
@@ -202,7 +204,9 @@ def parse_probe_json(data: dict[str, Any]) -> MediaInfo:
                         codec_name=str(s.get("codec_name", "")),
                         channels=int(s.get("channels") or 0),
                         sample_rate=int(s.get("sample_rate") or 0),
-                        channel_layout=str(s["channel_layout"]) if s.get("channel_layout") else None,
+                        channel_layout=str(s["channel_layout"])
+                        if s.get("channel_layout")
+                        else None,
                         bit_rate=parse_optional_int(s.get("bit_rate")),
                         duration=parse_optional_float(s.get("duration")),
                     )
@@ -243,8 +247,10 @@ def probe_media(
 
     cmd = [
         ffprobe_bin,
-        "-v", "error",
-        "-print_format", "json",
+        "-v",
+        "error",
+        "-print_format",
+        "json",
         "-show_format",
         "-show_streams",
         str(path),
@@ -259,7 +265,9 @@ def probe_media(
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as e:
-        raise ProbeError(f"ffprobe timed out after {timeout:.1f}s inspecting '{path}'") from e
+        raise ProbeError(
+            f"ffprobe timed out after {timeout:.1f}s inspecting '{path}'"
+        ) from e
     except FileNotFoundError as e:
         raise ProbeError(f"ffprobe binary not found at '{ffprobe_bin}'") from e
     except OSError as e:

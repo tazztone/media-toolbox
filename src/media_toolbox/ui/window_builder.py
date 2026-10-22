@@ -6,7 +6,7 @@ Declarative layout and widget hierarchy builder for Media Toolbox MainWindow.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import gi
 
@@ -129,7 +129,9 @@ def build_window_layout(win: MainWindow) -> None:
     root_box.append(win.main_stack)
 
     # Progress Footer (anchored at bottom)
-    win.progress_footer = ProgressFooterWidget(on_cancel_callback=win._on_cancel_clicked)
+    win.progress_footer = ProgressFooterWidget(
+        on_cancel_callback=win._on_cancel_clicked
+    )
     root_box.append(win.progress_footer)
 
     win.toast_overlay.set_child(root_box)
@@ -154,7 +156,9 @@ def build_transcode_page(win: MainWindow) -> Adw.PreferencesPage:
 
     # Rate Control & Quality
     win.rate_widget = RateControlWidget()
-    win.rate_widget.mode_row.connect("notify::selected", lambda *_: win._update_default_output_paths())
+    win.rate_widget.mode_row.connect(
+        "notify::selected", lambda *_: win._update_default_output_paths()
+    )
     page.add(win.rate_widget)
 
     # Resolution & Dimensions
@@ -191,7 +195,9 @@ def build_transcode_page(win: MainWindow) -> Adw.PreferencesPage:
         subtitle="Not configured",
     )
     browse_btn = Gtk.Button(label="Browse...")
-    browse_btn.connect("clicked", lambda _b: win.choose_output_destination(is_audio=False))
+    browse_btn.connect(
+        "clicked", lambda _b: win.choose_output_destination(is_audio=False)
+    )
     win.video_dest_row.add_suffix(browse_btn)
     action_group.add(win.video_dest_row)
 
@@ -280,7 +286,9 @@ def build_extract_audio_page(win: MainWindow) -> Adw.PreferencesPage:
         subtitle="Not configured",
     )
     browse_btn = Gtk.Button(label="Browse...")
-    browse_btn.connect("clicked", lambda _b: win.choose_output_destination(is_audio=True))
+    browse_btn.connect(
+        "clicked", lambda _b: win.choose_output_destination(is_audio=True)
+    )
     win.audio_dest_row.add_suffix(browse_btn)
     action_group.add(win.audio_dest_row)
 

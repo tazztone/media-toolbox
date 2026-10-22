@@ -14,8 +14,6 @@ INVARIANT: Strict zero GUI imports (gi, Gtk, Adw, Nautilus, tkinter, PyQt, PySid
 
 from __future__ import annotations
 
-from collections import deque
-import dataclasses
 import errno
 import math
 import os
@@ -23,11 +21,12 @@ import signal
 import subprocess
 import threading
 import time
-from typing import Any, Callable, Iterable, Iterator, Optional, Union
 import warnings
+from collections import deque
+from collections.abc import Callable, Iterable, Iterator
+from typing import Any
 
 from media_toolbox.core.models import MediaToolboxError, ProgressEvent
-
 
 # ---------------------------------------------------------------------------
 # Exception Taxonomy
@@ -47,8 +46,8 @@ class RunnerError(MediaToolboxError):
 
     def __init__(
         self,
-        message_or_cmd: Union[str, list[str]] = "",
-        cmd: Optional[list[str]] = None,
+        message_or_cmd: str | list[str] = "",
+        cmd: list[str] | None = None,
         returncode: int = 1,
         stderr: str = "",
         stdout: str = "",
@@ -103,8 +102,8 @@ class RunnerCancelledError(RunnerError):
 
     def __init__(
         self,
-        message_or_cmd: Union[str, list[str]] = "Execution was cancelled",
-        cmd: Optional[list[str]] = None,
+        message_or_cmd: str | list[str] = "Execution was cancelled",
+        cmd: list[str] | None = None,
         returncode: int = -15,
         stderr: str = "",
         stdout: str = "",
@@ -131,8 +130,8 @@ class RunnerFileNotFoundError(FileNotFoundError, RunnerError):
 
     def __init__(
         self,
-        message_or_cmd: Union[str, list[str]] = "FFmpeg executable not found",
-        cmd: Optional[list[str]] = None,
+        message_or_cmd: str | list[str] = "FFmpeg executable not found",
+        cmd: list[str] | None = None,
         returncode: int = 127,
         stderr: str = "",
         stdout: str = "",
@@ -155,7 +154,7 @@ class RunnerFileNotFoundError(FileNotFoundError, RunnerError):
 # ---------------------------------------------------------------------------
 
 
-def parse_speed(speed_val: Any) -> Optional[float]:
+def parse_speed(speed_val: Any) -> float | None:
     """
     Parse FFmpeg speed factor string into an optional positive float.
 
@@ -176,10 +175,10 @@ def parse_speed(speed_val: Any) -> Optional[float]:
 
 
 def parse_time_to_seconds(
-    out_time_us: Optional[str] = None,
-    out_time_ms: Optional[str] = None,
-    out_time_str: Optional[str] = None,
-    out_time: Optional[str] = None,
+    out_time_us: str | None = None,
+    out_time_ms: str | None = None,
+    out_time_str: str | None = None,
+    out_time: str | None = None,
 ) -> float:
     """
     Convert FFmpeg time fields to elapsed seconds.
@@ -217,13 +216,17 @@ def parse_time_to_seconds(
 
 def calculate_percentage(
     out_time_seconds: float,
-    total_duration: Optional[float],
+    total_duration: float | None,
     is_completed: bool = False,
 ) -> float:
     """Calculate completion percentage clamped to [0.0, 100.0]."""
     if is_completed:
         return 100.0
-    if total_duration is None or not math.isfinite(total_duration) or total_duration <= 0.0:
+    if (
+        total_duration is None
+        or not math.isfinite(total_duration)
+        or total_duration <= 0.0
+    ):
         return 0.0
     if not math.isfinite(out_time_seconds) or out_time_seconds <= 0.0:
         return 0.0
@@ -233,14 +236,18 @@ def calculate_percentage(
 
 def calculate_eta_seconds(
     out_time_seconds: float,
-    total_duration: Optional[float],
-    speed: Optional[float],
+    total_duration: float | None,
+    speed: float | None,
     is_completed: bool = False,
-) -> Optional[float]:
+) -> float | None:
     """Calculate estimated remaining time in seconds."""
     if is_completed:
         return 0.0
-    if total_duration is None or not math.isfinite(total_duration) or total_duration <= 0.0:
+    if (
+        total_duration is None
+        or not math.isfinite(total_duration)
+        or total_duration <= 0.0
+    ):
         return None
     if speed is None or not math.isfinite(speed) or speed <= 0.0:
         return None
@@ -262,14 +269,14 @@ class ProgressParser:
     Emits ProgressEvent on progress=continue and progress=end.
     """
 
-    def __init__(self, total_duration: Optional[float] = None) -> None:
+    def __init__(self, total_duration: float | None = None) -> None:
         self.total_duration = total_duration
         self._block: dict[str, str] = {}
         self._completed_emitted: bool = False
         self._last_out_time_seconds: float = 0.0
         self._last_percentage: float = 0.0
 
-    def feed_line(self, line: str) -> Optional[ProgressEvent]:
+    def feed_line(self, line: str) -> ProgressEvent | None:
         """Process one stream line. Returns ProgressEvent on block boundary, else None."""
         line = line.strip()
         if not line or "=" not in line:
@@ -307,11 +314,15 @@ class ProgressParser:
                 except (ValueError, TypeError):
                     return 0.0
 
-            raw_pct = calculate_percentage(out_time, self.total_duration, is_completed=is_end)
+            raw_pct = calculate_percentage(
+                out_time, self.total_duration, is_completed=is_end
+            )
             pct = max(self._last_percentage, raw_pct)
             self._last_percentage = pct
 
-            eta = calculate_eta_seconds(out_time, self.total_duration, speed, is_completed=is_end)
+            eta = calculate_eta_seconds(
+                out_time, self.total_duration, speed, is_completed=is_end
+            )
 
             event = ProgressEvent(
                 frame=_to_int("frame"),
@@ -330,7 +341,7 @@ class ProgressParser:
 
         return None
 
-    def finish(self, force: bool = False) -> Optional[ProgressEvent]:
+    def finish(self, force: bool = False) -> ProgressEvent | None:
         """Emit completion event if process finished without emitting progress=end or when force=True."""
         if force or not self._completed_emitted:
             self._completed_emitted = True
@@ -353,7 +364,7 @@ class ProgressParser:
 
 def parse_progress_stream(
     lines: Iterable[str],
-    total_duration: Optional[float] = None,
+    total_duration: float | None = None,
 ) -> Iterator[ProgressEvent]:
     """Generator yielding ProgressEvents from an iterable of stream lines."""
     parser = ProgressParser(total_duration=total_duration)
@@ -376,10 +387,8 @@ def _is_pgid_alive(pgid: int) -> bool:
     except ProcessLookupError:
         return False
     except OSError as e:
-        if e.errno == errno.ESRCH:
-            return False
         # EPERM means processes exist in group but caller lacks permission to signal
-        return True
+        return e.errno != errno.ESRCH
 
 
 def terminate_process_group(
@@ -434,12 +443,12 @@ def terminate_process_group(
 
 def run_ffmpeg(
     cmd: list[str],
-    total_duration_seconds: Optional[float] = None,
-    progress_callback: Optional[Callable[[ProgressEvent], None]] = None,
-    cancel_event: Optional[threading.Event] = None,
+    total_duration_seconds: float | None = None,
+    progress_callback: Callable[[ProgressEvent], None] | None = None,
+    cancel_event: threading.Event | None = None,
     sigterm_timeout: float = 2.0,
-    total_duration: Optional[float] = None,
-    is_ffmpeg: Optional[bool] = None,
+    total_duration: float | None = None,
+    is_ffmpeg: bool | None = None,
 ) -> None:
     """
     Execute a single FFmpeg command, parsing progress output and handling cancellation.
@@ -469,15 +478,24 @@ def run_ffmpeg(
             stacklevel=2,
         )
 
-    dur = total_duration_seconds if total_duration_seconds is not None else total_duration
+    dur = (
+        total_duration_seconds if total_duration_seconds is not None else total_duration
+    )
 
     if cancel_event is not None and cancel_event.is_set():
         raise RunnerCancelledError("Execution cancelled before start", cmd=cmd)
 
     effective_cmd = list(cmd)
     base_name = os.path.basename(effective_cmd[0]).lower()
-    if (is_ffmpeg is True or (is_ffmpeg is None and "ffmpeg" in base_name)) and "-progress" not in effective_cmd:
-        effective_cmd = [effective_cmd[0], "-nostats", "-progress", "pipe:1"] + effective_cmd[1:]
+    if (
+        is_ffmpeg is True or (is_ffmpeg is None and "ffmpeg" in base_name)
+    ) and "-progress" not in effective_cmd:
+        effective_cmd = [
+            effective_cmd[0],
+            "-nostats",
+            "-progress",
+            "pipe:1",
+        ] + effective_cmd[1:]
 
     try:
         proc = subprocess.Popen(
@@ -524,41 +542,50 @@ def run_ffmpeg(
                     while stderr_chars > max_stderr_chars and stderr_chunks:
                         popped = stderr_chunks.popleft()
                         stderr_chars -= len(popped)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
         finally:
             if proc.stderr is not None:
                 try:
                     proc.stderr.close()
-                except Exception:
+                except Exception:  # noqa: BLE001, S110
                     pass
 
-    stderr_thread = threading.Thread(target=_drain_stderr, daemon=True, name="ffmpeg-stderr-drain")
+    stderr_thread = threading.Thread(
+        target=_drain_stderr, daemon=True, name="ffmpeg-stderr-drain"
+    )
     stderr_thread.start()
 
     done_event = threading.Event()
-    watcher_thread: Optional[threading.Thread] = None
+    watcher_thread: threading.Thread | None = None
 
     # Asynchronous cancellation watcher thread with bounded wait loop
     if cancel_event is not None:
+
         def _cancel_watcher() -> None:
             while not done_event.is_set():
                 if cancel_event.is_set():
-                    terminate_process_group(pgid, proc, graceful_timeout=sigterm_timeout)
+                    terminate_process_group(
+                        pgid, proc, graceful_timeout=sigterm_timeout
+                    )
                     break
                 done_event.wait(timeout=0.05)
 
-        watcher_thread = threading.Thread(target=_cancel_watcher, daemon=True, name="ffmpeg-cancel-watch")
+        watcher_thread = threading.Thread(
+            target=_cancel_watcher, daemon=True, name="ffmpeg-cancel-watch"
+        )
         watcher_thread.start()
 
     parser = ProgressParser(total_duration=dur)
-    pending_end_event: Optional[ProgressEvent] = None
+    pending_end_event: ProgressEvent | None = None
 
     try:
         if proc.stdout is not None:
             for line in proc.stdout:
                 if cancel_event is not None and cancel_event.is_set():
-                    terminate_process_group(pgid, proc, graceful_timeout=sigterm_timeout)
+                    terminate_process_group(
+                        pgid, proc, graceful_timeout=sigterm_timeout
+                    )
                     break
 
                 event = parser.feed_line(line)
@@ -576,7 +603,7 @@ def run_ffmpeg(
         if proc.stdout is not None:
             try:
                 proc.stdout.close()
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
 
         if cancel_event is not None and cancel_event.is_set():
@@ -593,7 +620,12 @@ def run_ffmpeg(
     full_stderr = "".join(stderr_chunks)
 
     if cancel_event is not None and cancel_event.is_set():
-        raise RunnerCancelledError("Process was cancelled", cmd=effective_cmd, returncode=proc.returncode, stderr=full_stderr)
+        raise RunnerCancelledError(
+            "Process was cancelled",
+            cmd=effective_cmd,
+            returncode=proc.returncode,
+            stderr=full_stderr,
+        )
 
     if proc.returncode != 0:
         raise RunnerError(
@@ -614,10 +646,10 @@ def run_ffmpeg(
 
 def run_command(
     cmd: list[str],
-    total_duration: Optional[float] = None,
-    progress_callback: Optional[Callable[[ProgressEvent], None]] = None,
-    cancel_event: Optional[threading.Event] = None,
-    total_duration_seconds: Optional[float] = None,
+    total_duration: float | None = None,
+    progress_callback: Callable[[ProgressEvent], None] | None = None,
+    cancel_event: threading.Event | None = None,
+    total_duration_seconds: float | None = None,
     sigterm_timeout: float = 2.0,
 ) -> None:
     """Compatibility alias for run_ffmpeg supporting total_duration and total_duration_seconds (deprecated)."""
@@ -626,7 +658,9 @@ def run_command(
         DeprecationWarning,
         stacklevel=2,
     )
-    dur = total_duration_seconds if total_duration_seconds is not None else total_duration
+    dur = (
+        total_duration_seconds if total_duration_seconds is not None else total_duration
+    )
     run_ffmpeg(
         cmd=cmd,
         total_duration_seconds=dur,
@@ -638,13 +672,13 @@ def run_command(
 
 def run_ffmpeg_pipeline(
     cmds: list[list[str]],
-    total_duration_seconds: Optional[float] = None,
-    progress_callback: Optional[Callable[[ProgressEvent], None]] = None,
-    pipeline_progress_callback: Optional[Callable[[int, int, ProgressEvent], None]] = None,
-    cancel_event: Optional[threading.Event] = None,
+    total_duration_seconds: float | None = None,
+    progress_callback: Callable[[ProgressEvent], None] | None = None,
+    pipeline_progress_callback: Callable[[int, int, ProgressEvent], None] | None = None,
+    cancel_event: threading.Event | None = None,
     sigterm_timeout: float = 2.0,
-    total_duration: Optional[float] = None,
-    is_ffmpeg: Optional[bool] = None,
+    total_duration: float | None = None,
+    is_ffmpeg: bool | None = None,
 ) -> None:
     """
     Execute a sequential pipeline of FFmpeg commands (e.g. 2-pass bitrate targeting).
@@ -674,7 +708,9 @@ def run_ffmpeg_pipeline(
             stacklevel=2,
         )
 
-    dur = total_duration_seconds if total_duration_seconds is not None else total_duration
+    dur = (
+        total_duration_seconds if total_duration_seconds is not None else total_duration
+    )
     num_passes = len(cmds)
     pipeline_last_out_time: float = 0.0
 
@@ -682,18 +718,24 @@ def run_ffmpeg_pipeline(
         pass_num = pass_idx + 1
 
         if cancel_event is not None and cancel_event.is_set():
-            raise RunnerCancelledError(f"Pipeline cancelled before pass {pass_num}", cmd=cmd)
+            raise RunnerCancelledError(
+                f"Pipeline cancelled before pass {pass_num}", cmd=cmd
+            )
 
-        def _pass_callback(raw_event: ProgressEvent, p_idx: int = pass_idx, p_num: int = pass_num) -> None:
+        def _pass_callback(
+            raw_event: ProgressEvent, p_idx: int = pass_idx, p_num: int = pass_num
+        ) -> None:
             nonlocal pipeline_last_out_time
             if pipeline_progress_callback is not None:
                 pipeline_progress_callback(p_num, num_passes, raw_event)
 
             if progress_callback is not None:
-                scaled_pct = (p_idx * 100.0 / num_passes) + (raw_event.percentage / num_passes)
+                scaled_pct = (p_idx * 100.0 / num_passes) + (
+                    raw_event.percentage / num_passes
+                )
                 clamped_pct = round(max(0.0, min(100.0, scaled_pct)), 2)
 
-                pipeline_eta: Optional[float] = None
+                pipeline_eta: float | None = None
                 if dur and raw_event.speed and raw_event.speed > 0:
                     rem_in_pass = max(0.0, dur - raw_event.out_time_seconds)
                     rem_passes = num_passes - 1 - p_idx
@@ -702,10 +744,14 @@ def run_ffmpeg_pipeline(
                 elif raw_event.eta_seconds is not None:
                     pipeline_eta = raw_event.eta_seconds
 
-                is_overall_completed = (p_idx == num_passes - 1) and raw_event.is_completed
+                is_overall_completed = (
+                    p_idx == num_passes - 1
+                ) and raw_event.is_completed
 
                 if dur is not None and dur > 0.0:
-                    cumulative_out_time = (p_idx * dur) + min(dur, raw_event.out_time_seconds)
+                    cumulative_out_time = (p_idx * dur) + min(
+                        dur, raw_event.out_time_seconds
+                    )
                 else:
                     cumulative_out_time = raw_event.out_time_seconds
 

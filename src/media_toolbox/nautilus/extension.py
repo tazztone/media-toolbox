@@ -17,21 +17,24 @@ Graceful fallback: imports without crashing when python-nautilus is not installe
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import shlex
 import shutil
 import subprocess
 import sys
-from typing import Any, Optional, Sequence
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Any
 from urllib.parse import unquote, urlparse
 
 try:
     import gi
+
     try:
         gi.require_version("Nautilus", "4.1")
     except (ValueError, AttributeError):
         pass
     from gi.repository import GObject, Nautilus
+
     _NAUTILUS_AVAILABLE = True
 except (ImportError, ValueError, AttributeError):
     _NAUTILUS_AVAILABLE = False
@@ -54,6 +57,7 @@ except (ImportError, ValueError, AttributeError):
         Menu = _Stub
         FileInfo = _Stub
 
+
 INSTALLED_PYTHON: str = ""
 
 SUPPORTED_MIME_PREFIXES = ("video/", "audio/")
@@ -67,9 +71,25 @@ ADDITIONAL_MEDIA_MIMES = {
 
 SUPPORTED_EXTENSIONS = {
     # Video containers
-    ".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v", ".flv", ".wmv", ".ts",
+    ".mp4",
+    ".mkv",
+    ".mov",
+    ".avi",
+    ".webm",
+    ".m4v",
+    ".flv",
+    ".wmv",
+    ".ts",
     # Audio containers
-    ".mp3", ".wav", ".flac", ".opus", ".m4a", ".aac", ".ogg", ".oga", ".wma",
+    ".mp3",
+    ".wav",
+    ".flac",
+    ".opus",
+    ".m4a",
+    ".aac",
+    ".ogg",
+    ".oga",
+    ".wma",
 }
 
 TERMINAL_CANDIDATES = (
@@ -105,7 +125,7 @@ def is_media_file(file_info: Any) -> bool:
     return ext in SUPPORTED_EXTENSIONS
 
 
-def get_file_path(file_info: Any) -> Optional[str]:
+def get_file_path(file_info: Any) -> str | None:
     """Extract absolute filesystem path from Nautilus.FileInfo."""
     if hasattr(file_info, "get_location"):
         loc = file_info.get_location()
@@ -129,7 +149,11 @@ def find_python_interpreter() -> str:
         return override
 
     # Check baked installer interpreter
-    if INSTALLED_PYTHON and os.path.isfile(INSTALLED_PYTHON) and os.access(INSTALLED_PYTHON, os.X_OK):
+    if (
+        INSTALLED_PYTHON
+        and os.path.isfile(INSTALLED_PYTHON)
+        and os.access(INSTALLED_PYTHON, os.X_OK)
+    ):
         return INSTALLED_PYTHON
 
     try:
@@ -138,7 +162,7 @@ def find_python_interpreter() -> str:
         venv_py = repo_root / ".venv" / "bin" / "python3"
         if venv_py.is_file() and os.access(venv_py, os.X_OK):
             return str(venv_py)
-    except Exception:
+    except Exception:  # noqa: BLE001, S110
         pass
 
     active_venv = os.environ.get("VIRTUAL_ENV")
@@ -164,13 +188,15 @@ def get_toolbox_env() -> dict[str, str]:
             pp = env.get("PYTHONPATH", "")
             env["PYTHONPATH"] = f"{repo_src}:{pp}" if pp else str(repo_src)
             return env
-    except Exception:
+    except Exception:  # noqa: BLE001, S110
         pass
 
     return env
 
 
-def launch_detached(cmd: Sequence[str], env: Optional[dict[str, str]] = None) -> subprocess.Popen[bytes]:
+def launch_detached(
+    cmd: Sequence[str], env: dict[str, str] | None = None
+) -> subprocess.Popen[bytes]:
     """Launch detached subprocess to avoid blocking Nautilus or dying on window close."""
     full_env = get_toolbox_env()
     if env:
@@ -187,7 +213,7 @@ def launch_detached(cmd: Sequence[str], env: Optional[dict[str, str]] = None) ->
     )
 
 
-def find_terminal_emulator() -> Optional[str]:
+def find_terminal_emulator() -> str | None:
     """Find installed terminal emulator executable."""
     for term in TERMINAL_CANDIDATES:
         if shutil.which(term):
@@ -195,7 +221,9 @@ def find_terminal_emulator() -> Optional[str]:
     return None
 
 
-def build_terminal_command(terminal_bin: str, shell_script: str, extra_args: Sequence[str] = ()) -> list[str]:
+def build_terminal_command(
+    terminal_bin: str, shell_script: str, extra_args: Sequence[str] = ()
+) -> list[str]:
     """Assemble terminal execution arguments across terminal types."""
     term_name = Path(terminal_bin).name
     if term_name in ("ptyxis", "gnome-terminal"):
@@ -227,7 +255,9 @@ def get_transcode_output_path(input_path: str) -> str:
 def get_extract_audio_output_path(input_path: str) -> str:
     """Generate non-colliding default output path for MP3 extraction."""
     p = Path(input_path)
-    base_out = p.parent / (f"{p.stem}_audio.mp3" if p.suffix.lower() == ".mp3" else f"{p.stem}.mp3")
+    base_out = p.parent / (
+        f"{p.stem}_audio.mp3" if p.suffix.lower() == ".mp3" else f"{p.stem}.mp3"
+    )
     if not base_out.exists():
         return str(base_out)
     counter = 1
@@ -317,7 +347,9 @@ class MediaToolboxExtension(GObject.GObject, Nautilus.MenuProvider):
         lines = ["set -e", "echo '=== Media Toolbox: Metadata Inspection ==='"]
         for p in paths:
             lines.append(f"echo {shlex.quote(f'--- Probing: {p} ---')}")
-            lines.append(f"{shlex.quote(py)} -m media_toolbox.cli inspect {shlex.quote(p)}")
+            lines.append(
+                f"{shlex.quote(py)} -m media_toolbox.cli inspect {shlex.quote(p)}"
+            )
             lines.append("echo ''")
         lines.append("read -n 1 -s -r -p 'Press any key to close...'")
         script = "\n".join(lines)
@@ -347,18 +379,22 @@ class MediaToolboxExtension(GObject.GObject, Nautilus.MenuProvider):
 
         lines = [
             "set -e",
-            'trap "if command -v notify-send >/dev/null 2>&1; then notify-send \'Media Toolbox\' \'Transcoding failed\'; fi" ERR',
-            'if command -v notify-send >/dev/null 2>&1; then notify-send \'Media Toolbox\' \'Starting video transcode...\'; fi',
+            "trap \"if command -v notify-send >/dev/null 2>&1; then notify-send 'Media Toolbox' 'Transcoding failed'; fi\" ERR",
+            "if command -v notify-send >/dev/null 2>&1; then notify-send 'Media Toolbox' 'Starting video transcode...'; fi",
             "echo '=== Media Toolbox: Quick Transcode (H.264) ==='",
         ]
         for idx, p in enumerate(paths, 1):
             out_p = get_transcode_output_path(p)
-            lines.append(f"echo {shlex.quote(f'[{idx}/{len(paths)}] Transcoding {p} -> {out_p}')}")
+            lines.append(
+                f"echo {shlex.quote(f'[{idx}/{len(paths)}] Transcoding {p} -> {out_p}')}"
+            )
             cmd = f"{shlex.quote(py)} -m media_toolbox.cli transcode {shlex.quote(p)} {shlex.quote(out_p)} --preset h264"
             lines.append(cmd)
         lines.append("echo ''")
         lines.append("echo '=== Transcoding Complete ==='")
-        lines.append("if command -v notify-send >/dev/null 2>&1; then notify-send 'Media Toolbox' 'Transcoding complete'; fi")
+        lines.append(
+            "if command -v notify-send >/dev/null 2>&1; then notify-send 'Media Toolbox' 'Transcoding complete'; fi"
+        )
         lines.append("read -n 1 -s -r -p 'Press any key to close...'")
         script = "\n".join(lines)
 
@@ -374,18 +410,22 @@ class MediaToolboxExtension(GObject.GObject, Nautilus.MenuProvider):
 
         lines = [
             "set -e",
-            'trap "if command -v notify-send >/dev/null 2>&1; then notify-send \'Media Toolbox\' \'Audio extraction failed\'; fi" ERR',
-            'if command -v notify-send >/dev/null 2>&1; then notify-send \'Media Toolbox\' \'Starting audio extraction...\'; fi',
+            "trap \"if command -v notify-send >/dev/null 2>&1; then notify-send 'Media Toolbox' 'Audio extraction failed'; fi\" ERR",
+            "if command -v notify-send >/dev/null 2>&1; then notify-send 'Media Toolbox' 'Starting audio extraction...'; fi",
             "echo '=== Media Toolbox: Extract Audio (MP3) ==='",
         ]
         for idx, p in enumerate(paths, 1):
             out_p = get_extract_audio_output_path(p)
-            lines.append(f"echo {shlex.quote(f'[{idx}/{len(paths)}] Extracting audio {p} -> {out_p}')}")
+            lines.append(
+                f"echo {shlex.quote(f'[{idx}/{len(paths)}] Extracting audio {p} -> {out_p}')}"
+            )
             cmd = f"{shlex.quote(py)} -m media_toolbox.cli extract-audio {shlex.quote(p)} {shlex.quote(out_p)} --codec mp3"
             lines.append(cmd)
         lines.append("echo ''")
         lines.append("echo '=== Audio Extraction Complete ==='")
-        lines.append("if command -v notify-send >/dev/null 2>&1; then notify-send 'Media Toolbox' 'Audio extraction complete'; fi")
+        lines.append(
+            "if command -v notify-send >/dev/null 2>&1; then notify-send 'Media Toolbox' 'Audio extraction complete'; fi"
+        )
         lines.append("read -n 1 -s -r -p 'Press any key to close...'")
         script = "\n".join(lines)
 

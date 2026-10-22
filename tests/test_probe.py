@@ -4,15 +4,15 @@ Unit tests for ffprobe parser and inspection runner (core/probe.py).
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import Any
-import subprocess
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 from media_toolbox.core.models import MediaInfo, ProbeError
 from media_toolbox.core.probe import (
-    parse_frame_rate,
     parse_optional_float,
     parse_probe_json,
     parse_rotation,
@@ -51,7 +51,9 @@ class TestParseProbeJson:
         assert media.format.size_bytes == 20190000
         assert media.duration == 60.0
 
-    def test_parse_audio_only_with_cover_art(self, probe_data_audio_only_mp3: dict[str, Any]) -> None:
+    def test_parse_audio_only_with_cover_art(
+        self, probe_data_audio_only_mp3: dict[str, Any]
+    ) -> None:
         media = parse_probe_json(probe_data_audio_only_mp3)
         assert media.has_video is False
         assert media.primary_video is None
@@ -100,7 +102,9 @@ class TestParseProbeJson:
             ("invalid", None),
         ],
     )
-    def test_parse_frame_rate_variations(self, fps_str: str, expected_float: float | None) -> None:
+    def test_parse_frame_rate_variations(
+        self, fps_str: str, expected_float: float | None
+    ) -> None:
         data = {
             "streams": [
                 {
@@ -121,7 +125,9 @@ class TestParseProbeJson:
         else:
             assert media.primary_video.fps == pytest.approx(expected_float, rel=1e-4)
 
-    def test_parse_duration_fallback(self, probe_data_missing_format_duration: dict[str, Any]) -> None:
+    def test_parse_duration_fallback(
+        self, probe_data_missing_format_duration: dict[str, Any]
+    ) -> None:
         media = parse_probe_json(probe_data_missing_format_duration)
         assert media.format.duration is None
         assert media.primary_video is not None
@@ -138,7 +144,9 @@ class TestParseProbeJson:
             {"streams": [], "format": "not a dict"},
         ],
     )
-    def test_parse_malformed_json_raises_probe_error(self, malformed_data: dict[str, Any]) -> None:
+    def test_parse_malformed_json_raises_probe_error(
+        self, malformed_data: dict[str, Any]
+    ) -> None:
         with pytest.raises(ProbeError):
             parse_probe_json(malformed_data)
 
@@ -187,7 +195,9 @@ class TestProbeMediaExecution:
         assert str(dummy_file) in args
 
     @patch("subprocess.run")
-    def test_probe_media_subprocess_failure(self, mock_run: MagicMock, tmp_path: Path) -> None:
+    def test_probe_media_subprocess_failure(
+        self, mock_run: MagicMock, tmp_path: Path
+    ) -> None:
         dummy_file = tmp_path / "corrupt.mp4"
         dummy_file.write_bytes(b"bad content")
 
@@ -201,7 +211,9 @@ class TestProbeMediaExecution:
             probe_media(dummy_file)
 
     @patch("subprocess.run")
-    def test_probe_media_corrupt_json_output(self, mock_run: MagicMock, tmp_path: Path) -> None:
+    def test_probe_media_corrupt_json_output(
+        self, mock_run: MagicMock, tmp_path: Path
+    ) -> None:
         dummy_file = tmp_path / "corrupt.mp4"
         dummy_file.write_bytes(b"bad content")
 
@@ -215,7 +227,9 @@ class TestProbeMediaExecution:
             probe_media(dummy_file)
 
     @patch("subprocess.run")
-    def test_probe_media_empty_output(self, mock_run: MagicMock, tmp_path: Path) -> None:
+    def test_probe_media_empty_output(
+        self, mock_run: MagicMock, tmp_path: Path
+    ) -> None:
         dummy_file = tmp_path / "empty.mp4"
         dummy_file.write_bytes(b"empty")
 
@@ -229,14 +243,19 @@ class TestProbeMediaExecution:
             probe_media(dummy_file)
 
     @patch("subprocess.run", side_effect=FileNotFoundError("Executable not found"))
-    def test_probe_media_missing_binary(self, _mock_run: MagicMock, tmp_path: Path) -> None:
+    def test_probe_media_missing_binary(
+        self, _mock_run: MagicMock, tmp_path: Path
+    ) -> None:
         dummy_file = tmp_path / "valid.mp4"
         dummy_file.write_bytes(b"content")
 
         with pytest.raises(ProbeError, match="ffprobe binary not found"):
             probe_media(dummy_file, ffprobe_bin="nonexistent_ffprobe_bin")
 
-    @patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="ffprobe", timeout=5.0))
+    @patch(
+        "subprocess.run",
+        side_effect=subprocess.TimeoutExpired(cmd="ffprobe", timeout=5.0),
+    )
     def test_probe_media_timeout(self, _mock_run: MagicMock, tmp_path: Path) -> None:
         dummy_file = tmp_path / "valid.mp4"
         dummy_file.write_bytes(b"content")
@@ -253,7 +272,11 @@ class TestProbeMediaExecution:
 
     def test_parse_probe_json_malformed_stream_field(self) -> None:
         bad_json = {
-            "format": {"filename": "test.mp4", "format_name": "mp4", "duration": "10.0"},
+            "format": {
+                "filename": "test.mp4",
+                "format_name": "mp4",
+                "duration": "10.0",
+            },
             "streams": [{"codec_type": "video", "index": "not_an_int"}],
         }
         with pytest.raises(ProbeError, match="Malformed stream entry"):

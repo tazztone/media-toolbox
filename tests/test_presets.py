@@ -12,9 +12,10 @@ Verifies:
 from __future__ import annotations
 
 import ast
-from pathlib import Path
 import subprocess
+from pathlib import Path
 from unittest.mock import patch
+
 import pytest
 
 from media_toolbox.core.presets import (
@@ -28,9 +29,7 @@ from media_toolbox.core.presets import (
     OPUS_PRESET,
     PRORES_PRESET,
     VP9_PRESET,
-    AudioPreset,
     PresetName,
-    VideoPreset,
     get_audio_preset,
     get_container_faststart_args,
     get_preset,
@@ -53,7 +52,14 @@ def test_all_10_presets_exist() -> None:
 
     video_names = {p.name for p in video_presets}
     assert {"h264", "h265", "av1", "vp9", "gif", "prores"}.issubset(video_names)
-    assert {"h264_nvenc", "hevc_nvenc", "h264_vaapi", "hevc_vaapi", "h264_qsv", "hevc_qsv"}.issubset(video_names)
+    assert {
+        "h264_nvenc",
+        "hevc_nvenc",
+        "h264_vaapi",
+        "hevc_vaapi",
+        "h264_qsv",
+        "hevc_qsv",
+    }.issubset(video_names)
 
     audio_names = {p.name for p in audio_presets}
     assert audio_names == {"mp3", "aac", "opus", "flac"}
@@ -177,19 +183,27 @@ def test_h264_cli_flags() -> None:
     # Default CRF
     crf_args = H264_PRESET.build_video_args()
     assert crf_args == [
-        "-c:v", "libx264",
-        "-crf", "23",
-        "-preset", "medium",
-        "-pix_fmt", "yuv420p",
+        "-c:v",
+        "libx264",
+        "-crf",
+        "23",
+        "-preset",
+        "medium",
+        "-pix_fmt",
+        "yuv420p",
     ]
 
     # Custom CRF override
     custom_crf = H264_PRESET.build_video_args(crf=18)
     assert custom_crf == [
-        "-c:v", "libx264",
-        "-crf", "18",
-        "-preset", "medium",
-        "-pix_fmt", "yuv420p",
+        "-c:v",
+        "libx264",
+        "-crf",
+        "18",
+        "-preset",
+        "medium",
+        "-pix_fmt",
+        "yuv420p",
     ]
 
     # Two-Pass Pass 1
@@ -199,12 +213,18 @@ def test_h264_cli_flags() -> None:
         pass_logfile="/tmp/p264",
     )
     assert pass1_args == [
-        "-c:v", "libx264",
-        "-b:v", "1200k",
-        "-preset", "medium",
-        "-pix_fmt", "yuv420p",
-        "-pass", "1",
-        "-passlogfile", "/tmp/p264",
+        "-c:v",
+        "libx264",
+        "-b:v",
+        "1200k",
+        "-preset",
+        "medium",
+        "-pix_fmt",
+        "yuv420p",
+        "-pass",
+        "1",
+        "-passlogfile",
+        "/tmp/p264",
     ]
     assert "-crf" not in pass1_args
 
@@ -213,11 +233,16 @@ def test_h265_cli_flags() -> None:
     """H.265 video args include Apple ecosystem hvc1 tag and encoder-specific 2-pass."""
     args = H265_PRESET.build_video_args()
     assert args == [
-        "-c:v", "libx265",
-        "-crf", "28",
-        "-preset", "medium",
-        "-tag:v", "hvc1",
-        "-pix_fmt", "yuv420p",
+        "-c:v",
+        "libx265",
+        "-crf",
+        "28",
+        "-preset",
+        "medium",
+        "-tag:v",
+        "hvc1",
+        "-pix_fmt",
+        "yuv420p",
     ]
 
     # Two-pass pass 1
@@ -227,12 +252,18 @@ def test_h265_cli_flags() -> None:
         pass_logfile="/tmp/p265_stats",
     )
     assert p1 == [
-        "-c:v", "libx265",
-        "-b:v", "1500k",
-        "-preset", "medium",
-        "-tag:v", "hvc1",
-        "-pix_fmt", "yuv420p",
-        "-x265-params", "pass=1:stats=/tmp/p265_stats",
+        "-c:v",
+        "libx265",
+        "-b:v",
+        "1500k",
+        "-preset",
+        "medium",
+        "-tag:v",
+        "hvc1",
+        "-pix_fmt",
+        "yuv420p",
+        "-x265-params",
+        "pass=1:stats=/tmp/p265_stats",
     ]
     assert "-pass" not in p1
     assert "-passlogfile" not in p1
@@ -244,12 +275,18 @@ def test_h265_cli_flags() -> None:
         pass_logfile="/tmp/p265_stats",
     )
     assert p2 == [
-        "-c:v", "libx265",
-        "-b:v", "1500k",
-        "-preset", "medium",
-        "-tag:v", "hvc1",
-        "-pix_fmt", "yuv420p",
-        "-x265-params", "pass=2:stats=/tmp/p265_stats",
+        "-c:v",
+        "libx265",
+        "-b:v",
+        "1500k",
+        "-preset",
+        "medium",
+        "-tag:v",
+        "hvc1",
+        "-pix_fmt",
+        "yuv420p",
+        "-x265-params",
+        "pass=2:stats=/tmp/p265_stats",
     ]
     assert "-pass" not in p2
     assert "-passlogfile" not in p2
@@ -333,30 +370,39 @@ def test_resolve_hardware_preset() -> None:
 
     # Auto mode with mocked available encoders
     mock_nv_encoders = {"h264_nvenc", "hevc_nvenc", "libx264"}
-    p_auto_nv = resolve_hardware_preset("h264", hwaccel="auto", available_encoders=mock_nv_encoders)
+    p_auto_nv = resolve_hardware_preset(
+        "h264", hwaccel="auto", available_encoders=mock_nv_encoders
+    )
     assert p_auto_nv.name == "h264_nvenc"
 
     mock_va_encoders = {"h264_vaapi", "hevc_vaapi", "libx264"}
-    p_auto_va = resolve_hardware_preset("h264", hwaccel="auto", available_encoders=mock_va_encoders)
+    p_auto_va = resolve_hardware_preset(
+        "h264", hwaccel="auto", available_encoders=mock_va_encoders
+    )
     assert p_auto_va.name == "h264_vaapi"
 
     # Auto mode fallback to CPU when no hardware encoder present
     mock_cpu_only = {"libx264", "libx265"}
-    p_auto_cpu = resolve_hardware_preset("h264", hwaccel="auto", available_encoders=mock_cpu_only)
+    p_auto_cpu = resolve_hardware_preset(
+        "h264", hwaccel="auto", available_encoders=mock_cpu_only
+    )
     assert p_auto_cpu.name == "h264"
-
-
 
 
 def test_av1_cli_flags() -> None:
     """AV1 video args include multicore parameters."""
     args = AV1_PRESET.build_video_args()
     assert args == [
-        "-c:v", "libaom-av1",
-        "-crf", "30",
-        "-cpu-used", "4",
-        "-row-mt", "1",
-        "-pix_fmt", "yuv420p",
+        "-c:v",
+        "libaom-av1",
+        "-crf",
+        "30",
+        "-cpu-used",
+        "4",
+        "-row-mt",
+        "1",
+        "-pix_fmt",
+        "yuv420p",
     ]
 
 
@@ -365,10 +411,14 @@ def test_vp9_cli_flags() -> None:
     # CRF mode
     crf_args = VP9_PRESET.build_video_args()
     assert crf_args == [
-        "-c:v", "libvpx-vp9",
-        "-b:v", "0",
-        "-crf", "30",
-        "-pix_fmt", "yuv420p",
+        "-c:v",
+        "libvpx-vp9",
+        "-b:v",
+        "0",
+        "-crf",
+        "30",
+        "-pix_fmt",
+        "yuv420p",
     ]
 
     # Two-pass mode
@@ -378,11 +428,16 @@ def test_vp9_cli_flags() -> None:
         pass_logfile="/tmp/pvp9",
     )
     assert p1_args == [
-        "-c:v", "libvpx-vp9",
-        "-b:v", "800k",
-        "-pix_fmt", "yuv420p",
-        "-pass", "1",
-        "-passlogfile", "/tmp/pvp9",
+        "-c:v",
+        "libvpx-vp9",
+        "-b:v",
+        "800k",
+        "-pix_fmt",
+        "yuv420p",
+        "-pass",
+        "1",
+        "-passlogfile",
+        "/tmp/pvp9",
     ]
     assert "-crf" not in p1_args
 
@@ -391,10 +446,14 @@ def test_prores_cli_flags() -> None:
     """Apple ProRes args format HQ profile 3 and 10-bit 4:2:2 pixel format."""
     args = PRORES_PRESET.build_video_args()
     assert args == [
-        "-c:v", "prores_ks",
-        "-profile:v", "3",
-        "-vendor", "apl0",
-        "-pix_fmt", "yuv422p10le",
+        "-c:v",
+        "prores_ks",
+        "-profile:v",
+        "3",
+        "-vendor",
+        "apl0",
+        "-pix_fmt",
+        "yuv422p10le",
     ]
 
 
@@ -453,7 +512,13 @@ def test_container_faststart() -> None:
 
 def test_presets_zero_gui() -> None:
     """Presets module must have zero imports from GUI toolkits."""
-    target_path = Path(__file__).resolve().parent.parent / "src" / "media_toolbox" / "core" / "presets.py"
+    target_path = (
+        Path(__file__).resolve().parent.parent
+        / "src"
+        / "media_toolbox"
+        / "core"
+        / "presets.py"
+    )
     with open(target_path, "r", encoding="utf-8") as f:
         tree = ast.parse(f.read(), filename=str(target_path))
 
@@ -464,18 +529,51 @@ def test_presets_zero_gui() -> None:
                 full_name = f"{mod}.{alias.name}" if mod else alias.name
                 assert not any(
                     gui_pkg in full_name
-                    for gui_pkg in ("gi", "Gtk", "Adw", "Nautilus", "tkinter", "PyQt", "PySide")
+                    for gui_pkg in (
+                        "gi",
+                        "Gtk",
+                        "Adw",
+                        "Nautilus",
+                        "tkinter",
+                        "PyQt",
+                        "PySide",
+                    )
                 ), f"Forbidden GUI import found in presets.py: {full_name}"
 
 
 def test_is_speed_preset() -> None:
     """is_speed_preset correctly classifies CPU speed presets vs format presets."""
-    for valid in ("ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo"):
+    for valid in (
+        "ultrafast",
+        "superfast",
+        "veryfast",
+        "faster",
+        "fast",
+        "medium",
+        "slow",
+        "slower",
+        "veryslow",
+        "placebo",
+    ):
         assert is_speed_preset(valid) is True
         assert is_speed_preset(valid.upper()) is True
         assert is_speed_preset(f"  {valid}  ") is True
 
-    for invalid in ("h264", "h265", "av1", "vp9", "gif", "prores", "mp3", "aac", "opus", "flac", "", None, "invalid_xyz"):
+    for invalid in (
+        "h264",
+        "h265",
+        "av1",
+        "vp9",
+        "gif",
+        "prores",
+        "mp3",
+        "aac",
+        "opus",
+        "flac",
+        "",
+        None,
+        "invalid_xyz",
+    ):
         assert is_speed_preset(invalid) is False
 
 
@@ -488,4 +586,3 @@ def test_video_preset_build_args_ignores_invalid_speed_preset() -> None:
     args_h265 = H265_PRESET.build_video_args(speed_preset="h265")
     assert "-preset" in args_h265
     assert args_h265[args_h265.index("-preset") + 1] == "medium"
-

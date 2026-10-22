@@ -25,48 +25,39 @@ Target performance: Execution time <1.0s.
 
 from __future__ import annotations
 
-import json
-import math
 import os
-from pathlib import Path
 import subprocess
 import sys
 import threading
 import time
 import types
-from typing import Any, Generator
+from collections.abc import Generator
+from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
+
 import pytest
 
+from media_toolbox import cli
+from media_toolbox.core.bitrate import calculate_target_video_bitrate
+from media_toolbox.core.builder import build_ffmpeg_commands
 from media_toolbox.core.models import (
-    AudioStream,
     EncodeOptions,
     FormatInfo,
     MediaInfo,
-    MediaToolboxError,
     ProbeError,
-    ProgressEvent,
     VideoStream,
 )
 from media_toolbox.core.probe import (
-    parse_frame_rate,
-    parse_optional_float,
-    parse_optional_int,
     parse_probe_json,
     probe_media,
 )
-from media_toolbox.core.bitrate import calculate_target_video_bitrate
-from media_toolbox.core.builder import build_ffmpeg_commands
 from media_toolbox.core.runner import (
     ProgressParser,
     RunnerCancelledError,
     RunnerError,
-    parse_progress_stream,
     run_ffmpeg,
-    run_ffmpeg_pipeline,
 )
-import media_toolbox.cli as cli
-
 
 # ==============================================================================
 # Suite 1: Corrupted & Edge Payloads
@@ -86,9 +77,11 @@ class TestAdversarialPayloads:
         mock_proc.stdout = '{"format": {"filename": "test.mp4", "duration": "10.0"'  # Missing closing braces
         mock_proc.stderr = ""
 
-        with patch("subprocess.run", return_value=mock_proc):
-            with pytest.raises(ProbeError, match="Failed to parse ffprobe output as JSON"):
-                probe_media(dummy_file)
+        with (
+            patch("subprocess.run", return_value=mock_proc),
+            pytest.raises(ProbeError, match="Failed to parse ffprobe output as JSON"),
+        ):
+            probe_media(dummy_file)
 
     def test_probe_non_json_garbage_raises_probe_error(self, tmp_path: Path) -> None:
         """HTML errors or raw driver crash dumps from ffprobe must raise ProbeError."""
@@ -109,9 +102,11 @@ class TestAdversarialPayloads:
             mock_proc.stdout = garbage
             mock_proc.stderr = ""
 
-            with patch("subprocess.run", return_value=mock_proc):
-                with pytest.raises(ProbeError):
-                    probe_media(dummy_file)
+            with (
+                patch("subprocess.run", return_value=mock_proc),
+                pytest.raises(ProbeError),
+            ):
+                probe_media(dummy_file)
 
     def test_probe_empty_stdout_raises_probe_error(self, tmp_path: Path) -> None:
         """Empty or whitespace-only stdout from ffprobe must raise ProbeError."""
@@ -124,9 +119,11 @@ class TestAdversarialPayloads:
             mock_proc.stdout = empty
             mock_proc.stderr = ""
 
-            with patch("subprocess.run", return_value=mock_proc):
-                with pytest.raises(ProbeError, match="empty output"):
-                    probe_media(dummy_file)
+            with (
+                patch("subprocess.run", return_value=mock_proc),
+                pytest.raises(ProbeError, match="empty output"),
+            ):
+                probe_media(dummy_file)
 
     def test_probe_missing_format_section(self) -> None:
         """Missing or non-dict 'format' field in probe dictionary must raise ProbeError."""
@@ -256,29 +253,49 @@ class TestAdversarialPayloads:
 
     def test_bitrate_math_adversarial_parameters(self) -> None:
         """Bitrate calculator must strictly validate non-positive durations, targets, and bounds."""
-        with pytest.raises(ValueError, match="duration_seconds must be a positive finite number"):
+        with pytest.raises(
+            ValueError, match="duration_seconds must be a positive finite number"
+        ):
             calculate_target_video_bitrate(target_size_mb=25, duration_seconds=0.0)
 
-        with pytest.raises(ValueError, match="duration_seconds must be a positive finite number"):
+        with pytest.raises(
+            ValueError, match="duration_seconds must be a positive finite number"
+        ):
             calculate_target_video_bitrate(target_size_mb=25, duration_seconds=-10.0)
 
-        with pytest.raises(ValueError, match="duration_seconds must be a positive finite number"):
-            calculate_target_video_bitrate(target_size_mb=25, duration_seconds=float("nan"))
+        with pytest.raises(
+            ValueError, match="duration_seconds must be a positive finite number"
+        ):
+            calculate_target_video_bitrate(
+                target_size_mb=25, duration_seconds=float("nan")
+            )
 
-        with pytest.raises(ValueError, match="target_size_mb must be a positive finite number"):
+        with pytest.raises(
+            ValueError, match="target_size_mb must be a positive finite number"
+        ):
             calculate_target_video_bitrate(target_size_mb=0.0, duration_seconds=60.0)
 
-        with pytest.raises(ValueError, match="target_size_mb must be a positive finite number"):
+        with pytest.raises(
+            ValueError, match="target_size_mb must be a positive finite number"
+        ):
             calculate_target_video_bitrate(target_size_mb=-25.0, duration_seconds=60.0)
 
         with pytest.raises(ValueError, match="audio_bitrate_kbps cannot be negative"):
-            calculate_target_video_bitrate(target_size_mb=25, duration_seconds=60, audio_bitrate_kbps=-128)
+            calculate_target_video_bitrate(
+                target_size_mb=25, duration_seconds=60, audio_bitrate_kbps=-128
+            )
 
         with pytest.raises(ValueError, match="mux_overhead_margin must be in range"):
-            calculate_target_video_bitrate(target_size_mb=25, duration_seconds=60, mux_overhead_margin=1.5)
+            calculate_target_video_bitrate(
+                target_size_mb=25, duration_seconds=60, mux_overhead_margin=1.5
+            )
 
-        with pytest.raises(ValueError, match="min_video_bitrate_kbps cannot be negative"):
-            calculate_target_video_bitrate(target_size_mb=25, duration_seconds=60, min_video_bitrate_kbps=-1)
+        with pytest.raises(
+            ValueError, match="min_video_bitrate_kbps cannot be negative"
+        ):
+            calculate_target_video_bitrate(
+                target_size_mb=25, duration_seconds=60, min_video_bitrate_kbps=-1
+            )
 
 
 # ==============================================================================
@@ -381,7 +398,10 @@ class TestAdversarialRunner:
         err = exc_info.value
         assert err.returncode == 1
         assert "Invalid argument" in err.stderr
-        assert err.last_error_line == "Error while opening encoder for output stream #0:0: Invalid argument"
+        assert (
+            err.last_error_line
+            == "Error while opening encoder for output stream #0:0: Invalid argument"
+        )
         assert err.cmd == cmd
 
     def test_runner_fast_cancellation_within_100ms_process_group(self) -> None:
@@ -402,7 +422,9 @@ class TestAdversarialRunner:
         elapsed_ms = (time.monotonic() - start_time) * 1000.0
 
         watcher.join(timeout=1.0)
-        assert elapsed_ms < 100.0, f"Cancellation took {elapsed_ms:.1f}ms (expected <100ms)"
+        assert elapsed_ms < 100.0, (
+            f"Cancellation took {elapsed_ms:.1f}ms (expected <100ms)"
+        )
 
     def test_runner_sigkill_escalation_on_sigterm_ignoring_process(self) -> None:
         """Unresponsive process ignoring SIGTERM must be terminated via SIGKILL within grace period."""
@@ -427,7 +449,9 @@ class TestAdversarialRunner:
         elapsed_ms = (time.monotonic() - start_time) * 1000.0
 
         watcher.join(timeout=1.0)
-        assert elapsed_ms < 150.0, f"SIGKILL escalation took {elapsed_ms:.1f}ms (expected <150ms)"
+        assert elapsed_ms < 150.0, (
+            f"SIGKILL escalation took {elapsed_ms:.1f}ms (expected <150ms)"
+        )
 
     def test_runner_pre_cancelled_event_never_spawns_process(self) -> None:
         """Pre-set cancel_event must immediately raise RunnerCancelledError without spawning Popen."""
@@ -435,14 +459,25 @@ class TestAdversarialRunner:
         cancel_event.set()
 
         with patch("subprocess.Popen") as mock_popen:
-            with pytest.raises(RunnerCancelledError, match="Execution cancelled before start"):
-                run_ffmpeg(["ffmpeg", "-i", "in.mp4", "out.mp4"], cancel_event=cancel_event)
+            with pytest.raises(
+                RunnerCancelledError, match="Execution cancelled before start"
+            ):
+                run_ffmpeg(
+                    ["ffmpeg", "-i", "in.mp4", "out.mp4"], cancel_event=cancel_event
+                )
             mock_popen.assert_not_called()
 
-    def test_runner_cancellation_cleans_partial_output_file(self, tmp_path: Path) -> None:
+    def test_runner_cancellation_cleans_partial_output_file(
+        self, tmp_path: Path
+    ) -> None:
         """Job cancellation flow must cleanly delete partial staging files and never publish incomplete output."""
         from media_toolbox.core.jobs import JobConfig, run_job
-        from media_toolbox.core.models import EncodeOptions, FormatInfo, MediaInfo, VideoStream
+        from media_toolbox.core.models import (
+            EncodeOptions,
+            FormatInfo,
+            MediaInfo,
+            VideoStream,
+        )
 
         inp = tmp_path / "in.mp4"
         inp.write_bytes(b"source data")
@@ -521,9 +556,10 @@ class TestAdversarialCLIFuzzing:
 
         # 2. Package router __main__.main() catches headless state -> displays help (0)
         import media_toolbox.__main__ as pkg_main
+
         monkeypatch.setattr(sys, "argv", ["media_toolbox"])
         code = pkg_main.main()
-        out, err = capsys.readouterr()
+        out, _err = capsys.readouterr()
         assert code == 0
         assert "usage: media_toolbox" in out or "Modern media inspection" in out
 
@@ -545,7 +581,11 @@ class TestAdversarialCLIFuzzing:
 
     def test_cli_invalid_preset_rejected(self) -> None:
         """Querying invalid preset names from registry must strictly raise KeyError."""
-        from media_toolbox.core.presets import get_audio_preset, get_preset, get_video_preset
+        from media_toolbox.core.presets import (
+            get_audio_preset,
+            get_preset,
+            get_video_preset,
+        )
 
         with pytest.raises(KeyError, match="Unknown preset 'bogus_preset_999'"):
             get_preset("bogus_preset_999")
@@ -565,8 +605,12 @@ class TestAdversarialCLIFuzzing:
 
         with patch("media_toolbox.cli.probe_media") as mock_probe:
             mock_probe.return_value = MediaInfo(
-                format=FormatInfo(filename=str(same_file), format_name="mov,mp4", duration=10.0),
-                video_streams=(VideoStream(index=0, codec_name="h264", width=1280, height=720),),
+                format=FormatInfo(
+                    filename=str(same_file), format_name="mov,mp4", duration=10.0
+                ),
+                video_streams=(
+                    VideoStream(index=0, codec_name="h264", width=1280, height=720),
+                ),
             )
             with patch("media_toolbox.cli.run_ffmpeg_pipeline") as mock_runner:
                 mock_runner.side_effect = RunnerError(
@@ -576,26 +620,32 @@ class TestAdversarialCLIFuzzing:
                 )
                 code = cli.main(["transcode", str(same_file), str(same_file)])
 
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert code == 1
-        assert "point to the same file" in err or "Transcoding failed" in err or "Output file is same as input" in err
+        assert (
+            "point to the same file" in err
+            or "Transcoding failed" in err
+            or "Output file is same as input" in err
+        )
 
-    def test_cli_nonexistent_input_file_handling(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_cli_nonexistent_input_file_handling(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Non-existent files passed to inspect, transcode, or extract-audio return exit code 1."""
         nonexistent = "/path/to/definitely_nonexistent_media_file_12345.mp4"
 
         code = cli.main(["inspect", nonexistent])
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert code == 1
         assert "File not found" in err
 
         code = cli.main(["transcode", nonexistent, "out.mp4"])
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert code == 1
         assert "Input file not found" in err
 
         code = cli.main(["extract-audio", nonexistent, "out.mp3"])
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert code == 1
         assert "Input file not found" in err
 
@@ -625,23 +675,29 @@ class TestAdversarialCLIFuzzing:
 
         for bad_speed in ["0", "-1", "-0.5"]:
             code = cli.main(["transcode", str(dummy), "out.mp4", "--speed", bad_speed])
-            out, err = capsys.readouterr()
+            _out, err = capsys.readouterr()
             assert code == 2
             assert "Speed multiplier must be positive" in err
 
-            code = cli.main(["extract-audio", str(dummy), "out.mp3", "--speed", bad_speed])
-            out, err = capsys.readouterr()
+            code = cli.main(
+                ["extract-audio", str(dummy), "out.mp3", "--speed", bad_speed]
+            )
+            _out, err = capsys.readouterr()
             assert code == 2
             assert "Speed multiplier must be positive" in err
 
     def test_cli_contradictory_options_rejected(self) -> None:
         """Contradictory options (e.g. GIF with two-pass) raise ValueError in command builder."""
         options = EncodeOptions(preset="gif", two_pass=True)
-        with pytest.raises(ValueError, match="Two-pass encoding is not supported for GIF preset"):
+        with pytest.raises(
+            ValueError, match="Two-pass encoding is not supported for GIF preset"
+        ):
             build_ffmpeg_commands("in.mp4", "out.gif", options)
 
         options2 = EncodeOptions(extract_audio=True, mute_audio=True)
-        with pytest.raises(ValueError, match="Cannot simultaneously extract and mute audio"):
+        with pytest.raises(
+            ValueError, match="Cannot simultaneously extract and mute audio"
+        ):
             build_ffmpeg_commands("in.mp4", "out.mp3", options2)
 
 
@@ -698,10 +754,14 @@ def mock_nautilus_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, 
 class TestAdversarialDesktopAndAST:
     """White-box security and headless AST invariant hardening."""
 
-    def test_launcher_sh_path_injection_spaces_semicolons_metacharacters(self, tmp_path: Path) -> None:
+    def test_launcher_sh_path_injection_spaces_semicolons_metacharacters(
+        self, tmp_path: Path
+    ) -> None:
         """Launcher script must never execute injected shell commands from Nautilus paths."""
         repo_root = Path(__file__).resolve().parent.parent
-        launcher_script = repo_root / "src" / "media_toolbox" / "nautilus" / "launcher.sh"
+        launcher_script = (
+            repo_root / "src" / "media_toolbox" / "nautilus" / "launcher.sh"
+        )
         assert launcher_script.is_file(), f"launcher.sh not found at {launcher_script}"
 
         canary_file = tmp_path / "pwned_canary.txt"
@@ -709,14 +769,16 @@ class TestAdversarialDesktopAndAST:
             canary_file.unlink()
 
         # Malicious paths attempting shell injection via semicolons, subshells, backticks, and pipes
-        hostile_paths = "\n".join([
-            f"/tmp/file1;touch {canary_file};echo.mp4",
-            f"/tmp/file2 $(touch {canary_file}).mp4",
-            f"/tmp/file3 `touch {canary_file}`.mp4",
-            f"/tmp/file4 | touch {canary_file}",
-            f"/tmp/file5 && touch {canary_file}",
-            "/tmp/file with spaces and quotes'\"!@#$%^&*().mp4",
-        ])
+        hostile_paths = "\n".join(
+            [
+                f"/tmp/file1;touch {canary_file};echo.mp4",
+                f"/tmp/file2 $(touch {canary_file}).mp4",
+                f"/tmp/file3 `touch {canary_file}`.mp4",
+                f"/tmp/file4 | touch {canary_file}",
+                f"/tmp/file5 && touch {canary_file}",
+                "/tmp/file with spaces and quotes'\"!@#$%^&*().mp4",
+            ]
+        )
 
         env = os.environ.copy()
         env["NAUTILUS_SCRIPT_SELECTED_FILE_PATHS"] = hostile_paths
@@ -724,15 +786,18 @@ class TestAdversarialDesktopAndAST:
         env["WAYLAND_DISPLAY"] = ""
 
         # Run launcher.sh in bash
-        proc = subprocess.run(
+        subprocess.run(
             ["bash", str(launcher_script)],
             env=env,
             capture_output=True,
             text=True,
+            check=False,
         )
 
         # Assert no canary file was touched
-        assert not canary_file.exists(), "Command injection vulnerability detected: canary file was created!"
+        assert not canary_file.exists(), (
+            "Command injection vulnerability detected: canary file was created!"
+        )
 
     @pytest.mark.usefixtures("mock_nautilus_env")
     def test_nautilus_extension_shlex_quote_hardening(self, tmp_path: Path) -> None:
@@ -759,18 +824,30 @@ class TestAdversarialDesktopAndAST:
             script = cmd[cmd.index("-c") + 1] if "-c" in cmd else cmd[-1]
 
             # 1. Bash syntax validation
-            syntax_check = subprocess.run(["bash", "-n", "-c", script], capture_output=True, text=True)
-            assert syntax_check.returncode == 0, f"Script has invalid syntax:\n{syntax_check.stderr}"
+            syntax_check = subprocess.run(
+                ["bash", "-n", "-c", script],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            assert syntax_check.returncode == 0, (
+                f"Script has invalid syntax:\n{syntax_check.stderr}"
+            )
 
             # 2. Injection execution validation: running the script must NOT create canary
-            subprocess.run(["bash", "-c", script], capture_output=True, text=True)
-            assert not canary.exists(), "Command injection vulnerability detected in Nautilus extension script!"
+            subprocess.run(
+                ["bash", "-c", script], capture_output=True, text=True, check=False
+            )
+            assert not canary.exists(), (
+                "Command injection vulnerability detected in Nautilus extension script!"
+            )
 
     @pytest.mark.usefixtures("mock_nautilus_env")
-    def test_nautilus_extension_non_colliding_output_path_generators(self, tmp_path: Path) -> None:
+    def test_nautilus_extension_non_colliding_output_path_generators(
+        self, tmp_path: Path
+    ) -> None:
         """Extension output generators must avoid colliding with existing files by appending counters."""
         from media_toolbox.nautilus.extension import (
-            get_extract_audio_output_path,
             get_transcode_output_path,
         )
 
@@ -835,5 +912,8 @@ class TestAdversarialDesktopAndAST:
                 capture_output=True,
                 text=True,
                 env=env,
+                check=False,
             )
-            assert proc.returncode == 0, f"Module {mod} failed headless import test:\n{proc.stderr}"
+            assert proc.returncode == 0, (
+                f"Module {mod} failed headless import test:\n{proc.stderr}"
+            )

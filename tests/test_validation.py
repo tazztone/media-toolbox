@@ -4,7 +4,6 @@ Tests for media_toolbox.core.validation: Centralized option and preset validatio
 
 from __future__ import annotations
 
-from pathlib import Path
 import pytest
 
 from media_toolbox.core.builder import build_ffmpeg_commands
@@ -65,11 +64,15 @@ class TestValidationAndPresetNormalization:
 
     def test_prores_rejects_two_pass_and_target_size(self) -> None:
         opts_two_pass = EncodeOptions(preset="prores", two_pass=True)
-        with pytest.raises(ValueError, match="[Tt]wo-pass.*not supported.*[Pp]ro[Rr]es"):
+        with pytest.raises(
+            ValueError, match="[Tt]wo-pass.*not supported.*[Pp]ro[Rr]es"
+        ):
             validate_encode_options(opts_two_pass)
 
         opts_target_size = EncodeOptions(preset="prores", target_size_mb=50.0)
-        with pytest.raises(ValueError, match="[Tt]arget size.*not supported.*[Pp]ro[Rr]es"):
+        with pytest.raises(
+            ValueError, match="[Tt]arget size.*not supported.*[Pp]ro[Rr]es"
+        ):
             validate_encode_options(opts_target_size)
 
     def test_prores_rejects_crf_mode(self) -> None:
@@ -79,11 +82,15 @@ class TestValidationAndPresetNormalization:
 
     def test_gif_rejects_two_pass_and_target_size(self) -> None:
         opts_two_pass = EncodeOptions(preset="gif", two_pass=True)
-        with pytest.raises(ValueError, match="[Tt]wo-pass.*not supported.*[Gg][Ii][Ff]"):
+        with pytest.raises(
+            ValueError, match="[Tt]wo-pass.*not supported.*[Gg][Ii][Ff]"
+        ):
             validate_encode_options(opts_two_pass)
 
         opts_target_size = EncodeOptions(preset="gif", target_size_mb=10.0)
-        with pytest.raises(ValueError, match="[Tt]arget size.*not supported.*[Gg][Ii][Ff]"):
+        with pytest.raises(
+            ValueError, match="[Tt]arget size.*not supported.*[Gg][Ii][Ff]"
+        ):
             validate_encode_options(opts_target_size)
 
     def test_animated_gif_alias_enters_gif_palette_mode(self) -> None:
@@ -137,7 +144,9 @@ class TestValidationAndPresetNormalization:
         """Extracting audio from silent media fails before execution."""
         silent_info = MediaInfo(
             format=FormatInfo(filename="silent.mp4", format_name="mp4", duration=10.0),
-            video_streams=(VideoStream(index=0, codec_name="h264", width=1280, height=720),),
+            video_streams=(
+                VideoStream(index=0, codec_name="h264", width=1280, height=720),
+            ),
             audio_streams=(),
         )
         opts = EncodeOptions(extract_audio=True)
@@ -149,7 +158,9 @@ class TestValidationAndPresetNormalization:
         audio_info = MediaInfo(
             format=FormatInfo(filename="audio.mp3", format_name="mp3", duration=60.0),
             video_streams=(),
-            audio_streams=(AudioStream(index=0, codec_name="mp3", channels=2, sample_rate=44100),),
+            audio_streams=(
+                AudioStream(index=0, codec_name="mp3", channels=2, sample_rate=44100),
+            ),
         )
         opts = EncodeOptions(preset="h264")
         with pytest.raises(ValueError, match="no video stream"):
@@ -180,12 +191,13 @@ class TestValidationAndPresetNormalization:
     def test_audio_preset_with_mute_audio_rejected(self) -> None:
         """Audio preset combined with mute_audio is rejected as contradictory."""
         opts = EncodeOptions(preset="mp3", mute_audio=True)
-        with pytest.raises(ValueError, match="Cannot simultaneously extract and mute audio"):
+        with pytest.raises(
+            ValueError, match="Cannot simultaneously extract and mute audio"
+        ):
             validate_encode_options(opts)
 
     def test_resolve_job_spec_preserves_explicit_svtav1(self) -> None:
         """Explicit video_codec='libsvtav1' is preserved and not substituted with libaom-av1."""
-        from media_toolbox.core.validation import resolve_job_spec
 
         opts = EncodeOptions(video_codec="libsvtav1")
         spec = resolve_job_spec(opts)
@@ -193,7 +205,6 @@ class TestValidationAndPresetNormalization:
 
     def test_resolve_job_spec_audio_extract_m4a_resolves_to_aac(self) -> None:
         """Audio extraction to .m4a canonicalizes to AAC preset and codec."""
-        from media_toolbox.core.validation import resolve_job_spec
 
         opts = EncodeOptions(extract_audio=True)
         spec = resolve_job_spec(opts, output_path="output.m4a")
@@ -202,7 +213,6 @@ class TestValidationAndPresetNormalization:
 
     def test_resolve_job_spec_preserves_explicit_audio_codec(self) -> None:
         """Explicit audio codec like pcm_s16le is preserved for extraction."""
-        from media_toolbox.core.validation import resolve_job_spec
 
         opts = EncodeOptions(extract_audio=True, audio_codec="pcm_s16le")
         spec = resolve_job_spec(opts, output_path="output.wav")
@@ -221,32 +231,48 @@ class TestValidationAndPresetNormalization:
     def test_webm_incompatible_audio_codec_rejected(self) -> None:
         """Explicitly requesting an incompatible audio codec for WebM raises ValueError."""
         opts = EncodeOptions(preset="vp9", audio_codec="aac")
-        with pytest.raises(ValueError, match="Incompatible audio codec 'aac' for WebM/VP9"):
+        with pytest.raises(
+            ValueError, match="Incompatible audio codec 'aac' for WebM/VP9"
+        ):
             validate_encode_options(opts, output_path="out.webm")
 
     def test_stream_copy_with_filters_rejected(self) -> None:
         """Combining audio/video stream copy with filters is rejected."""
         # Audio copy with audio filters
         opts_a_speed = EncodeOptions(audio_codec="copy", speed=1.5)
-        with pytest.raises(ValueError, match="Audio filters .* cannot be applied when audio codec is 'copy'"):
+        with pytest.raises(
+            ValueError,
+            match="Audio filters .* cannot be applied when audio codec is 'copy'",
+        ):
             validate_encode_options(opts_a_speed)
 
         opts_a_norm = EncodeOptions(audio_codec="copy", normalize_audio=True)
-        with pytest.raises(ValueError, match="Audio filters .* cannot be applied when audio codec is 'copy'"):
+        with pytest.raises(
+            ValueError,
+            match="Audio filters .* cannot be applied when audio codec is 'copy'",
+        ):
             validate_encode_options(opts_a_norm)
 
         # Video copy with video filters
         opts_v_crop = EncodeOptions(video_codec="copy", crop="16:9")
-        with pytest.raises(ValueError, match="Video filters .* cannot be applied when video codec is 'copy'"):
+        with pytest.raises(
+            ValueError,
+            match="Video filters .* cannot be applied when video codec is 'copy'",
+        ):
             validate_encode_options(opts_v_crop)
 
         opts_v_scale = EncodeOptions(video_codec="copy", scale=(1280, 720))
-        with pytest.raises(ValueError, match="Video filters .* cannot be applied when video codec is 'copy'"):
+        with pytest.raises(
+            ValueError,
+            match="Video filters .* cannot be applied when video codec is 'copy'",
+        ):
             validate_encode_options(opts_v_scale)
 
     def test_scale_and_fps_upfront_validation(self) -> None:
         """Invalid scale dimensions and fps are caught in validate_encode_options."""
-        with pytest.raises(ValueError, match="Scale dimensions cannot both be non-positive"):
+        with pytest.raises(
+            ValueError, match="Scale dimensions cannot both be non-positive"
+        ):
             validate_encode_options(EncodeOptions(scale=(-1, -1)))
 
         with pytest.raises(ValueError, match="Frame rate must be positive"):
@@ -255,16 +281,22 @@ class TestValidationAndPresetNormalization:
     def test_audio_bitrate_preset_range_validation(self) -> None:
         """Audio bitrates outside preset boundaries are rejected."""
         # Minimum threshold < 8 kbps rejected
-        with pytest.raises(ValueError, match="Audio bitrate must be between 8 and 2000 kbps"):
+        with pytest.raises(
+            ValueError, match="Audio bitrate must be between 8 and 2000 kbps"
+        ):
             validate_encode_options(EncodeOptions(audio_bitrate_kbps=4))
 
         # OPUS preset range is 32-256 kbps; 320 kbps should be rejected for opus preset
-        with pytest.raises(ValueError, match="Audio bitrate 320 kbps out of valid range"):
-            validate_encode_options(EncodeOptions(preset="opus", audio_bitrate_kbps=320), output_path="out.opus")
+        with pytest.raises(
+            ValueError, match="Audio bitrate 320 kbps out of valid range"
+        ):
+            validate_encode_options(
+                EncodeOptions(preset="opus", audio_bitrate_kbps=320),
+                output_path="out.opus",
+            )
 
     def test_transcode_resolves_audio_codec_alias_to_encoder(self) -> None:
         """In video transcoding, audio codec alias 'mp3' resolves to 'libmp3lame'."""
-        from media_toolbox.core.validation import resolve_job_spec
 
         opts = EncodeOptions(preset="h264", audio_codec="mp3")
         spec = resolve_job_spec(opts)
@@ -273,7 +305,9 @@ class TestValidationAndPresetNormalization:
     def test_extra_args_positional_tokens_rejected(self) -> None:
         """Naked positional file paths in extra_args are rejected."""
         opts = EncodeOptions(extra_args=("/path/to/rogue.mp4",))
-        with pytest.raises(ValueError, match="Positional token .* in extra_args is invalid"):
+        with pytest.raises(
+            ValueError, match="Positional token .* in extra_args is invalid"
+        ):
             validate_encode_options(opts)
 
     def test_extra_args_forbidden_flags_rejected(self) -> None:
@@ -306,7 +340,9 @@ class TestValidationAndPresetNormalization:
     def test_extra_args_dangerous_flags_rejected(self, flag: str) -> None:
         """Dangerous or managed execution flags in extra_args are rejected."""
         opts = EncodeOptions(extra_args=(flag, "dangerous_val"))
-        with pytest.raises(InvalidOptionsError, match=f"Flag '{flag}' is managed by media-toolbox"):
+        with pytest.raises(
+            InvalidOptionsError, match=f"Flag '{flag}' is managed by media-toolbox"
+        ):
             validate_encode_options(opts)
 
     @pytest.mark.parametrize(
@@ -336,7 +372,10 @@ class TestValidationAndPresetNormalization:
         with pytest.raises(InvalidOptionsError, match="must be non-negative"):
             validate_encode_options(EncodeOptions(audio_track_index=-1))
 
-        with pytest.raises(InvalidOptionsError, match="Cannot specify audio_track_index when mute_audio is True"):
+        with pytest.raises(
+            InvalidOptionsError,
+            match="Cannot specify audio_track_index when mute_audio is True",
+        ):
             validate_encode_options(EncodeOptions(audio_track_index=0, mute_audio=True))
 
         info = MediaInfo(
@@ -352,13 +391,17 @@ class TestValidationAndPresetNormalization:
         validate_encode_options(EncodeOptions(audio_track_index=0), media_info=info)
 
         # Track 1 out of bounds (only 1 audio stream present)
-        with pytest.raises(InvalidOptionsError, match="Audio track index 1 out of range"):
+        with pytest.raises(
+            InvalidOptionsError, match="Audio track index 1 out of range"
+        ):
             validate_encode_options(EncodeOptions(audio_track_index=1), media_info=info)
 
     def test_gif_options_validation(self) -> None:
         """GIF options validate bounds and allowed algorithms."""
         # Valid
-        validate_encode_options(EncodeOptions(gif_max_colors=128, gif_dither="bayer", gif_stats_mode="diff"))
+        validate_encode_options(
+            EncodeOptions(gif_max_colors=128, gif_dither="bayer", gif_stats_mode="diff")
+        )
         validate_encode_options(EncodeOptions(gif_max_colors=4, gif_dither="none"))
         validate_encode_options(EncodeOptions(gif_max_colors=256))
 
@@ -375,5 +418,3 @@ class TestValidationAndPresetNormalization:
         # Invalid stats_mode
         with pytest.raises(InvalidOptionsError, match="gif_stats_mode"):
             validate_encode_options(EncodeOptions(gif_stats_mode="invalid_stats"))
-
-

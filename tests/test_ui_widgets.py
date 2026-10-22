@@ -10,6 +10,7 @@ Tests:
 from __future__ import annotations
 
 from unittest.mock import MagicMock
+
 import pytest
 
 from media_toolbox.core.models import (
@@ -17,11 +18,6 @@ from media_toolbox.core.models import (
     FormatInfo,
     MediaInfo,
     VideoStream,
-)
-from tests.ui_test_helpers import (
-    gi_env,
-    isolate_gi_sys_modules,
-    sample_silent_media_info,
 )
 
 pytestmark = [pytest.mark.desktop]
@@ -61,7 +57,9 @@ class TestDynamicRevealers:
         mock_self = MagicMock()
         mock_self.mode_row = MagicMock()
         mock_self.mode_row.get_selected.return_value = 0
-        mock_self._on_mode_changed = RateControlWidget._on_mode_changed.__get__(mock_self, RateControlWidget)
+        mock_self._on_mode_changed = RateControlWidget._on_mode_changed.__get__(
+            mock_self, RateControlWidget
+        )
 
         # GIF disables rate control and collapses revealers
         RateControlWidget.set_codec_preset(mock_self, "gif")
@@ -127,14 +125,18 @@ class TestDynamicRevealers:
         AudioOptionsWidget._on_mute_changed(mock_self, mock_switch, None)
         mock_self.adjustments_revealer.set_reveal_child.assert_called_with(True)
 
-    def test_audio_options_disabled_when_source_is_silent(self, sample_silent_media_info: MediaInfo) -> None:
+    def test_audio_options_disabled_when_source_is_silent(
+        self, sample_silent_media_info: MediaInfo
+    ) -> None:
         """Verify that files without audio streams disable the audio options group."""
         from media_toolbox.ui.widgets import AudioOptionsWidget
 
         mock_self = MagicMock()
         AudioOptionsWidget.set_has_audio(mock_self, sample_silent_media_info.has_audio)
         mock_self.set_sensitive.assert_called_with(False)
-        mock_self.set_description.assert_called_with("Source file contains no audio streams")
+        mock_self.set_description.assert_called_with(
+            "Source file contains no audio streams"
+        )
 
     def test_audio_options_tracks_revealer_and_selection(self) -> None:
         """Verify multi-track audio reveals track dropdown, while single/zero tracks hide it."""
@@ -179,7 +181,6 @@ class TestDynamicRevealers:
         mock_self.keep_subs_switch.get_active.return_value = False
         assert AudioOptionsWidget.get_keep_subtitles(mock_self) is False
 
-
         AudioOptionsWidget.set_has_audio(mock_self, True)
         mock_self.set_sensitive.assert_called_with(True)
         mock_self.set_description.assert_called_with("")
@@ -216,7 +217,12 @@ class TestMetadataCard:
             channel_layout="stereo",
             bit_rate=128_000,
         )
-        fmt = FormatInfo(filename="sample.mp4", format_name="mov,mp4", duration=60.0, size_bytes=15_000_000)
+        fmt = FormatInfo(
+            filename="sample.mp4",
+            format_name="mov,mp4",
+            duration=60.0,
+            size_bytes=15_000_000,
+        )
         info = MediaInfo(format=fmt, video_streams=(v,), audio_streams=(a,))
 
         mock_card = MagicMock()
@@ -246,7 +252,12 @@ class TestMetadataCard:
             duration=10.0,
             bit_rate=15_000_000,
         )
-        fmt = FormatInfo(filename="silent.mp4", format_name="mp4", duration=10.0, size_bytes=18_750_000)
+        fmt = FormatInfo(
+            filename="silent.mp4",
+            format_name="mp4",
+            duration=10.0,
+            size_bytes=18_750_000,
+        )
         info = MediaInfo(format=fmt, video_streams=(v,), audio_streams=())
 
         mock_card = MagicMock()
@@ -274,7 +285,12 @@ class TestMetadataCard:
             channel_layout="stereo",
             bit_rate=320_000,
         )
-        fmt = FormatInfo(filename="track.mp3", format_name="mp3", duration=120.0, size_bytes=4_800_000)
+        fmt = FormatInfo(
+            filename="track.mp3",
+            format_name="mp3",
+            duration=120.0,
+            size_bytes=4_800_000,
+        )
         info = MediaInfo(format=fmt, video_streams=(), audio_streams=(a,))
 
         mock_card = MagicMock()
@@ -303,22 +319,33 @@ class TestMetadataCard:
             duration=None,
             bit_rate=None,
         )
-        fmt = FormatInfo(filename="diagram.png", format_name="image2", duration=None, size_bytes=45_000)
+        fmt = FormatInfo(
+            filename="diagram.png",
+            format_name="image2",
+            duration=None,
+            size_bytes=45_000,
+        )
         info = MediaInfo(format=fmt, video_streams=(v,), audio_streams=())
 
         mock_card = MagicMock()
         MetadataCard.set_media_info(mock_card, info)
 
         mock_card.badge_row.set_subtitle.assert_called_with("[Still Image / Other]")
-        mock_card.video_row.set_subtitle.assert_called_with("PNG | 800 × 600 @ N/A | Bitrate: -")
+        mock_card.video_row.set_subtitle.assert_called_with(
+            "PNG | 800 × 600 @ N/A | Bitrate: -"
+        )
         mock_card.audio_row.set_subtitle.assert_called_with("No audio stream")
 
         # Container without any streams
         mock_card_empty = MagicMock()
-        empty_fmt = FormatInfo(filename="raw.bin", format_name="data", duration=None, size_bytes=1024)
+        empty_fmt = FormatInfo(
+            filename="raw.bin", format_name="data", duration=None, size_bytes=1024
+        )
         empty_info = MediaInfo(format=empty_fmt, video_streams=(), audio_streams=())
         MetadataCard.set_media_info(mock_card_empty, empty_info)
-        mock_card_empty.badge_row.set_subtitle.assert_called_with("[Still Image / Other]")
+        mock_card_empty.badge_row.set_subtitle.assert_called_with(
+            "[Still Image / Other]"
+        )
         mock_card_empty.video_row.set_subtitle.assert_called_with("No video stream")
         mock_card_empty.audio_row.set_subtitle.assert_called_with("No audio stream")
 
@@ -336,12 +363,19 @@ class TestMetadataCard:
             channel_layout=None,
             bit_rate=None,
         )
-        fmt = FormatInfo(filename="surround.flac", format_name="flac", duration=60.0, size_bytes=30_000_000)
+        fmt = FormatInfo(
+            filename="surround.flac",
+            format_name="flac",
+            duration=60.0,
+            size_bytes=30_000_000,
+        )
         info_multi = MediaInfo(format=fmt, video_streams=(), audio_streams=(a_multi,))
 
         mock_card = MagicMock()
         MetadataCard.set_media_info(mock_card, info_multi)
-        mock_card.audio_row.set_subtitle.assert_called_with("FLAC | 6 channels | 96.0 kHz | Bitrate: -")
+        mock_card.audio_row.set_subtitle.assert_called_with(
+            "FLAC | 6 channels | 96.0 kHz | Bitrate: -"
+        )
 
         # Mono layout is None
         a_mono = AudioStream(
@@ -356,7 +390,9 @@ class TestMetadataCard:
         info_mono = MediaInfo(format=fmt, video_streams=(), audio_streams=(a_mono,))
         mock_card_mono = MagicMock()
         MetadataCard.set_media_info(mock_card_mono, info_mono)
-        mock_card_mono.audio_row.set_subtitle.assert_called_with("WAV | 1 channel | 44.1 kHz | Bitrate: 706 kbps")
+        mock_card_mono.audio_row.set_subtitle.assert_called_with(
+            "WAV | 1 channel | 44.1 kHz | Bitrate: 706 kbps"
+        )
 
     def test_metadata_card_clear(self) -> None:
         """Verify clear restores placeholder labels across all rows."""

@@ -17,13 +17,14 @@ Verifies:
 from __future__ import annotations
 
 import ast
-from pathlib import Path
 import signal
 import sys
 import threading
 import time
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 from media_toolbox.core.models import MediaToolboxError, ProgressEvent
@@ -41,7 +42,6 @@ from media_toolbox.core.runner import (
     run_ffmpeg_pipeline,
     terminate_process_group,
 )
-
 
 # ---------------------------------------------------------------------------
 # Test Suite 1: Pure Parsing & Time Conversion Math
@@ -77,9 +77,15 @@ class TestProgressParserUnits:
         assert parse_time_to_seconds(out_time_ms="1234567") == pytest.approx(1.234567)
 
     def test_parse_time_to_seconds_formatted_out_time(self) -> None:
-        assert parse_time_to_seconds(out_time_str="00:01:30.500000") == pytest.approx(90.5)
-        assert parse_time_to_seconds(out_time_str="01:00:00.000000") == pytest.approx(3600.0)
-        assert parse_time_to_seconds(out_time_str="02:15.000000") == pytest.approx(135.0)
+        assert parse_time_to_seconds(out_time_str="00:01:30.500000") == pytest.approx(
+            90.5
+        )
+        assert parse_time_to_seconds(out_time_str="01:00:00.000000") == pytest.approx(
+            3600.0
+        )
+        assert parse_time_to_seconds(out_time_str="02:15.000000") == pytest.approx(
+            135.0
+        )
         assert parse_time_to_seconds(out_time_str="45.5") == pytest.approx(45.5)
 
     def test_parse_time_to_seconds_negative_and_na(self) -> None:
@@ -449,7 +455,10 @@ class TestRunFFmpegExecution:
             return mock
 
         with patch("subprocess.Popen", side_effect=fake_popen):
-            run_ffmpeg(["ffmpeg", "-i", "input.mp4", "output.mp4"], progress_callback=lambda e: None)
+            run_ffmpeg(
+                ["ffmpeg", "-i", "input.mp4", "output.mp4"],
+                progress_callback=lambda e: None,
+            )
 
         assert "-progress" in captured_cmd
         assert "pipe:1" in captured_cmd
@@ -591,7 +600,9 @@ class TestRunnerCancellation:
         # Should return immediately without exception
         terminate_process_group(999999, mock_proc)
 
-    def test_terminate_process_group_kills_surviving_descendants_when_leader_exited(self) -> None:
+    def test_terminate_process_group_kills_surviving_descendants_when_leader_exited(
+        self,
+    ) -> None:
         """Verifies terminate_process_group signals process group even if leader has already exited."""
         mock_proc = MagicMock()
         mock_proc.poll.return_value = 0  # Leader exited
@@ -601,9 +612,16 @@ class TestRunnerCancellation:
         def fake_is_pgid_alive(_pgid: int) -> bool:
             return alive_calls.pop(0) if alive_calls else False
 
-        with patch("media_toolbox.core.runner._is_pgid_alive", side_effect=fake_is_pgid_alive), \
-             patch("os.killpg") as mock_killpg:
-            terminate_process_group(12345, mock_proc, graceful_timeout=0.2, kill_timeout=0.2)
+        with (
+            patch(
+                "media_toolbox.core.runner._is_pgid_alive",
+                side_effect=fake_is_pgid_alive,
+            ),
+            patch("os.killpg") as mock_killpg,
+        ):
+            terminate_process_group(
+                12345, mock_proc, graceful_timeout=0.2, kill_timeout=0.2
+            )
             mock_killpg.assert_any_call(12345, signal.SIGTERM)
 
 
@@ -667,7 +685,11 @@ class TestMultiPassPipeline:
         assert scaled_events[-1].is_completed is True
 
     def test_pipeline_aborts_on_pass1_error(self) -> None:
-        cmd1 = [sys.executable, "-c", "import sys; sys.stderr.write('pass 1 error'); sys.exit(2)"]
+        cmd1 = [
+            sys.executable,
+            "-c",
+            "import sys; sys.stderr.write('pass 1 error'); sys.exit(2)",
+        ]
         cmd2 = [sys.executable, "-c", "import sys; sys.exit(0)"]
 
         with pytest.raises(RunnerError) as exc_info:
@@ -682,11 +704,17 @@ class TestMultiPassPipeline:
         def _cb(_ev: ProgressEvent) -> None:
             cancel_event.set()
 
-        cmd1 = [sys.executable, "-c", "print('out_time_us=1000000\\nprogress=end', flush=True)"]
+        cmd1 = [
+            sys.executable,
+            "-c",
+            "print('out_time_us=1000000\\nprogress=end', flush=True)",
+        ]
         cmd2 = [sys.executable, "-c", "import time; time.sleep(5)"]
 
         with pytest.raises(RunnerCancelledError):
-            run_ffmpeg_pipeline([cmd1, cmd2], progress_callback=_cb, cancel_event=cancel_event)
+            run_ffmpeg_pipeline(
+                [cmd1, cmd2], progress_callback=_cb, cancel_event=cancel_event
+            )
 
     def test_pipeline_monotonic_out_time_across_pass_transitions(self) -> None:
         """
@@ -749,8 +777,12 @@ class TestMultiPassPipeline:
         assert global_events[-1].is_completed is True
 
         # Invariant 5: Pass-level callback preserves unscaled pass out_times
-        pass1_raw_times = [ev.out_time_seconds for p_num, _, ev in pass_records if p_num == 1]
-        pass2_raw_times = [ev.out_time_seconds for p_num, _, ev in pass_records if p_num == 2]
+        pass1_raw_times = [
+            ev.out_time_seconds for p_num, _, ev in pass_records if p_num == 1
+        ]
+        pass2_raw_times = [
+            ev.out_time_seconds for p_num, _, ev in pass_records if p_num == 2
+        ]
         assert pass1_raw_times == [2.5, 5.0]
         assert pass2_raw_times == [0.5, 2.5, 5.0]
 
@@ -763,11 +795,15 @@ class TestMultiPassPipeline:
         cmds = [[sys.executable, "-c", script_template] for _ in range(3)]
         events: list[ProgressEvent] = []
 
-        run_ffmpeg_pipeline(cmds, total_duration_seconds=4.0, progress_callback=events.append)
+        run_ffmpeg_pipeline(
+            cmds, total_duration_seconds=4.0, progress_callback=events.append
+        )
         assert len(events) == 6
 
         times = [e.out_time_seconds for e in events]
-        assert all(times[i] <= times[i + 1] for i in range(len(times) - 1)), f"Times decreased: {times}"
+        assert all(times[i] <= times[i + 1] for i in range(len(times) - 1)), (
+            f"Times decreased: {times}"
+        )
         # Expected cumulative times:
         # Pass 1: 2.0s, 4.0s
         # Pass 2: 4.0 + 2.0 = 6.0s, 4.0 + 4.0 = 8.0s
@@ -785,7 +821,9 @@ class TestMultiPassPipeline:
             [sys.executable, "-c", script2],
         ]
         events: list[ProgressEvent] = []
-        run_ffmpeg_pipeline(cmds, total_duration_seconds=None, progress_callback=events.append)
+        run_ffmpeg_pipeline(
+            cmds, total_duration_seconds=None, progress_callback=events.append
+        )
         assert len(events) == 2
         times = [e.out_time_seconds for e in events]
         # Invariant: monotonic clamp prevents drop from 3.0s to 1.0s
@@ -803,7 +841,13 @@ class TestRunnerHeadlessASTInvariant:
     """Verifies that core/runner.py maintains zero GUI imports invariant."""
 
     def test_runner_zero_gui_imports(self) -> None:
-        runner_path = Path(__file__).resolve().parent.parent / "src" / "media_toolbox" / "core" / "runner.py"
+        runner_path = (
+            Path(__file__).resolve().parent.parent
+            / "src"
+            / "media_toolbox"
+            / "core"
+            / "runner.py"
+        )
         with open(runner_path, "r", encoding="utf-8") as f:
             tree = ast.parse(f.read(), filename=str(runner_path))
 
@@ -814,9 +858,9 @@ class TestRunnerHeadlessASTInvariant:
                 mod = getattr(node, "module", "") or ""
                 for alias in getattr(node, "names", []):
                     full_name = f"{mod}.{alias.name}" if mod else alias.name
-                    assert not any(
-                        pkg in full_name for pkg in forbidden
-                    ), f"Forbidden GUI import found in core/runner.py: {full_name}"
+                    assert not any(pkg in full_name for pkg in forbidden), (
+                        f"Forbidden GUI import found in core/runner.py: {full_name}"
+                    )
 
     def test_test_runner_zero_gui_imports(self) -> None:
         """Verify test_runner.py contains zero GUI imports (headless execution invariant)."""

@@ -9,7 +9,8 @@ from __future__ import annotations
 import json
 import os
 import sys
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 from media_toolbox.core.formatters import (
     format_aspect_ratio,
@@ -22,7 +23,7 @@ from media_toolbox.core.formatters import (
 from media_toolbox.core.models import MediaInfo, ProgressEvent
 
 
-def parse_scale_arg(scale_str: Optional[str]) -> Optional[tuple[int, int]]:
+def parse_scale_arg(scale_str: str | None) -> tuple[int, int] | None:
     """Parse WIDTHxHEIGHT or WIDTH:HEIGHT scale string into (width, height) tuple."""
     if not scale_str:
         return None
@@ -34,18 +35,24 @@ def parse_scale_arg(scale_str: Optional[str]) -> Optional[tuple[int, int]]:
         )
     parts = s.split(sep)
     if len(parts) != 2:
-        raise ValueError(f"Invalid scale format '{scale_str}'. Expected WIDTHxHEIGHT or WIDTH:HEIGHT")
+        raise ValueError(
+            f"Invalid scale format '{scale_str}'. Expected WIDTHxHEIGHT or WIDTH:HEIGHT"
+        )
     try:
         w, h = int(parts[0]), int(parts[1])
         if w <= 0 and h <= 0:
-            raise ValueError(f"Scale dimensions cannot both be non-positive: {scale_str}")
+            raise ValueError(
+                f"Scale dimensions cannot both be non-positive: {scale_str}"
+            )
         if w == 0 or h == 0:
             raise ValueError(f"Scale dimensions cannot be 0: {scale_str}")
         return (w, h)
     except ValueError as e:
         if "Scale dimensions" in str(e) or "Invalid scale format" in str(e):
             raise
-        raise ValueError(f"Invalid non-integer scale dimensions in '{scale_str}'") from e
+        raise ValueError(
+            f"Invalid non-integer scale dimensions in '{scale_str}'"
+        ) from e
 
 
 def should_colorize(stream: Any = sys.stdout) -> bool:
@@ -67,17 +74,29 @@ def media_info_to_dict(media: MediaInfo) -> dict[str, Any]:
             "codec_name": s.codec_name or None,
             "width": s.width,
             "height": s.height,
-            "resolution": [s.width, s.height] if (s.width > 0 and s.height > 0) else None,
-            "display_resolution": s.display_resolution if (s.width > 0 and s.height > 0) else None,
-            "effective_resolution": list(s.effective_dimensions) if (s.width > 0 and s.height > 0) else None,
+            "resolution": [s.width, s.height]
+            if (s.width > 0 and s.height > 0)
+            else None,
+            "display_resolution": s.display_resolution
+            if (s.width > 0 and s.height > 0)
+            else None,
+            "effective_resolution": list(s.effective_dimensions)
+            if (s.width > 0 and s.height > 0)
+            else None,
             "aspect_ratio": format_aspect_ratio(s.width, s.height),
-            "aspect_ratio_float": round(s.aspect_ratio, 4) if s.aspect_ratio > 0 else None,
+            "aspect_ratio_float": round(s.aspect_ratio, 4)
+            if s.aspect_ratio > 0
+            else None,
             "pixel_format": s.pix_fmt,
             "fps": s.fps,
             "bit_rate": s.bit_rate,
-            "bit_rate_kbps": round(s.bit_rate / 1000) if s.bit_rate is not None else None,
+            "bit_rate_kbps": round(s.bit_rate / 1000)
+            if s.bit_rate is not None
+            else None,
             "duration": s.duration,
-            "duration_formatted": format_duration(s.duration) if s.duration is not None else None,
+            "duration_formatted": format_duration(s.duration)
+            if s.duration is not None
+            else None,
             "rotation": s.rotation,
             "is_attached_pic": s.is_attached_pic,
         }
@@ -95,7 +114,9 @@ def media_info_to_dict(media: MediaInfo) -> dict[str, Any]:
             "bit_rate": s.bit_rate,
             "bit_rate_kbps": s.bit_rate_kbps,
             "duration": s.duration,
-            "duration_formatted": format_duration(s.duration) if s.duration is not None else None,
+            "duration_formatted": format_duration(s.duration)
+            if s.duration is not None
+            else None,
         }
         a_streams.append(a_dict)
 
@@ -104,7 +125,9 @@ def media_info_to_dict(media: MediaInfo) -> dict[str, Any]:
             "filename": media.format.filename,
             "format_name": media.format.format_name,
             "duration": media.format.duration,
-            "duration_formatted": format_duration(media.format.duration) if media.format.duration is not None else None,
+            "duration_formatted": format_duration(media.format.duration)
+            if media.format.duration is not None
+            else None,
             "size_bytes": media.format.size_bytes,
             "size_human": format_file_size(media.format.size_bytes),
             "bit_rate": media.format.bit_rate,
@@ -114,7 +137,9 @@ def media_info_to_dict(media: MediaInfo) -> dict[str, Any]:
         "audio_streams": a_streams,
         "summary": {
             "resolved_duration": media.duration,
-            "duration_formatted": format_duration(dur_val) if dur_val is not None and dur_val > 0 else "N/A",
+            "duration_formatted": format_duration(dur_val)
+            if dur_val is not None and dur_val > 0
+            else "N/A",
             "has_video": media.has_video,
             "has_audio": media.has_audio,
             "is_audio_only": media.is_audio_only,
@@ -167,14 +192,22 @@ def render_media_info_text(media: MediaInfo, use_color: bool = False) -> str:
     if media.video_streams:
         for s in media.video_streams:
             lines.append("")
-            tag = " (Cover Art)" if s.is_attached_pic else (" (Still Image)" if media.is_image else "")
+            tag = (
+                " (Cover Art)"
+                if s.is_attached_pic
+                else (" (Still Image)" if media.is_image else "")
+            )
             lines.append(f"{bold}[Video Stream #{s.index}{tag}]{reset}")
             lines.append(f"  {'Codec:':<16}{s.codec_name or 'N/A'}")
-            res_str = f"{s.width}x{s.height}" if (s.width > 0 and s.height > 0) else "N/A"
+            res_str = (
+                f"{s.width}x{s.height}" if (s.width > 0 and s.height > 0) else "N/A"
+            )
             if s.rotation != 0:
                 res_str += f" (effective: {s.effective_dimensions[0]}x{s.effective_dimensions[1]} @ {s.rotation}°)"
             lines.append(f"  {'Resolution:':<16}{res_str}")
-            lines.append(f"  {'Aspect Ratio:':<16}{format_aspect_ratio(s.width, s.height)}")
+            lines.append(
+                f"  {'Aspect Ratio:':<16}{format_aspect_ratio(s.width, s.height)}"
+            )
             lines.append(f"  {'Pixel Format:':<16}{s.pix_fmt or 'N/A'}")
             lines.append(f"  {'Frame Rate:':<16}{format_fps(s.fps, s.is_attached_pic)}")
             lines.append(f"  {'Bitrate:':<16}{format_bitrate(s.bit_rate)}")
@@ -190,8 +223,14 @@ def render_media_info_text(media: MediaInfo, use_color: bool = False) -> str:
             lines.append("")
             lines.append(f"{bold}[Audio Stream #{s.index}]{reset}")
             lines.append(f"  {'Codec:':<16}{s.codec_name or 'N/A'}")
-            lines.append(f"  {'Channels:':<16}{format_channels(s.channel_layout, s.channels)}")
-            sr_str = f"{s.sample_rate:,} Hz ({s.sample_rate_khz:.1f} kHz)" if s.sample_rate > 0 else "N/A"
+            lines.append(
+                f"  {'Channels:':<16}{format_channels(s.channel_layout, s.channels)}"
+            )
+            sr_str = (
+                f"{s.sample_rate:,} Hz ({s.sample_rate_khz:.1f} kHz)"
+                if s.sample_rate > 0
+                else "N/A"
+            )
             lines.append(f"  {'Sample Rate:':<16}{sr_str}")
             lines.append(f"  {'Bitrate:':<16}{format_bitrate(s.bit_rate)}")
             lines.append(f"  {'Duration:':<16}{format_duration(s.duration)}")
@@ -211,7 +250,9 @@ def render_media_info_text(media: MediaInfo, use_color: bool = False) -> str:
     return "\n".join(lines)
 
 
-def create_progress_reporter(quiet: bool = False) -> Optional[Callable[[ProgressEvent], None]]:
+def create_progress_reporter(
+    quiet: bool = False,
+) -> Callable[[ProgressEvent], None] | None:
     """Create terminal progress callback handling TTY carriage return or non-TTY logging."""
     if quiet:
         return None
@@ -224,10 +265,16 @@ def create_progress_reporter(quiet: bool = False) -> Optional[Callable[[Progress
         if is_tty:
             bar_len = 20
             pct = max(0.0, min(100.0, evt.percentage))
-            filled = int(round(bar_len * (pct / 100.0)))
-            bar = "=" * max(0, filled - 1) + (">" if filled > 0 and filled < bar_len else ("=" if filled == bar_len else ""))
+            filled = round(bar_len * (pct / 100.0))
+            bar = "=" * max(0, filled - 1) + (
+                ">"
+                if filled > 0 and filled < bar_len
+                else ("=" if filled == bar_len else "")
+            )
             bar_str = f"[{bar:<{bar_len}}]"
-            size_mb = (evt.total_size_bytes / (1024 * 1024)) if evt.total_size_bytes else 0.0
+            size_mb = (
+                (evt.total_size_bytes / (1024 * 1024)) if evt.total_size_bytes else 0.0
+            )
             line = f"\r{bar_str} {pct:5.1f}% | Speed: {evt.speed_str:<6} | ETA: {evt.eta_str:<8} | Size: {size_mb:6.1f} MB"
             sys.stdout.write(line)
             sys.stdout.flush()
@@ -237,7 +284,9 @@ def create_progress_reporter(quiet: bool = False) -> Optional[Callable[[Progress
         else:
             if int(evt.percentage / 10) > int(last_pct / 10) or evt.is_completed:
                 last_pct = evt.percentage
-                sys.stdout.write(f"Progress: {evt.percentage:5.1f}% (ETA: {evt.eta_str})\n")
+                sys.stdout.write(
+                    f"Progress: {evt.percentage:5.1f}% (ETA: {evt.eta_str})\n"
+                )
                 sys.stdout.flush()
 
     return _reporter

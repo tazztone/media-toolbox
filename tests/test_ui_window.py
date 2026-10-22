@@ -9,10 +9,11 @@ Tests:
 
 from __future__ import annotations
 
-from pathlib import Path
 import threading
 import time
+from pathlib import Path
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 from media_toolbox.core.jobs import JobConfig
@@ -22,10 +23,6 @@ from media_toolbox.core.models import (
     MediaInfo,
     ProgressEvent,
     VideoStream,
-)
-from tests.ui_test_helpers import (
-    gi_env,
-    isolate_gi_sys_modules,
 )
 
 pytestmark = [pytest.mark.desktop]
@@ -43,15 +40,22 @@ class TestPerformanceAndTiming:
         """Assert operational logic of the UI suite executes well within 500ms."""
         start = time.perf_counter()
 
-        from media_toolbox.ui.forms import build_encode_options_from_state, resolve_default_output_path
+        from media_toolbox.ui.forms import (
+            build_encode_options_from_state,
+            resolve_default_output_path,
+        )
 
         p = Path("/tmp/test.mkv")
         for _ in range(100):
-            _ = build_encode_options_from_state("h264", "crf", 23, 25.0, (1920, 1080), False, True, 2.0, 192)
+            _ = build_encode_options_from_state(
+                "h264", "crf", 23, 25.0, (1920, 1080), False, True, 2.0, 192
+            )
             _ = resolve_default_output_path(p, "h264")
 
         duration = time.perf_counter() - start
-        assert duration < 0.2, f"Execution took too long: {duration:.4f}s (budget: 0.2s)"
+        assert duration < 0.2, (
+            f"Execution took too long: {duration:.4f}s (budget: 0.2s)"
+        )
 
     def test_zero_thread_leaks_after_execution(self) -> None:
         """Assert no active MediaToolboxWorker threads remain alive."""
@@ -61,32 +65,39 @@ class TestPerformanceAndTiming:
     def test_monotonic_progress_footer_bar(self) -> None:
         """Verify ProgressFooterWidget maintains non-decreasing progress unless pass changes."""
         from media_toolbox.ui.widgets import ProgressFooterWidget
-        from media_toolbox.core.models import ProgressEvent
 
         mock_footer = MagicMock()
         mock_footer._current_fraction = 0.0
         mock_footer._last_pass_info = None
 
         # Step 1: 50%
-        ProgressFooterWidget.update_progress(mock_footer, ProgressEvent(percentage=50.0))
+        ProgressFooterWidget.update_progress(
+            mock_footer, ProgressEvent(percentage=50.0)
+        )
         mock_footer.progress_bar.set_fraction.assert_called_with(0.5)
         mock_footer.pct_label.set_text.assert_called_with("50.0%")
         assert mock_footer._current_fraction == 0.5
 
         # Step 2: 40% (jitter backwards) should NOT regress
-        ProgressFooterWidget.update_progress(mock_footer, ProgressEvent(percentage=40.0))
+        ProgressFooterWidget.update_progress(
+            mock_footer, ProgressEvent(percentage=40.0)
+        )
         mock_footer.progress_bar.set_fraction.assert_called_with(0.5)
         mock_footer.pct_label.set_text.assert_called_with("50.0%")
         assert mock_footer._current_fraction == 0.5
 
         # Step 3: 75%
-        ProgressFooterWidget.update_progress(mock_footer, ProgressEvent(percentage=75.0))
+        ProgressFooterWidget.update_progress(
+            mock_footer, ProgressEvent(percentage=75.0)
+        )
         mock_footer.progress_bar.set_fraction.assert_called_with(0.75)
         mock_footer.pct_label.set_text.assert_called_with("75.0%")
         assert mock_footer._current_fraction == 0.75
 
         # Step 4: pass change updates status label without regressing progress
-        ProgressFooterWidget.update_progress(mock_footer, ProgressEvent(percentage=10.0), pass_info="Pass 2/2")
+        ProgressFooterWidget.update_progress(
+            mock_footer, ProgressEvent(percentage=10.0), pass_info="Pass 2/2"
+        )
         mock_footer.status_label.set_text.assert_called_with("Pass 2/2")
         assert mock_footer._current_fraction == 0.75
 
@@ -95,19 +106,24 @@ class TestPerformanceAndTiming:
         assert mock_footer._current_fraction == 0.0
 
     @pytest.mark.usefixtures("gi_env")
-    def test_async_probe_sequence_counter_discards_stale_completion(self, tmp_path: Path) -> None:
+    def test_async_probe_sequence_counter_discards_stale_completion(
+        self, tmp_path: Path
+    ) -> None:
         """Verify stale probe completion from earlier request ID is discarded."""
         from media_toolbox.ui.window import MainWindow
-        from media_toolbox.core.models import MediaInfo, FormatInfo
 
         mock_win = MagicMock()
         mock_win._probe_request_id = 2  # Current request is 2
 
         file1 = tmp_path / "first.mp4"
-        info1 = MediaInfo(format=FormatInfo(filename="first.mp4", format_name="mp4", duration=10.0))
+        info1 = MediaInfo(
+            format=FormatInfo(filename="first.mp4", format_name="mp4", duration=10.0)
+        )
 
         file2 = tmp_path / "second.mp4"
-        info2 = MediaInfo(format=FormatInfo(filename="second.mp4", format_name="mp4", duration=20.0))
+        info2 = MediaInfo(
+            format=FormatInfo(filename="second.mp4", format_name="mp4", duration=20.0)
+        )
 
         # Stale completion with req_id=1
         ret1 = MainWindow._on_probe_success(mock_win, file1, 1, info1)
@@ -123,22 +139,25 @@ class TestPerformanceAndTiming:
 class TestWindowStateAndProgressDecoupling:
     """Verifies MainWindow state machine, probing lockout, overwrite confirmation, and progress decoupling."""
 
-    def test_probing_lockout_prevents_stale_job_submission(self, tmp_path: Path) -> None:
+    def test_probing_lockout_prevents_stale_job_submission(
+        self, tmp_path: Path
+    ) -> None:
         """Loading file B while file A was ready invalidates A and prevents starting jobs during probing."""
         from media_toolbox.ui.window import MainWindow, WindowState
-        from media_toolbox.core.models import MediaInfo, FormatInfo
 
         mock_win = MagicMock()
         mock_win.state = WindowState.READY
         mock_win.is_transcoding = False
         mock_win._probe_request_id = 1
         mock_win.input_file = tmp_path / "file_a.mp4"
-        mock_win.media_info = MediaInfo(format=FormatInfo(filename="file_a.mp4", format_name="mp4", duration=10.0))
+        mock_win.media_info = MediaInfo(
+            format=FormatInfo(filename="file_a.mp4", format_name="mp4", duration=10.0)
+        )
 
         target_b = tmp_path / "file_b.mp4"
         target_b.touch()
 
-        with patch("threading.Thread") as mock_thread:
+        with patch("threading.Thread"):
             MainWindow.load_media_file(mock_win, target_b, sync=False)
 
         assert mock_win.state == WindowState.PROBING
@@ -155,7 +174,6 @@ class TestWindowStateAndProgressDecoupling:
     def test_interleaved_pass_and_aggregate_progress_monotonic(self) -> None:
         """Progress bar is driven exclusively by aggregate events and never regresses."""
         from media_toolbox.ui.widgets import ProgressFooterWidget
-        from media_toolbox.core.models import ProgressEvent
 
         mock_footer = MagicMock()
         mock_footer._current_fraction = 0.0
@@ -205,7 +223,9 @@ class TestWindowStateAndProgressDecoupling:
         mock_footer.progress_bar.set_fraction.assert_called_with(0.55)
         assert mock_footer._current_fraction == 0.55
 
-    def test_custom_output_path_persists_across_preset_changes(self, tmp_path: Path) -> None:
+    def test_custom_output_path_persists_across_preset_changes(
+        self, tmp_path: Path
+    ) -> None:
         """Custom user output path is retained when changing presets."""
         from media_toolbox.ui.window import MainWindow
 
@@ -227,16 +247,17 @@ class TestWindowStateAndProgressDecoupling:
 
     def test_overwrite_confirmation_behavior(self, tmp_path: Path) -> None:
         """Non-existing file starts directly; existing file triggers Adw.MessageDialog."""
-        from media_toolbox.ui.window import MainWindow, WindowState
-        from media_toolbox.core.jobs import JobConfig
         from media_toolbox.core.models import EncodeOptions
+        from media_toolbox.ui.window import MainWindow, WindowState
 
         mock_win = MagicMock()
         mock_win._start_worker = MagicMock()
 
         # Case 1: non-existing destination
         non_existing = tmp_path / "new_file.mp4"
-        cfg1 = JobConfig(input_path="in.mp4", output_path=non_existing, options=EncodeOptions())
+        cfg1 = JobConfig(
+            input_path="in.mp4", output_path=non_existing, options=EncodeOptions()
+        )
         MainWindow._confirm_overwrite_and_start(mock_win, cfg1, "Encoding...")
         mock_win._start_worker.assert_called_once_with(cfg1, "Encoding...")
 
@@ -246,7 +267,9 @@ class TestWindowStateAndProgressDecoupling:
         mock_win.input_file = "in.mp4"
         existing = tmp_path / "already_exists.mp4"
         existing.touch()
-        cfg2 = JobConfig(input_path="in.mp4", output_path=existing, options=EncodeOptions())
+        cfg2 = JobConfig(
+            input_path="in.mp4", output_path=existing, options=EncodeOptions()
+        )
 
         # Subcase 2a: Adw.AlertDialog (Libadwaita 1.5+)
         with patch("gi.repository.Adw.AlertDialog") as mock_dialog_cls:
@@ -289,44 +312,51 @@ class TestWindowStateAndProgressDecoupling:
         mock_win._start_worker.reset_mock()
         mock_win._pending_confirmation = False
         import gi.repository.Adw as AdwModule
-        with patch.object(AdwModule, "AlertDialog", None):
-            with patch("gi.repository.Adw.MessageDialog") as mock_msg_cls:
-                mock_msg = MagicMock()
-                mock_msg_cls.return_value = mock_msg
 
-                MainWindow._confirm_overwrite_and_start(mock_win, cfg2, "Encoding...")
-                mock_msg_cls.assert_called_once()
-                mock_msg.present.assert_called_once()
-                resp_cb = mock_msg.connect.call_args[0][1]
-                mock_win._pending_confirmation = True
-                resp_cb(mock_msg, "replace")
-                assert mock_win._start_worker.call_args[0][0].overwrite is True
+        with (
+            patch.object(AdwModule, "AlertDialog", None),
+            patch("gi.repository.Adw.MessageDialog") as mock_msg_cls,
+        ):
+            mock_msg = MagicMock()
+            mock_msg_cls.return_value = mock_msg
+
+            MainWindow._confirm_overwrite_and_start(mock_win, cfg2, "Encoding...")
+            mock_msg_cls.assert_called_once()
+            mock_msg.present.assert_called_once()
+            resp_cb = mock_msg.connect.call_args[0][1]
+            mock_win._pending_confirmation = True
+            resp_cb(mock_msg, "replace")
+            assert mock_win._start_worker.call_args[0][0].overwrite is True
 
     def test_start_worker_ignores_duplicate_when_worker_alive(self) -> None:
         """MainWindow._start_worker does not launch a second worker if one is active and alive."""
-        from media_toolbox.ui.window import MainWindow, WindowState
-        from media_toolbox.core.jobs import JobConfig
         from media_toolbox.core.models import EncodeOptions
+        from media_toolbox.ui.window import MainWindow
 
         mock_win = MagicMock()
         mock_alive_worker = MagicMock()
         mock_alive_worker.is_alive.return_value = True
         mock_win._active_worker = mock_alive_worker
 
-        cfg = JobConfig(input_path="in.mp4", output_path="out.mp4", options=EncodeOptions())
+        cfg = JobConfig(
+            input_path="in.mp4", output_path="out.mp4", options=EncodeOptions()
+        )
         with patch("threading.Thread") as mock_thread_cls:
             MainWindow._start_worker(mock_win, cfg, "Title")
             mock_thread_cls.assert_not_called()
 
-    def test_start_actions_do_not_mutate_filesystem_on_ui_thread(self, tmp_path: Path) -> None:
+    def test_start_actions_do_not_mutate_filesystem_on_ui_thread(
+        self, tmp_path: Path
+    ) -> None:
         """_start_transcode and _start_extract_audio delegate destination directory creation to run_job."""
         from media_toolbox.ui.window import MainWindow, WindowState
-        from media_toolbox.core.models import EncodeOptions, MediaInfo, FormatInfo
 
         mock_win = MagicMock()
         mock_win.state = WindowState.READY
         mock_win.input_file = tmp_path / "input.mp4"
-        mock_win.media_info = MediaInfo(format=FormatInfo(filename="input.mp4", format_name="mp4", duration=1.0))
+        mock_win.media_info = MediaInfo(
+            format=FormatInfo(filename="input.mp4", format_name="mp4", duration=1.0)
+        )
         mock_win.video_output_path = tmp_path / "nonexistent_dir" / "out.mp4"
         mock_win.audio_output_path = tmp_path / "nonexistent_dir2" / "out.mp3"
         mock_win.get_transcode_options.return_value = EncodeOptions()
@@ -342,19 +372,24 @@ class TestWindowStateAndProgressDecoupling:
         assert not (tmp_path / "nonexistent_dir2").exists()
         mock_win._confirm_overwrite_and_start.assert_called_once()
 
-    def test_probe_success_sets_effective_rotated_dimensions(self, tmp_path: Path) -> None:
+    def test_probe_success_sets_effective_rotated_dimensions(
+        self, tmp_path: Path
+    ) -> None:
         """Probe success passes rotation-compensated effective dimensions to resolution widget."""
         from media_toolbox.ui.window import MainWindow
-        from media_toolbox.core.models import MediaInfo, FormatInfo, VideoStream
 
         mock_win = MagicMock()
         mock_win._probe_request_id = 1
         mock_win.state = None
 
         target = tmp_path / "portrait.mp4"
-        video = VideoStream(index=0, codec_name="h264", width=1920, height=1080, rotation=90)
+        video = VideoStream(
+            index=0, codec_name="h264", width=1920, height=1080, rotation=90
+        )
         info = MediaInfo(
-            format=FormatInfo(filename="portrait.mp4", format_name="mp4", duration=10.0),
+            format=FormatInfo(
+                filename="portrait.mp4", format_name="mp4", duration=10.0
+            ),
             video_streams=(video,),
         )
 
@@ -387,7 +422,9 @@ class TestWindowStateAndProgressDecoupling:
         mock_win.state = None
         mock_win._close_after_cleanup = False
         with patch("media_toolbox.ui.window_worker.GLib.idle_add") as mock_idle:
-            MainWindow._finish(mock_win, success=True, footer_msg="Saved: 1.mp4", toast_msg="Done")
+            MainWindow._finish(
+                mock_win, success=True, footer_msg="Saved: 1.mp4", toast_msg="Done"
+            )
             assert mock_win.batch_index == 1
             mock_idle.assert_called_once()
             cb = mock_idle.call_args[0][0]
@@ -408,4 +445,3 @@ class TestWindowStateAndProgressDecoupling:
         MainWindow._on_cancel_clicked(mock_win)
         assert mock_win.is_batch_active is False
         assert mock_win.is_batch_running is False
-

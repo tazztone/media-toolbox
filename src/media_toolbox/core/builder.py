@@ -14,13 +14,11 @@ INVARIANT: Must have ZERO imports from GUI toolkits (gi, Gtk, Adw, etc.).
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import tempfile
-from typing import Optional
+from pathlib import Path
 
 from media_toolbox.core.bitrate import calculate_target_video_bitrate
 from media_toolbox.core.filtergraph import (
-    build_audio_filter,
     build_audio_filter_args,
     build_palettegen_filter,
     build_paletteuse_filter,
@@ -40,7 +38,7 @@ from media_toolbox.core.probe import probe_media
 from media_toolbox.core.validation import resolve_job_spec, validate_encode_options
 
 
-def resolve_speed_preset(options: EncodeOptions) -> Optional[str]:
+def resolve_speed_preset(options: EncodeOptions) -> str | None:
     """
     Resolve valid FFmpeg encoder speed preset from EncodeOptions.
     Only returns recognized speed presets, or None.
@@ -85,13 +83,26 @@ def extract_user_stream_maps(extra_args: tuple[str, ...]) -> list[str]:
     return maps
 
 
-_AUDIO_OR_CONTAINER_ARG_FLAGS = frozenset({
-    "-c:a", "-codec:a", "-b:a", "-ar", "-ac", "-af", "-filter:a", "-disposition:a",
-    "-f", "-movflags", "-brand",
-})
-_AUDIO_OR_CONTAINER_BOOL_FLAGS = frozenset({
-    "-an",
-})
+_AUDIO_OR_CONTAINER_ARG_FLAGS = frozenset(
+    {
+        "-c:a",
+        "-codec:a",
+        "-b:a",
+        "-ar",
+        "-ac",
+        "-af",
+        "-filter:a",
+        "-disposition:a",
+        "-f",
+        "-movflags",
+        "-brand",
+    }
+)
+_AUDIO_OR_CONTAINER_BOOL_FLAGS = frozenset(
+    {
+        "-an",
+    }
+)
 
 
 def extract_two_pass_video_extra_args(extra_args: tuple[str, ...]) -> list[str]:
@@ -106,7 +117,18 @@ def extract_two_pass_video_extra_args(extra_args: tuple[str, ...]) -> list[str]:
         if arg in _AUDIO_OR_CONTAINER_ARG_FLAGS:
             i += 2
             continue
-        if arg.startswith(("-c:a", "-codec:a", "-b:a", "-ar:", "-ac:", "-af:", "-filter:a", "-disposition:a")):
+        if arg.startswith(
+            (
+                "-c:a",
+                "-codec:a",
+                "-b:a",
+                "-ar:",
+                "-ac:",
+                "-af:",
+                "-filter:a",
+                "-disposition:a",
+            )
+        ):
             i += 2
             continue
         # User stream maps handled separately or forwarded
@@ -129,8 +151,8 @@ def extract_two_pass_video_extra_args(extra_args: tuple[str, ...]) -> list[str]:
 
 
 def resolve_stream_mappings(
-    media_info: Optional[MediaInfo],
-    audio_track_index: Optional[int] = None,
+    media_info: MediaInfo | None,
+    audio_track_index: int | None = None,
 ) -> tuple[str, str]:
     """
     Resolve deterministic video and audio stream mapping identifiers.
@@ -151,9 +173,9 @@ def build_audio_extract_command(
     input_path: str,
     output_path: str,
     options: EncodeOptions,
-    media_info: Optional[MediaInfo] = None,
+    media_info: MediaInfo | None = None,
     include_progress: bool = False,
-    spec: Optional[ResolvedJobSpec] = None,
+    spec: ResolvedJobSpec | None = None,
     ffmpeg_bin: str = "ffmpeg",
 ) -> list[str]:
     """
@@ -168,7 +190,9 @@ def build_audio_extract_command(
 
     has_user_map = has_stream_map(options.extra_args)
     if not has_user_map:
-        _, a_map = resolve_stream_mappings(media_info, audio_track_index=options.audio_track_index)
+        _, a_map = resolve_stream_mappings(
+            media_info, audio_track_index=options.audio_track_index
+        )
         cmd.extend(["-i", input_path, "-vn", "-map", a_map])
     else:
         cmd.extend(["-i", input_path, "-vn"])
@@ -183,14 +207,20 @@ def build_audio_extract_command(
     )
 
     # Resolve audio preset / codec
-    audio_preset = AUDIO_PRESETS.get(spec.audio_preset_name) if spec.audio_preset_name else None
+    audio_preset = (
+        AUDIO_PRESETS.get(spec.audio_preset_name) if spec.audio_preset_name else None
+    )
     if audio_preset is None and spec.audio_codec is None:
         out_ext = Path(output_path).suffix.lstrip(".").lower()
         if is_audio_preset(out_ext):
             audio_preset = get_audio_preset(out_ext)
 
     if audio_preset is not None:
-        cmd.extend(audio_preset.build_audio_args(bitrate_kbps=options.audio_bitrate_kbps, extract_audio=False))
+        cmd.extend(
+            audio_preset.build_audio_args(
+                bitrate_kbps=options.audio_bitrate_kbps, extract_audio=False
+            )
+        )
     else:
         codec = spec.audio_codec or options.audio_codec or "aac"
         cmd.extend(["-c:a", codec])
@@ -211,7 +241,7 @@ def build_gif_command(
     input_path: str,
     output_path: str,
     options: EncodeOptions,
-    media_info: Optional[MediaInfo] = None,
+    media_info: MediaInfo | None = None,
     include_progress: bool = False,
     ffmpeg_bin: str = "ffmpeg",
 ) -> list[str]:
@@ -227,9 +257,17 @@ def build_gif_command(
     scale = options.scale
     fps = options.fps
     if media_info and media_info.primary_video:
-        if scale is None and media_info.primary_video.width and media_info.primary_video.width > 800:
+        if (
+            scale is None
+            and media_info.primary_video.width
+            and media_info.primary_video.width > 800
+        ):
             scale = (800, -2)
-        if fps is None and media_info.primary_video.fps and media_info.primary_video.fps > 15:
+        if (
+            fps is None
+            and media_info.primary_video.fps
+            and media_info.primary_video.fps > 15
+        ):
             fps = 15
 
     vf = build_video_filter(
@@ -273,10 +311,10 @@ def build_two_pass_commands(
     input_path: str,
     output_path: str,
     options: EncodeOptions,
-    media_info: Optional[MediaInfo] = None,
-    pass_logfile: Optional[str] = None,
+    media_info: MediaInfo | None = None,
+    pass_logfile: str | None = None,
     include_progress: bool = False,
-    spec: Optional[ResolvedJobSpec] = None,
+    spec: ResolvedJobSpec | None = None,
     ffmpeg_bin: str = "ffmpeg",
 ) -> list[list[str]]:
     """
@@ -295,7 +333,9 @@ def build_two_pass_commands(
 
     duration = media_info.duration
     if duration <= 0:
-        raise ValueError(f"Cannot calculate target bitrate: media duration is {duration}")
+        raise ValueError(
+            f"Cannot calculate target bitrate: media duration is {duration}"
+        )
 
     # Audio bitrate for math formula
     if options.mute_audio or not media_info.has_audio:
@@ -311,7 +351,9 @@ def build_two_pass_commands(
         speed=options.speed,
     )
 
-    log_prefix = pass_logfile or os.path.join(tempfile.gettempdir(), f"ffmpeg2pass_{os.getpid()}")
+    log_prefix = pass_logfile or os.path.join(
+        tempfile.gettempdir(), f"ffmpeg2pass_{os.getpid()}"
+    )
 
     vf_args = build_video_filter_args(
         scale=options.scale,
@@ -321,9 +363,13 @@ def build_two_pass_commands(
         fps=options.fps,
     )
 
-    v_preset = VIDEO_PRESETS.get(spec.video_preset_name) if spec.video_preset_name else None
+    v_preset = (
+        VIDEO_PRESETS.get(spec.video_preset_name) if spec.video_preset_name else None
+    )
     speed_preset = resolve_speed_preset(options)
-    v_map, a_map = resolve_stream_mappings(media_info, audio_track_index=options.audio_track_index)
+    v_map, a_map = resolve_stream_mappings(
+        media_info, audio_track_index=options.audio_track_index
+    )
     has_user_map = has_stream_map(options.extra_args)
 
     def _pass_cmd(pass_num: int) -> list[str]:
@@ -333,7 +379,11 @@ def build_two_pass_commands(
         cmd.extend(["-i", input_path])
         if not has_user_map:
             cmd.extend(["-map", v_map])
-            if pass_num == 2 and not options.mute_audio and (media_info is None or media_info.has_audio):
+            if (
+                pass_num == 2
+                and not options.mute_audio
+                and (media_info is None or media_info.has_audio)
+            ):
                 cmd.extend(["-map", a_map])
             if pass_num == 2 and options.keep_subtitles:
                 cmd.extend(["-map", "0:s?", "-c:s", "copy"])
@@ -350,20 +400,28 @@ def build_two_pass_commands(
             )
         else:
             v_codec = spec.video_codec or options.video_codec or "libx264"
-            cmd.extend([
-                "-c:v", v_codec,
-                "-b:v", f"{int(v_bitrate_kbps)}k",
-            ])
+            cmd.extend(
+                [
+                    "-c:v",
+                    v_codec,
+                    "-b:v",
+                    f"{int(v_bitrate_kbps)}k",
+                ]
+            )
             if v_codec in ("libx265", "x265", "hevc"):
                 x265_opts = [f"pass={pass_num}"]
                 if log_prefix:
                     x265_opts.append(f"stats={log_prefix}")
                 cmd.extend(["-x265-params", ":".join(x265_opts)])
             else:
-                cmd.extend([
-                    "-pass", str(pass_num),
-                    "-passlogfile", log_prefix,
-                ])
+                cmd.extend(
+                    [
+                        "-pass",
+                        str(pass_num),
+                        "-passlogfile",
+                        log_prefix,
+                    ]
+                )
             if speed_preset:
                 cmd.extend(["-preset", speed_preset])
 
@@ -407,9 +465,9 @@ def build_single_pass_command(
     input_path: str,
     output_path: str,
     options: EncodeOptions,
-    media_info: Optional[MediaInfo] = None,
+    media_info: MediaInfo | None = None,
     include_progress: bool = False,
-    spec: Optional[ResolvedJobSpec] = None,
+    spec: ResolvedJobSpec | None = None,
     ffmpeg_bin: str = "ffmpeg",
 ) -> list[str]:
     """
@@ -425,7 +483,9 @@ def build_single_pass_command(
     cmd.extend(["-i", input_path])
     has_user_map = has_stream_map(options.extra_args)
     if not has_user_map:
-        v_map, a_map = resolve_stream_mappings(media_info, audio_track_index=options.audio_track_index)
+        v_map, a_map = resolve_stream_mappings(
+            media_info, audio_track_index=options.audio_track_index
+        )
         cmd.extend(["-map", v_map])
         if not options.mute_audio and (media_info is None or media_info.has_audio):
             cmd.extend(["-map", a_map])
@@ -444,11 +504,15 @@ def build_single_pass_command(
     )
 
     # Video codec & quality
-    v_preset = VIDEO_PRESETS.get(spec.video_preset_name) if spec.video_preset_name else None
+    v_preset = (
+        VIDEO_PRESETS.get(spec.video_preset_name) if spec.video_preset_name else None
+    )
     speed_preset = resolve_speed_preset(options)
 
     if v_preset is not None:
-        cmd.extend(v_preset.build_video_args(crf=options.crf, speed_preset=speed_preset))
+        cmd.extend(
+            v_preset.build_video_args(crf=options.crf, speed_preset=speed_preset)
+        )
     else:
         v_codec = spec.video_codec or options.video_codec or "libx264"
         cmd.extend(["-c:v", v_codec])
@@ -493,8 +557,8 @@ def build_ffmpeg_commands(
     input_path: str | Path,
     output_path: str | Path,
     options: EncodeOptions,
-    media_info: Optional[MediaInfo] = None,
-    pass_logfile: Optional[str] = None,
+    media_info: MediaInfo | None = None,
+    pass_logfile: str | None = None,
     include_progress: bool = False,
     ffmpeg_bin: str = "ffmpeg",
 ) -> list[list[str]]:
@@ -512,7 +576,9 @@ def build_ffmpeg_commands(
     output_str = str(output_path)
 
     # Centralized validation upfront
-    spec = validate_encode_options(options, media_info=media_info, output_path=output_str)
+    spec = validate_encode_options(
+        options, media_info=media_info, output_path=output_str
+    )
 
     # Mode 1: Audio Extraction / Audio-Only Presets
     if spec.rate_mode == "extract_audio":

@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import errno
 import os
-from pathlib import Path
 import threading
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -15,7 +15,6 @@ import pytest
 
 from media_toolbox.core.jobs import (
     JobConfig,
-    JobResult,
     cleanup_stale_staging_dirs,
     publish_output,
     run_job,
@@ -95,7 +94,9 @@ class TestPathSafety:
         with pytest.raises(DestinationExistsError, match="already exists"):
             validate_job_paths(inp, out, overwrite=False)
 
-    def test_broken_symlink_destination_rejected_without_overwrite(self, tmp_path: Path):
+    def test_broken_symlink_destination_rejected_without_overwrite(
+        self, tmp_path: Path
+    ):
         inp = tmp_path / "in.mp4"
         inp.touch()
         out = tmp_path / "broken_link.mp4"
@@ -479,9 +480,15 @@ class TestTransactionalJobExecution:
         out = tmp_path / "dest.mp4"
         err = OSError()
         err.errno = errno.EOPNOTSUPP
-        with patch("os.link", side_effect=err):
-            with pytest.raises(OutputPublishError, match="does not support atomic no-clobber"):
-                publish_output(staging, out, overwrite=False, allow_non_atomic_fallback=False)
+        with (
+            patch("os.link", side_effect=err),
+            pytest.raises(
+                OutputPublishError, match="does not support atomic no-clobber"
+            ),
+        ):
+            publish_output(
+                staging, out, overwrite=False, allow_non_atomic_fallback=False
+            )
 
     def test_hardlink_unsupported_allowed_with_fallback_flag(self, tmp_path: Path):
         staging = tmp_path / "stage.mp4"
@@ -490,7 +497,9 @@ class TestTransactionalJobExecution:
         err = OSError()
         err.errno = errno.EOPNOTSUPP
         with patch("os.link", side_effect=err):
-            publish_output(staging, out, overwrite=False, allow_non_atomic_fallback=True)
+            publish_output(
+                staging, out, overwrite=False, allow_non_atomic_fallback=True
+            )
         assert out.exists()
         assert out.read_bytes() == b"content"
 
@@ -518,9 +527,13 @@ class TestTransactionalJobExecution:
         )
         err = OSError()
         err.errno = errno.EXDEV
-        with patch("os.link", side_effect=err):
-            with pytest.raises(OutputPublishError, match="does not support atomic no-clobber"):
-                run_job(config, runner=fake_runner)
+        with (
+            patch("os.link", side_effect=err),
+            pytest.raises(
+                OutputPublishError, match="does not support atomic no-clobber"
+            ),
+        ):
+            run_job(config, runner=fake_runner)
 
     def test_cleanup_stale_staging_dirs(self, tmp_path: Path):
         """Orphaned staging dirs older than max_age are cleaned up, recent ones remain."""
@@ -544,7 +557,9 @@ class TestTransactionalJobExecution:
         assert fresh_dir.exists()
         assert unrelated_file.exists()
 
-    def test_target_size_exceeded_flag(self, tmp_path: Path, dummy_media_info: MediaInfo):
+    def test_target_size_exceeded_flag(
+        self, tmp_path: Path, dummy_media_info: MediaInfo
+    ):
         """When actual output size exceeds target size, exceeded_target is set on JobResult."""
         inp = tmp_path / "in.mp4"
         inp.touch()
@@ -566,7 +581,9 @@ class TestTransactionalJobExecution:
         assert res.target_size_bytes == 1_000_000
         assert res.file_size_bytes == 2_000_000
 
-    def test_strict_size_retry_on_overshoot(self, tmp_path: Path, dummy_media_info: MediaInfo):
+    def test_strict_size_retry_on_overshoot(
+        self, tmp_path: Path, dummy_media_info: MediaInfo
+    ):
         """With strict_size=True, an oversized output triggers a second pass retry."""
         inp = tmp_path / "in.mp4"
         inp.touch()
@@ -595,7 +612,9 @@ class TestTransactionalJobExecution:
         assert res.exceeded_target is False
         assert res.file_size_bytes == 900_000
 
-    def test_job_config_forwards_custom_ffmpeg_bin(self, tmp_path: Path, dummy_media_info: MediaInfo):
+    def test_job_config_forwards_custom_ffmpeg_bin(
+        self, tmp_path: Path, dummy_media_info: MediaInfo
+    ):
         """JobConfig.ffmpeg_bin is forwarded to the command builder."""
         inp = tmp_path / "in.mp4"
         inp.touch()
@@ -621,5 +640,3 @@ class TestTransactionalJobExecution:
         )
         run_job(config, builder=capturing_builder, runner=fake_runner)
         assert captured_builder_kwargs.get("ffmpeg_bin") == "/custom/ffmpeg"
-
-

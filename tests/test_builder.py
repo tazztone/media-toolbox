@@ -16,14 +16,12 @@ from __future__ import annotations
 import ast
 import os
 from pathlib import Path
+
 import pytest
 
 from media_toolbox.core.builder import (
-    build_audio_extract_command,
     build_ffmpeg_commands,
     build_gif_command,
-    build_single_pass_command,
-    build_two_pass_commands,
 )
 from media_toolbox.core.models import (
     AudioStream,
@@ -151,7 +149,9 @@ def test_audio_volume_boost() -> None:
 
 def test_audio_extract_mp3() -> None:
     """Audio extraction with MP3 preset disables video and applies LAME encoder."""
-    options = EncodeOptions(extract_audio=True, video_codec="mp3", audio_bitrate_kbps=192)
+    options = EncodeOptions(
+        extract_audio=True, video_codec="mp3", audio_bitrate_kbps=192
+    )
     cmd = build_ffmpeg_commands("in.mp4", "out.mp3", options)[0]
 
     expected = [
@@ -187,7 +187,9 @@ def test_audio_extract_flac() -> None:
 def test_extract_and_mute_error() -> None:
     """Contradictory options extract_audio and mute_audio raise ValueError."""
     options = EncodeOptions(extract_audio=True, mute_audio=True)
-    with pytest.raises(ValueError, match="Cannot simultaneously extract and mute audio"):
+    with pytest.raises(
+        ValueError, match="Cannot simultaneously extract and mute audio"
+    ):
         build_ffmpeg_commands("in.mp4", "out.mp3", options)
 
 
@@ -240,11 +242,12 @@ def test_gif_custom_palette_options() -> None:
     assert "[p]paletteuse=dither=bayer" in filter_expr
 
 
-
 def test_gif_two_pass_error() -> None:
     """GIF preset rejects two-pass rate control."""
     options = EncodeOptions(video_codec="gif", two_pass=True)
-    with pytest.raises(ValueError, match="Two-pass encoding is not supported for GIF preset"):
+    with pytest.raises(
+        ValueError, match="Two-pass encoding is not supported for GIF preset"
+    ):
         build_ffmpeg_commands("in.mp4", "out.gif", options)
 
 
@@ -332,12 +335,18 @@ def test_two_pass_identical_vf(sample_mediainfo_standard_mp4: MediaInfo) -> None
     assert "setpts=(1.0/1.5)*PTS" in pass1_vf[0]
 
 
-def test_two_pass_speed_adjusts_bitrate(sample_mediainfo_standard_mp4: MediaInfo) -> None:
+def test_two_pass_speed_adjusts_bitrate(
+    sample_mediainfo_standard_mp4: MediaInfo,
+) -> None:
     """Sped-up playback reduces effective duration and increases video bitrate to hit target size."""
     options_1x = EncodeOptions(two_pass=True, target_size_mb=25.0, speed=1.0)
     options_2x = EncodeOptions(two_pass=True, target_size_mb=25.0, speed=2.0)
-    cmds_1x = build_ffmpeg_commands("in.mp4", "out.mp4", options_1x, media_info=sample_mediainfo_standard_mp4)
-    cmds_2x = build_ffmpeg_commands("in.mp4", "out.mp4", options_2x, media_info=sample_mediainfo_standard_mp4)
+    cmds_1x = build_ffmpeg_commands(
+        "in.mp4", "out.mp4", options_1x, media_info=sample_mediainfo_standard_mp4
+    )
+    cmds_2x = build_ffmpeg_commands(
+        "in.mp4", "out.mp4", options_2x, media_info=sample_mediainfo_standard_mp4
+    )
 
     b_idx_1x = cmds_1x[1].index("-b:v")
     b_idx_2x = cmds_2x[1].index("-b:v")
@@ -350,7 +359,9 @@ def test_two_pass_speed_adjusts_bitrate(sample_mediainfo_standard_mp4: MediaInfo
 def test_two_pass_mute_audio(sample_mediainfo_standard_mp4: MediaInfo) -> None:
     """Muted two-pass encoding disables audio on both passes and gives 100% bitrate to video."""
     options_muted = EncodeOptions(two_pass=True, target_size_mb=25.0, mute_audio=True)
-    options_unmuted = EncodeOptions(two_pass=True, target_size_mb=25.0, mute_audio=False)
+    options_unmuted = EncodeOptions(
+        two_pass=True, target_size_mb=25.0, mute_audio=False
+    )
 
     cmds_muted = build_ffmpeg_commands(
         "in.mp4", "out.mp4", options_muted, media_info=sample_mediainfo_standard_mp4
@@ -397,7 +408,9 @@ def test_two_pass_zero_duration() -> None:
 def test_two_pass_missing_media_info_not_on_disk() -> None:
     """If media_info is None and input file does not exist on disk, ValueError is raised."""
     options = EncodeOptions(two_pass=True, target_size_mb=10.0)
-    with pytest.raises(ValueError, match="media_info is required when input file is not on disk"):
+    with pytest.raises(
+        ValueError, match="media_info is required when input file is not on disk"
+    ):
         build_ffmpeg_commands("/nonexistent/fake_file.mp4", "out.mp4", options)
 
 
@@ -445,7 +458,13 @@ def test_negative_target_size_raises(invalid_size: float) -> None:
 
 def test_builder_zero_gui() -> None:
     """Builder module must have zero imports from GUI toolkits."""
-    target_path = Path(__file__).resolve().parent.parent / "src" / "media_toolbox" / "core" / "builder.py"
+    target_path = (
+        Path(__file__).resolve().parent.parent
+        / "src"
+        / "media_toolbox"
+        / "core"
+        / "builder.py"
+    )
     with open(target_path, "r", encoding="utf-8") as f:
         tree = ast.parse(f.read(), filename=str(target_path))
 
@@ -456,7 +475,15 @@ def test_builder_zero_gui() -> None:
                 full_name = f"{mod}.{alias.name}" if mod else alias.name
                 assert not any(
                     gui_pkg in full_name
-                    for gui_pkg in ("gi", "Gtk", "Adw", "Nautilus", "tkinter", "PyQt", "PySide")
+                    for gui_pkg in (
+                        "gi",
+                        "Gtk",
+                        "Adw",
+                        "Nautilus",
+                        "tkinter",
+                        "PyQt",
+                        "PySide",
+                    )
                 ), f"Forbidden GUI import found in builder.py: {full_name}"
 
 
@@ -598,7 +625,9 @@ def test_vp9_webm_selects_libopus_audio() -> None:
     assert cmd[-1] == "out.webm"
 
 
-def test_two_pass_vp9_webm_uses_libopus_in_pass2(sample_mediainfo_standard_mp4: MediaInfo) -> None:
+def test_two_pass_vp9_webm_uses_libopus_in_pass2(
+    sample_mediainfo_standard_mp4: MediaInfo,
+) -> None:
     """
     Two-pass encoding with preset='vp9' and .webm output uses libopus in Pass 2.
     (Bug A & Bug B regression test for 2-pass).
@@ -673,7 +702,9 @@ def test_preset_prores_selects_pcm_audio() -> None:
 def test_stream_mapping_in_commands(sample_mediainfo_standard_mp4: MediaInfo) -> None:
     """Single-pass and two-pass commands map 0:v:0 and 0:a:0? by default."""
     options = EncodeOptions(preset="h264")
-    cmd = build_ffmpeg_commands("in.mp4", "out.mp4", options, media_info=sample_mediainfo_standard_mp4)[0]
+    cmd = build_ffmpeg_commands(
+        "in.mp4", "out.mp4", options, media_info=sample_mediainfo_standard_mp4
+    )[0]
     assert "-map" in cmd
     assert cmd[cmd.index("-map") + 1] == "0:v:0"
     v_idx = cmd.index("-map")
@@ -683,7 +714,9 @@ def test_stream_mapping_in_commands(sample_mediainfo_standard_mp4: MediaInfo) ->
 
     # Two pass
     options_2p = EncodeOptions(preset="h264", two_pass=True, target_size_mb=25.0)
-    cmds_2p = build_ffmpeg_commands("in.mp4", "out.mp4", options_2p, media_info=sample_mediainfo_standard_mp4)
+    cmds_2p = build_ffmpeg_commands(
+        "in.mp4", "out.mp4", options_2p, media_info=sample_mediainfo_standard_mp4
+    )
     p1, p2 = cmds_2p[0], cmds_2p[1]
     assert "-map" in p1 and p1[p1.index("-map") + 1] == "0:v:0"
     assert "-map" in p2 and p2[p2.index("-map") + 1] == "0:v:0"
@@ -691,7 +724,9 @@ def test_stream_mapping_in_commands(sample_mediainfo_standard_mp4: MediaInfo) ->
 
 def test_stream_mapping_custom_override() -> None:
     """User-supplied -map extra args override default 0:v:0 / 0:a:0? mappings."""
-    options = EncodeOptions(preset="h264", extra_args=("-map", "0:v:1", "-map", "0:a:2"))
+    options = EncodeOptions(
+        preset="h264", extra_args=("-map", "0:v:1", "-map", "0:a:2")
+    )
     cmd = build_ffmpeg_commands("in.mp4", "out.mp4", options)[0]
     maps = [cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-map"]
     assert maps == ["0:v:1", "0:a:2"]
@@ -699,9 +734,20 @@ def test_stream_mapping_custom_override() -> None:
 
 def test_cover_art_fixture_selects_main_video_stream() -> None:
     """Cover art (attached picture at stream 0) does not get mapped as the primary video."""
-    cover_art = VideoStream(index=0, codec_name="mjpeg", width=500, height=500, is_attached_pic=True)
-    real_video = VideoStream(index=1, codec_name="h264", width=1920, height=1080, duration=30.0, is_attached_pic=False)
-    audio = AudioStream(index=2, codec_name="aac", channels=2, sample_rate=48000, duration=30.0)
+    cover_art = VideoStream(
+        index=0, codec_name="mjpeg", width=500, height=500, is_attached_pic=True
+    )
+    real_video = VideoStream(
+        index=1,
+        codec_name="h264",
+        width=1920,
+        height=1080,
+        duration=30.0,
+        is_attached_pic=False,
+    )
+    audio = AudioStream(
+        index=2, codec_name="aac", channels=2, sample_rate=48000, duration=30.0
+    )
     info = MediaInfo(
         format=FormatInfo(filename="album.mp4", format_name="mp4", duration=30.0),
         video_streams=(cover_art, real_video),
@@ -715,7 +761,9 @@ def test_cover_art_fixture_selects_main_video_stream() -> None:
 
     # GIF palettegen should also reference [0:1] instead of [0:v]
     gif_options = EncodeOptions(preset="gif")
-    gif_cmd = build_ffmpeg_commands("in.mp4", "out.gif", gif_options, media_info=info)[0]
+    gif_cmd = build_ffmpeg_commands("in.mp4", "out.gif", gif_options, media_info=info)[
+        0
+    ]
     fc_idx = gif_cmd.index("-filter_complex")
     assert "[0:1]" in gif_cmd[fc_idx + 1]
 
@@ -734,7 +782,9 @@ def test_custom_stream_maps_forwarded_to_pass_one() -> None:
         options,
         media_info=MediaInfo(
             format=FormatInfo(filename="in.mp4", format_name="mp4", duration=60.0),
-            video_streams=(VideoStream(index=0, codec_name="h264", width=1920, height=1080),),
+            video_streams=(
+                VideoStream(index=0, codec_name="h264", width=1920, height=1080),
+            ),
         ),
     )
     pass1, pass2 = cmds[0], cmds[1]
@@ -751,14 +801,27 @@ def test_map_metadata_does_not_disable_default_stream_mapping() -> None:
     assert "-map_metadata" in cmd
 
 
-def test_two_pass_video_extra_args_symmetric(sample_mediainfo_standard_mp4: MediaInfo) -> None:
+def test_two_pass_video_extra_args_symmetric(
+    sample_mediainfo_standard_mp4: MediaInfo,
+) -> None:
     """Video-affecting extra_args are forwarded to pass 1 and pass 2, while audio/container flags stay pass 2."""
     options = EncodeOptions(
         two_pass=True,
         target_size_mb=25.0,
-        extra_args=("-tune", "film", "-profile:v", "high", "-b:a", "192k", "-movflags", "+faststart"),
+        extra_args=(
+            "-tune",
+            "film",
+            "-profile:v",
+            "high",
+            "-b:a",
+            "192k",
+            "-movflags",
+            "+faststart",
+        ),
     )
-    cmds = build_ffmpeg_commands("in.mp4", "out.mp4", options, media_info=sample_mediainfo_standard_mp4)
+    cmds = build_ffmpeg_commands(
+        "in.mp4", "out.mp4", options, media_info=sample_mediainfo_standard_mp4
+    )
     pass1, pass2 = cmds[0], cmds[1]
 
     # Video flags must be present in pass 1
@@ -789,13 +852,25 @@ def test_audio_extract_preserves_custom_codec() -> None:
 def test_custom_ffmpeg_bin_parameter() -> None:
     """Builder functions use specified custom ffmpeg executable path."""
     options = EncodeOptions(preset="h264")
-    cmds = build_ffmpeg_commands("in.mp4", "out.mp4", options, ffmpeg_bin="/opt/custom/ffmpeg")
+    cmds = build_ffmpeg_commands(
+        "in.mp4", "out.mp4", options, ffmpeg_bin="/opt/custom/ffmpeg"
+    )
     assert cmds[0][0] == "/opt/custom/ffmpeg"
 
-    gif_cmds = build_ffmpeg_commands("in.mp4", "out.gif", EncodeOptions(preset="gif"), ffmpeg_bin="/custom/bin/ffmpeg")
+    gif_cmds = build_ffmpeg_commands(
+        "in.mp4",
+        "out.gif",
+        EncodeOptions(preset="gif"),
+        ffmpeg_bin="/custom/bin/ffmpeg",
+    )
     assert gif_cmds[0][0] == "/custom/bin/ffmpeg"
 
-    audio_cmds = build_ffmpeg_commands("in.mp4", "out.mp3", EncodeOptions(extract_audio=True), ffmpeg_bin="/custom/bin/ffmpeg")
+    audio_cmds = build_ffmpeg_commands(
+        "in.mp4",
+        "out.mp3",
+        EncodeOptions(extract_audio=True),
+        ffmpeg_bin="/custom/bin/ffmpeg",
+    )
     assert audio_cmds[0][0] == "/custom/bin/ffmpeg"
 
 
@@ -809,7 +884,9 @@ def test_stream_selection_audio_track_index() -> None:
     assert "0:a:1" in cmd
 
     # Audio extraction with track selection
-    audio_cmds = build_ffmpeg_commands("in.mp4", "out.mp3", EncodeOptions(extract_audio=True, audio_track_index=2))
+    audio_cmds = build_ffmpeg_commands(
+        "in.mp4", "out.mp3", EncodeOptions(extract_audio=True, audio_track_index=2)
+    )
     assert "0:a:2" in audio_cmds[0]
 
 
@@ -845,7 +922,9 @@ def test_gif_capping_when_mediainfo_exceeds_limits() -> None:
             VideoStream(index=0, codec_name="h264", width=1920, height=1080, fps=30.0),
         ),
     )
-    cmd = build_gif_command("in.mp4", "out.gif", EncodeOptions(preset="gif"), media_info=info)
+    cmd = build_gif_command(
+        "in.mp4", "out.gif", EncodeOptions(preset="gif"), media_info=info
+    )
     assert "-filter_complex" in cmd
     filter_expr = cmd[cmd.index("-filter_complex") + 1]
     assert "scale=800:-2" in filter_expr
@@ -870,7 +949,3 @@ def test_gif_capping_preserved_when_user_specified() -> None:
     filter_expr = cmd[cmd.index("-filter_complex") + 1]
     assert "scale=640:-2" in filter_expr
     assert "fps=fps=24" in filter_expr
-
-
-
-

@@ -9,9 +9,10 @@ Tests:
 
 from __future__ import annotations
 
-from pathlib import Path
 import threading
+from pathlib import Path
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 from media_toolbox.core.jobs import JobConfig
@@ -19,8 +20,6 @@ from media_toolbox.core.models import EncodeOptions, ProgressEvent
 from media_toolbox.core.runner import RunnerCancelledError, RunnerError
 from tests.ui_test_helpers import (
     drain_main_context,
-    gi_env,
-    isolate_gi_sys_modules,
     iterate_main_context,
 )
 
@@ -45,7 +44,9 @@ class TestNonBlockingWorkerThread:
         mock_win._worker_thread_entry = MagicMock()
 
         out_file = tmp_path / "output.mp4"
-        config = JobConfig(input_path="in.mp4", output_path=str(out_file), options=EncodeOptions())
+        config = JobConfig(
+            input_path="in.mp4", output_path=str(out_file), options=EncodeOptions()
+        )
 
         with patch("threading.Thread") as mock_thread_cls:
             mock_thread_inst = MagicMock()
@@ -71,11 +72,19 @@ class TestNonBlockingWorkerThread:
     def test_worker_dispatches_progress_via_glib_idle_add(self, gi_env) -> None:
         """Verify ProgressEvents update UI via MainWindow._on_progress_idle and ProgressFooterWidget.update_progress."""
         _, _, _, _, _, GLib = gi_env
-        from media_toolbox.ui.window import MainWindow
         from media_toolbox.ui.widgets import ProgressFooterWidget
+        from media_toolbox.ui.window import MainWindow
 
         mock_win = MagicMock()
-        evt = ProgressEvent(frame=150, fps=30.0, out_time_seconds=5.0, percentage=50.0, speed=2.0, eta_seconds=5.0, total_size_bytes=1048576)
+        evt = ProgressEvent(
+            frame=150,
+            fps=30.0,
+            out_time_seconds=5.0,
+            percentage=50.0,
+            speed=2.0,
+            eta_seconds=5.0,
+            total_size_bytes=1048576,
+        )
 
         # 1. Verify MainWindow._on_progress_idle dispatch
         GLib.idle_add(MainWindow._on_progress_idle, mock_win, evt)
@@ -92,7 +101,9 @@ class TestNonBlockingWorkerThread:
         mock_footer.pct_label.set_text.assert_called_with("50.0%")
         mock_footer.speed_label.set_text.assert_called_with("Speed: 2.00x")
         mock_footer.eta_label.set_text.assert_called_with("ETA: 00:05")
-        mock_footer.size_label.set_text.assert_called_with("Size: 1.00 MiB (1,048,576 bytes)")
+        mock_footer.size_label.set_text.assert_called_with(
+            "Size: 1.00 MiB (1,048,576 bytes)"
+        )
 
     def test_worker_dispatches_pipeline_progress_idle(self, gi_env) -> None:
         """Verify multi-pass progress events dispatch to MainWindow._on_pass_progress_idle with pass_info formatted."""
@@ -121,7 +132,9 @@ class TestNonBlockingWorkerThread:
             evt, pass_info=None
         )
 
-    def test_worker_idle_handlers_return_source_remove(self, gi_env, tmp_path: Path) -> None:
+    def test_worker_idle_handlers_return_source_remove(
+        self, gi_env, tmp_path: Path
+    ) -> None:
         """Verify all MainWindow idle handlers return GLib.SOURCE_REMOVE (False) and do not repeat."""
         _, _, _, _, _, GLib = gi_env
         from media_toolbox.ui.window import MainWindow
@@ -132,10 +145,14 @@ class TestNonBlockingWorkerThread:
 
         # Direct return value check
         assert MainWindow._on_progress_idle(mock_win, evt) == GLib.SOURCE_REMOVE
-        assert MainWindow._on_pass_progress_idle(mock_win, 1, 2, evt) == GLib.SOURCE_REMOVE
+        assert (
+            MainWindow._on_pass_progress_idle(mock_win, 1, 2, evt) == GLib.SOURCE_REMOVE
+        )
         assert MainWindow._on_success_idle(mock_win, fake_path) == GLib.SOURCE_REMOVE
         assert MainWindow._on_cancelled_idle(mock_win, fake_path) == GLib.SOURCE_REMOVE
-        assert MainWindow._on_error_idle(mock_win, "error message") == GLib.SOURCE_REMOVE
+        assert (
+            MainWindow._on_error_idle(mock_win, "error message") == GLib.SOURCE_REMOVE
+        )
 
         # Verify handlers execute exactly once in GLib main context without infinite loop
         mock_win.reset_mock()
@@ -149,8 +166,8 @@ class TestNonBlockingWorkerThread:
     def test_worker_success_completion_handling(self, gi_env, tmp_path: Path) -> None:
         """Verify successful transcode schedules success handler and restores UI controls."""
         _, _, _, _, _, GLib = gi_env
-        from media_toolbox.ui.window import MainWindow
         from media_toolbox.ui.widgets import ProgressFooterWidget
+        from media_toolbox.ui.window import MainWindow
 
         mock_win = MagicMock()
         mock_win.is_transcoding = True
@@ -177,12 +194,14 @@ class TestNonBlockingWorkerThread:
     def test_worker_error_marshalled_to_ui(self, gi_env) -> None:
         """Verify runner error message is marshalled back to main thread and displayed."""
         _, _, _, _, _, GLib = gi_env
-        from media_toolbox.ui.window import MainWindow
         from media_toolbox.ui.widgets import ProgressFooterWidget
+        from media_toolbox.ui.window import MainWindow
 
         mock_win = MagicMock()
         mock_win.is_transcoding = True
-        err = RunnerError("FFmpeg error", returncode=1, stderr="Invalid codec parameters")
+        err = RunnerError(
+            "FFmpeg error", returncode=1, stderr="Invalid codec parameters"
+        )
 
         GLib.idle_add(MainWindow._on_error_idle, mock_win, err.last_error_line)
 
@@ -191,14 +210,20 @@ class TestNonBlockingWorkerThread:
 
         assert mock_win.is_transcoding is False
         mock_win._set_ui_controls_sensitive.assert_called_with(True)
-        mock_win.progress_footer.finish.assert_called_with(False, "Failed: Invalid codec parameters")
+        mock_win.progress_footer.finish.assert_called_with(
+            False, "Failed: Invalid codec parameters"
+        )
         mock_win.toast_overlay.add_toast.assert_called_once()
 
         # Verify ProgressFooterWidget.finish on failure
         mock_footer = MagicMock()
-        ProgressFooterWidget.finish(mock_footer, False, "Failed: Invalid codec parameters")
+        ProgressFooterWidget.finish(
+            mock_footer, False, "Failed: Invalid codec parameters"
+        )
         mock_footer.cancel_button.set_sensitive.assert_called_with(False)
-        mock_footer.status_label.set_text.assert_called_with("Failed: Invalid codec parameters")
+        mock_footer.status_label.set_text.assert_called_with(
+            "Failed: Invalid codec parameters"
+        )
 
     @pytest.mark.usefixtures("gi_env")
     def test_worker_start_disables_open_btn(self, tmp_path: Path) -> None:
@@ -208,7 +233,9 @@ class TestNonBlockingWorkerThread:
         mock_win = MagicMock()
         mock_win.is_transcoding = False
         out_file = tmp_path / "out.mp4"
-        config = JobConfig(input_path="in.mp4", output_path=str(out_file), options=EncodeOptions())
+        config = JobConfig(
+            input_path="in.mp4", output_path=str(out_file), options=EncodeOptions()
+        )
 
         with patch("threading.Thread") as mock_thread_cls:
             MainWindow._start_worker(mock_win, config, "Transcoding...")
@@ -234,10 +261,14 @@ class TestNonBlockingWorkerThread:
         assert mock_win.is_transcoding is False
         mock_win._set_ui_controls_sensitive.assert_called_with(True)
         mock_win.open_btn.set_sensitive.assert_called_with(True)
-        mock_win.progress_footer.finish.assert_called_with(True, f"Saved: {out_file.name}")
+        mock_win.progress_footer.finish.assert_called_with(
+            True, f"Saved: {out_file.name}"
+        )
 
     @pytest.mark.usefixtures("gi_env")
-    def test_worker_cancelled_completion_restores_open_btn(self, tmp_path: Path) -> None:
+    def test_worker_cancelled_completion_restores_open_btn(
+        self, tmp_path: Path
+    ) -> None:
         """Verify _on_cancelled_idle marks is_transcoding=False and enables open_btn."""
         from media_toolbox.ui.window import MainWindow
 
@@ -267,7 +298,9 @@ class TestNonBlockingWorkerThread:
         assert mock_win.is_transcoding is False
         mock_win._set_ui_controls_sensitive.assert_called_with(True)
         mock_win.open_btn.set_sensitive.assert_called_with(True)
-        mock_win.progress_footer.finish.assert_called_with(False, "Failed: Encode failed")
+        mock_win.progress_footer.finish.assert_called_with(
+            False, "Failed: Encode failed"
+        )
 
     @pytest.mark.usefixtures("gi_env")
     def test_open_file_dialog_blocked_during_transcoding(self) -> None:
@@ -307,8 +340,8 @@ class TestCancellationFlow:
 
     def test_cancel_button_triggers_cancel_event(self) -> None:
         """Verify ProgressFooterWidget cancel invokes callback, and MainWindow._on_cancel_clicked sets cancel_event."""
-        from media_toolbox.ui.window import MainWindow
         from media_toolbox.ui.widgets import ProgressFooterWidget
+        from media_toolbox.ui.window import MainWindow
 
         # 1. Verify ProgressFooterWidget._on_cancel_clicked invokes callback
         mock_cb = MagicMock()
@@ -337,7 +370,9 @@ class TestCancellationFlow:
         mock_footer.cancel_button.set_label.assert_called_with("Cancelling...")
         mock_footer.status_label.set_text.assert_called_with("Cancelling transcode...")
 
-    def test_worker_catches_runner_cancelled_error(self, gi_env, tmp_path: Path) -> None:
+    def test_worker_catches_runner_cancelled_error(
+        self, gi_env, tmp_path: Path
+    ) -> None:
         """Verify MainWindow._worker_thread_entry catches RunnerCancelledError, preserves destination, and schedules _on_cancelled_idle."""
         _, _, _, _, _, GLib = gi_env
         from media_toolbox.ui.window import MainWindow
@@ -359,7 +394,10 @@ class TestCancellationFlow:
             options=EncodeOptions(),
         )
 
-        with patch("media_toolbox.ui.window_worker.run_job", side_effect=RunnerCancelledError("Process killed")):
+        with patch(
+            "media_toolbox.ui.window_worker.run_job",
+            side_effect=RunnerCancelledError("Process killed"),
+        ):
             MainWindow._worker_thread_entry(mock_win, config, cancel_event)
 
         # File is safely preserved, not deleted
@@ -380,10 +418,14 @@ class TestCancellationFlow:
         assert ret == GLib.SOURCE_REMOVE
         assert mock_win_idle.is_transcoding is False
         mock_win_idle._set_ui_controls_sensitive.assert_called_with(True)
-        mock_win_idle.progress_footer.finish.assert_called_with(False, "Operation cancelled")
+        mock_win_idle.progress_footer.finish.assert_called_with(
+            False, "Operation cancelled"
+        )
         mock_win_idle.toast_overlay.add_toast.assert_called_once()
 
-    def test_cancellation_preserves_pre_existing_output_file(self, tmp_path: Path) -> None:
+    def test_cancellation_preserves_pre_existing_output_file(
+        self, tmp_path: Path
+    ) -> None:
         """Verify MainWindow._worker_thread_entry does not delete pre-existing output files upon cancellation."""
         from media_toolbox.ui.window import MainWindow
 
@@ -403,7 +445,10 @@ class TestCancellationFlow:
             options=EncodeOptions(),
         )
 
-        with patch("media_toolbox.ui.window_worker.run_job", side_effect=RunnerCancelledError("Aborted")):
+        with patch(
+            "media_toolbox.ui.window_worker.run_job",
+            side_effect=RunnerCancelledError("Aborted"),
+        ):
             MainWindow._worker_thread_entry(mock_win, config, cancel_event)
 
         assert pre_existing_file.exists()

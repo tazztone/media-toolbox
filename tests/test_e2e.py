@@ -18,34 +18,29 @@ INVARIANTS:
 
 from __future__ import annotations
 
-import io
 import json
 import os
-from pathlib import Path
 import shlex
 import subprocess
 import sys
 import types
-from typing import Any, Callable, Generator, Optional
-from unittest.mock import MagicMock, call, patch
+from collections.abc import Callable, Generator
+from pathlib import Path
+from typing import Any
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from media_toolbox import cli
 from media_toolbox.core.bitrate import calculate_target_video_bitrate
 from media_toolbox.core.builder import (
-    build_audio_extract_command,
     build_ffmpeg_commands,
-    build_gif_command,
-    build_single_pass_command,
-    build_two_pass_commands,
 )
 from media_toolbox.core.filtergraph import (
     build_atempo_chain,
     build_audio_filter,
     build_crop_filter,
     build_fps_filter,
-    build_scale_filter,
-    build_setpts_filter,
     build_video_filter,
 )
 from media_toolbox.core.models import (
@@ -58,19 +53,12 @@ from media_toolbox.core.models import (
     VideoStream,
 )
 from media_toolbox.core.presets import (
-    GIF_PRESET,
-    H264_PRESET,
-    H265_PRESET,
     MP3_PRESET,
-    get_audio_preset,
-    get_video_preset,
 )
 from media_toolbox.core.runner import (
-    ProgressParser,
     run_ffmpeg,
     run_ffmpeg_pipeline,
 )
-
 
 # ---------------------------------------------------------------------------
 # Module-Level Teardown & Isolation Fixtures
@@ -87,10 +75,8 @@ def isolate_gi_sys_modules() -> Generator[None, None, None]:
             k
             for k in list(sys.modules.keys())
             if k == "gi"
-            or k.startswith("gi.")
-            or k.startswith("gi_")
+            or k.startswith(("gi.", "gi_", "media_toolbox.nautilus.extension"))
             or k in ("gobject", "glib", "gio", "gtk", "nautilus")
-            or k.startswith("media_toolbox.nautilus.extension")
         ]
         for k in to_delete:
             sys.modules.pop(k, None)
@@ -150,13 +136,15 @@ class MockMenuItem:
         self.label = label
         self.tip = tip
         self.icon = icon
-        self.submenu: Optional[MockMenu] = None
+        self.submenu: MockMenu | None = None
         self._signals: dict[str, list[tuple[Callable[..., Any], tuple[Any, ...]]]] = {}
 
     def set_submenu(self, menu: MockMenu) -> None:
         self.submenu = menu
 
-    def connect(self, signal_name: str, handler: Callable[..., Any], *args: Any) -> None:
+    def connect(
+        self, signal_name: str, handler: Callable[..., Any], *args: Any
+    ) -> None:
         if signal_name not in self._signals:
             self._signals[signal_name] = []
         self._signals[signal_name].append((handler, args))
@@ -186,13 +174,9 @@ class MockMenu:
 class MockMenuProvider:
     """Base dummy for Nautilus.MenuProvider interface."""
 
-    pass
-
 
 class MockGObject:
     """Base dummy for GObject.GObject."""
-
-    pass
 
 
 @pytest.fixture
@@ -246,20 +230,22 @@ def generate_synthetic_progress_lines(
         frame = int(elapsed * fps)
         out_time_us = int(elapsed * 1_000_000)
         total_size = int(elapsed * 250_000)
-        lines.extend([
-            f"frame={frame}",
-            f"fps={fps:.1f}",
-            f"stream_0_0_q=28.0",
-            f"bitrate=2000.0kbits/s",
-            f"total_size={total_size}",
-            f"out_time_us={out_time_us}",
-            f"out_time_ms={out_time_us}",
-            f"out_time=00:00:{elapsed:05.2f}",
-            f"dup_frames=0",
-            f"drop_frames=0",
-            f"speed={speed:.2f}x",
-            "progress=continue",
-        ])
+        lines.extend(
+            [
+                f"frame={frame}",
+                f"fps={fps:.1f}",
+                "stream_0_0_q=28.0",
+                "bitrate=2000.0kbits/s",
+                f"total_size={total_size}",
+                f"out_time_us={out_time_us}",
+                f"out_time_ms={out_time_us}",
+                f"out_time=00:00:{elapsed:05.2f}",
+                "dup_frames=0",
+                "drop_frames=0",
+                f"speed={speed:.2f}x",
+                "progress=continue",
+            ]
+        )
     lines.append("progress=end")
     return lines
 
@@ -331,7 +317,9 @@ class TestScenario1DiscordVideoCompression:
         )
         assert bitrate == 950
 
-    def test_discord_two_pass_command_structure(self, gameplay_media_info: MediaInfo) -> None:
+    def test_discord_two_pass_command_structure(
+        self, gameplay_media_info: MediaInfo
+    ) -> None:
         """Two-pass H.264 commands configure Pass 1 null sink and Pass 2 stereo faststart output."""
         options = EncodeOptions(
             target_size_mb=25.0,
@@ -365,7 +353,10 @@ class TestScenario1DiscordVideoCompression:
         assert "-c:a" in pass2_cmd and pass2_cmd[pass2_cmd.index("-c:a") + 1] == "aac"
         assert "-b:a" in pass2_cmd and pass2_cmd[pass2_cmd.index("-b:a") + 1] == "128k"
         assert "-ac" in pass2_cmd and pass2_cmd[pass2_cmd.index("-ac") + 1] == "2"
-        assert "-movflags" in pass2_cmd and pass2_cmd[pass2_cmd.index("-movflags") + 1] == "+faststart"
+        assert (
+            "-movflags" in pass2_cmd
+            and pass2_cmd[pass2_cmd.index("-movflags") + 1] == "+faststart"
+        )
         assert pass2_cmd[-1] == "discord_upload.mp4"
 
     def test_discord_progress_pipeline_aggregation(self) -> None:
@@ -384,7 +375,9 @@ class TestScenario1DiscordVideoCompression:
                 cmds=[["ffmpeg", "-pass", "1"], ["ffmpeg", "-pass", "2"]],
                 total_duration_seconds=180.0,
                 progress_callback=aggregated_events.append,
-                pipeline_progress_callback=lambda p, total, ev: pass_steps.append((p, total)),
+                pipeline_progress_callback=lambda p, total, ev: pass_steps.append(
+                    (p, total)
+                ),
             )
 
         assert len(aggregated_events) >= 6
@@ -447,15 +440,25 @@ class TestScenario2HighSpeedPreview:
         assert "-movflags" in cmd and cmd[cmd.index("-movflags") + 1] == "+faststart"
         assert cmd[-1] == "preview_720p_3x.mp4"
 
-    def test_high_speed_preview_cli_execution(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_high_speed_preview_cli_execution(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """CLI transcode subcommand parses speed 3.0 and scale 1280:720 without errors."""
         monkeypatch.chdir(tmp_path)
         (tmp_path / "lecture.mp4").write_bytes(b"dummy lecture video")
 
         mock_info = MediaInfo(
-            format=FormatInfo(filename="lecture.mp4", format_name="mov,mp4", duration=600.0),
-            video_streams=(VideoStream(index=0, codec_name="h264", width=3840, height=2160, fps=30.0),),
-            audio_streams=(AudioStream(index=1, codec_name="aac", channels=2, sample_rate=48000),),
+            format=FormatInfo(
+                filename="lecture.mp4", format_name="mov,mp4", duration=600.0
+            ),
+            video_streams=(
+                VideoStream(
+                    index=0, codec_name="h264", width=3840, height=2160, fps=30.0
+                ),
+            ),
+            audio_streams=(
+                AudioStream(index=1, codec_name="aac", channels=2, sample_rate=48000),
+            ),
         )
 
         def _fake_run(cmds, **_kwargs):
@@ -463,20 +466,24 @@ class TestScenario2HighSpeedPreview:
 
         with (
             patch("media_toolbox.cli.probe_media", return_value=mock_info),
-            patch("media_toolbox.cli.run_ffmpeg_pipeline", side_effect=_fake_run) as mock_run,
+            patch(
+                "media_toolbox.cli.run_ffmpeg_pipeline", side_effect=_fake_run
+            ) as mock_run,
         ):
-            code = cli.main([
-                "transcode",
-                "lecture.mp4",
-                "preview.mp4",
-                "--speed",
-                "3.0",
-                "--scale",
-                "1280:720",
-                "--crf",
-                "28",
-                "--quiet",
-            ])
+            code = cli.main(
+                [
+                    "transcode",
+                    "lecture.mp4",
+                    "preview.mp4",
+                    "--speed",
+                    "3.0",
+                    "--scale",
+                    "1280:720",
+                    "--crf",
+                    "28",
+                    "--quiet",
+                ]
+            )
             assert code == 0
             assert mock_run.call_count == 1
             executed_cmds = mock_run.call_args[0][0]
@@ -531,15 +538,26 @@ class TestScenario3AudioExtractionAndNormalization:
         assert "-b:a" in cmd and cmd[cmd.index("-b:a") + 1] == "192k"
         assert cmd[-1] == "podcast_normalized.mp3"
 
-    def test_audio_extraction_cli_e2e(self, capsys: pytest.CaptureFixture[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_audio_extraction_cli_e2e(
+        self,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         """CLI extract-audio subcommand extracts normalized MP3 cleanly."""
         monkeypatch.chdir(tmp_path)
         (tmp_path / "podcast.mkv").write_bytes(b"dummy podcast audio content")
 
         mock_info = MediaInfo(
-            format=FormatInfo(filename="podcast.mkv", format_name="matroska", duration=300.0),
-            video_streams=(VideoStream(index=0, codec_name="h264", width=1920, height=1080),),
-            audio_streams=(AudioStream(index=1, codec_name="flac", channels=2, sample_rate=48000),),
+            format=FormatInfo(
+                filename="podcast.mkv", format_name="matroska", duration=300.0
+            ),
+            video_streams=(
+                VideoStream(index=0, codec_name="h264", width=1920, height=1080),
+            ),
+            audio_streams=(
+                AudioStream(index=1, codec_name="flac", channels=2, sample_rate=48000),
+            ),
         )
 
         def _fake_run(cmds, **_kwargs):
@@ -547,18 +565,22 @@ class TestScenario3AudioExtractionAndNormalization:
 
         with (
             patch("media_toolbox.cli.probe_media", return_value=mock_info),
-            patch("media_toolbox.cli.run_ffmpeg_pipeline", side_effect=_fake_run) as mock_run,
+            patch(
+                "media_toolbox.cli.run_ffmpeg_pipeline", side_effect=_fake_run
+            ) as mock_run,
         ):
-            code = cli.main([
-                "extract-audio",
-                "podcast.mkv",
-                "podcast.mp3",
-                "--codec",
-                "mp3",
-                "--bitrate",
-                "192",
-                "--normalize",
-            ])
+            code = cli.main(
+                [
+                    "extract-audio",
+                    "podcast.mkv",
+                    "podcast.mp3",
+                    "--codec",
+                    "mp3",
+                    "--bitrate",
+                    "192",
+                    "--normalize",
+                ]
+            )
             assert code == 0
             assert mock_run.call_count == 1
             captured = capsys.readouterr()
@@ -581,7 +603,9 @@ class TestScenario4VerticalSocialMediaCrop:
     def test_vertical_crop_and_fps_filters(self) -> None:
         """9:16 center crop and 60fps filter assemble in strict order crop -> fps."""
         crop_f = build_crop_filter("9:16")
-        expected_crop = "crop=min(iw\\,ih*(9/16)):min(ih\\,iw*(16/9)):(iw-ow)/2:(ih-oh)/2"
+        expected_crop = (
+            "crop=min(iw\\,ih*(9/16)):min(ih\\,iw*(16/9)):(iw-ow)/2:(ih-oh)/2"
+        )
         assert crop_f == expected_crop
 
         fps_f = build_fps_filter(60)
@@ -608,7 +632,10 @@ class TestScenario4VerticalSocialMediaCrop:
         assert len(cmds) == 1
         cmd = cmds[0]
         assert "-vf" in cmd
-        assert cmd[cmd.index("-vf") + 1] == "crop=min(iw\\,ih*(9/16)):min(ih\\,iw*(16/9)):(iw-ow)/2:(ih-oh)/2,fps=fps=60"
+        assert (
+            cmd[cmd.index("-vf") + 1]
+            == "crop=min(iw\\,ih*(9/16)):min(ih\\,iw*(16/9)):(iw-ow)/2:(ih-oh)/2,fps=fps=60"
+        )
         assert "-c:v" in cmd and cmd[cmd.index("-c:v") + 1] == "libx265"
         assert "-crf" in cmd and cmd[cmd.index("-crf") + 1] == "28"
         assert "-tag:v" in cmd and cmd[cmd.index("-tag:v") + 1] == "hvc1"
@@ -648,14 +675,19 @@ class TestScenario5HighQualityGifConversion:
         cmd = cmds[0]
         assert "-filter_complex" in cmd
         fc = cmd[cmd.index("-filter_complex") + 1]
-        assert fc == "[0:v]scale=480:-2,fps=fps=15,split[a][b];[a]palettegen[p];[b][p]paletteuse"
+        assert (
+            fc
+            == "[0:v]scale=480:-2,fps=fps=15,split[a][b];[a]palettegen[p];[b][p]paletteuse"
+        )
         assert "-an" in cmd
         assert cmd[-1] == "demo.gif"
 
     def test_gif_rejects_two_pass(self) -> None:
         """Attempting two-pass encoding for GIF raises ValueError."""
         options = EncodeOptions(preset="gif", two_pass=True)
-        with pytest.raises(ValueError, match="Two-pass encoding is not supported for GIF preset"):
+        with pytest.raises(
+            ValueError, match="Two-pass encoding is not supported for GIF preset"
+        ):
             build_ffmpeg_commands("input.mp4", "output.gif", options)
 
     def test_gif_progress_runner(self) -> None:
@@ -690,10 +722,19 @@ class TestScenario6HeadlessBatchCLIPipeline:
     - AST invariant: Zero GUI modules loaded during headless execution
     """
 
-    def test_cli_inspect_silent_videofile(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_cli_inspect_silent_videofile(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """CLI inspect cleanly handles video without audio streams in JSON mode."""
-        v = VideoStream(index=0, codec_name="h264", width=1280, height=720, fps=24.0, duration=15.0)
-        fmt = FormatInfo(filename="silent.mp4", format_name="mov,mp4", duration=15.0, size_bytes=1000000)
+        v = VideoStream(
+            index=0, codec_name="h264", width=1280, height=720, fps=24.0, duration=15.0
+        )
+        fmt = FormatInfo(
+            filename="silent.mp4",
+            format_name="mov,mp4",
+            duration=15.0,
+            size_bytes=1000000,
+        )
         silent_info = MediaInfo(format=fmt, video_streams=(v,), audio_streams=())
 
         with patch("media_toolbox.cli.probe_media", return_value=silent_info):
@@ -707,23 +748,62 @@ class TestScenario6HeadlessBatchCLIPipeline:
         assert data["audio_streams"] == []
         assert len(data["video_streams"]) == 1
 
-    def test_cli_inspect_corrupt_file_handling(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_cli_inspect_corrupt_file_handling(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Corrupt media file raising ProbeError returns exit code 1 with clean stderr error."""
-        with patch("media_toolbox.cli.probe_media", side_effect=ProbeError("Corrupt EBML header")):
+        with patch(
+            "media_toolbox.cli.probe_media",
+            side_effect=ProbeError("Corrupt EBML header"),
+        ):
             ret = cli.main(["inspect", "corrupt_sample.mkv"])
             assert ret == 1
 
         err = capsys.readouterr().err
         assert "Error probing media: Corrupt EBML header" in err
 
-    def test_cli_inspect_multi_stream_media(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_cli_inspect_multi_stream_media(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Multi-stream container properly catalogs secondary audio tracks and attached cover art."""
-        v_main = VideoStream(index=0, codec_name="hevc", width=3840, height=2160, fps=23.976, duration=120.0)
-        a_eng = AudioStream(index=1, codec_name="ac3", channels=6, sample_rate=48000, channel_layout="5.1", duration=120.0, bit_rate=640000)
-        a_comm = AudioStream(index=2, codec_name="aac", channels=2, sample_rate=48000, channel_layout="stereo", duration=120.0, bit_rate=128000)
-        v_art = VideoStream(index=3, codec_name="png", width=1000, height=1000, is_attached_pic=True)
-        fmt = FormatInfo(filename="movie_multi.mkv", format_name="matroska", duration=120.0, size_bytes=250000000)
-        multi_info = MediaInfo(format=fmt, video_streams=(v_main, v_art), audio_streams=(a_eng, a_comm))
+        v_main = VideoStream(
+            index=0,
+            codec_name="hevc",
+            width=3840,
+            height=2160,
+            fps=23.976,
+            duration=120.0,
+        )
+        a_eng = AudioStream(
+            index=1,
+            codec_name="ac3",
+            channels=6,
+            sample_rate=48000,
+            channel_layout="5.1",
+            duration=120.0,
+            bit_rate=640000,
+        )
+        a_comm = AudioStream(
+            index=2,
+            codec_name="aac",
+            channels=2,
+            sample_rate=48000,
+            channel_layout="stereo",
+            duration=120.0,
+            bit_rate=128000,
+        )
+        v_art = VideoStream(
+            index=3, codec_name="png", width=1000, height=1000, is_attached_pic=True
+        )
+        fmt = FormatInfo(
+            filename="movie_multi.mkv",
+            format_name="matroska",
+            duration=120.0,
+            size_bytes=250000000,
+        )
+        multi_info = MediaInfo(
+            format=fmt, video_streams=(v_main, v_art), audio_streams=(a_eng, a_comm)
+        )
 
         with patch("media_toolbox.cli.probe_media", return_value=multi_info):
             ret = cli.main(["inspect", "movie_multi.mkv", "--json"])
@@ -745,7 +825,13 @@ class TestScenario6HeadlessBatchCLIPipeline:
             "from media_toolbox import cli\n"
             "assert 'gi' not in sys.modules, f'Forbidden module gi loaded: {list(sys.modules.keys())}'\n"
         )
-        proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env)
+        proc = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
         assert proc.returncode == 0, f"Headless execution loaded gi:\n{proc.stderr}"
 
 
@@ -772,9 +858,15 @@ class TestScenario7NautilusContextMenuDispatch:
             is_media_file,
         )
 
-        f_video = MockFileInfo("/home/user/My Videos/Action Movie (2026).mp4", mime_type="video/mp4")
-        f_audio = MockFileInfo("/home/user/Music/Track 01 - Intro.flac", mime_type="audio/flac")
-        f_doc = MockFileInfo("/home/user/Documents/Invoice 2026.pdf", mime_type="application/pdf")
+        f_video = MockFileInfo(
+            "/home/user/My Videos/Action Movie (2026).mp4", mime_type="video/mp4"
+        )
+        f_audio = MockFileInfo(
+            "/home/user/Music/Track 01 - Intro.flac", mime_type="audio/flac"
+        )
+        f_doc = MockFileInfo(
+            "/home/user/Documents/Invoice 2026.pdf", mime_type="application/pdf"
+        )
         f_dir = MockFileInfo("/home/user/Videos/", is_directory=True)
 
         assert is_media_file(f_video) is True
@@ -799,7 +891,9 @@ class TestScenario7NautilusContextMenuDispatch:
         """Menu activations quote paths with spaces using shlex.quote and spawn detached processes."""
         from media_toolbox.nautilus.extension import MediaToolboxExtension
 
-        f1 = MockFileInfo("/home/user/My Videos/Action Movie (2026).mp4", mime_type="video/mp4")
+        f1 = MockFileInfo(
+            "/home/user/My Videos/Action Movie (2026).mp4", mime_type="video/mp4"
+        )
         ext = MediaToolboxExtension()
         items = ext.get_file_items([f1])
         assert items[0].submenu is not None
@@ -819,11 +913,22 @@ class TestScenario7NautilusContextMenuDispatch:
 
     def test_nautilus_launcher_script_syntax_and_spaces(self) -> None:
         """Launcher script passes bash -n validation and correctly preserves space-separated paths."""
-        launcher_path = Path(__file__).resolve().parent.parent / "src" / "media_toolbox" / "nautilus" / "launcher.sh"
+        launcher_path = (
+            Path(__file__).resolve().parent.parent
+            / "src"
+            / "media_toolbox"
+            / "nautilus"
+            / "launcher.sh"
+        )
         assert launcher_path.is_file()
 
         # 1. Syntax check
-        res = subprocess.run(["bash", "-n", str(launcher_path)], capture_output=True, text=True)
+        res = subprocess.run(
+            ["bash", "-n", str(launcher_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
         assert res.returncode == 0, f"Bash syntax check failed: {res.stderr}"
 
         # 2. Simulation of space-separated files handling

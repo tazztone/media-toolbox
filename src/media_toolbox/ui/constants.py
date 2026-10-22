@@ -5,7 +5,6 @@ UI state enums and preset configurations for Libadwaita application window.
 from __future__ import annotations
 
 import enum
-from typing import Optional
 
 from media_toolbox.core.presets import list_audio_presets, list_video_presets
 
@@ -19,10 +18,14 @@ class WindowState(enum.Enum):
     CLOSED = "closed"
 
 
-VIDEO_PRESETS: list[tuple[str, str]] = [(p.display_name, p.name) for p in list_video_presets()]
-AUDIO_PRESETS: list[tuple[str, str]] = [(p.display_name, p.name) for p in list_audio_presets()]
+VIDEO_PRESETS: list[tuple[str, str]] = [
+    (p.display_name, p.name) for p in list_video_presets()
+]
+AUDIO_PRESETS: list[tuple[str, str]] = [
+    (p.display_name, p.name) for p in list_audio_presets()
+]
 
-CROP_PRESETS: list[tuple[str, Optional[str]]] = [
+CROP_PRESETS: list[tuple[str, str | None]] = [
     ("None (Original)", None),
     ("16:9 Landscape", "16:9"),
     ("9:16 Portrait / Shorts", "9:16"),

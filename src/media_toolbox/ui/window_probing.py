@@ -6,9 +6,8 @@ Media probing and file chooser portal mixin for Media Toolbox MainWindow.
 
 from __future__ import annotations
 
-from pathlib import Path
 import threading
-from typing import Any, Optional
+from pathlib import Path
 
 import gi
 
@@ -27,10 +26,10 @@ class WindowProbingMixin:
 
     # Attributes declared on MainWindow
     state: WindowState
-    input_file: Optional[Path]
-    media_info: Optional[MediaInfo]
-    video_output_path: Optional[Path]
-    audio_output_path: Optional[Path]
+    input_file: Path | None
+    media_info: MediaInfo | None
+    video_output_path: Path | None
+    audio_output_path: Path | None
     _video_output_custom: bool
     _audio_output_custom: bool
     _probe_request_id: int
@@ -39,19 +38,23 @@ class WindowProbingMixin:
     def open_file_dialog(self) -> None:
         """Present modern async file chooser portal."""
         if getattr(self, "is_transcoding", False):
-            self.toast_overlay.add_toast(Adw.Toast(title="Cannot open file while transcoding is in progress."))
+            self.toast_overlay.add_toast(
+                Adw.Toast(title="Cannot open file while transcoding is in progress.")
+            )
             return
         dialog = Gtk.FileDialog(title="Select Media File")
         dialog.open(self, None, self._on_file_dialog_finish)
 
-    def _on_file_dialog_finish(self, dialog: Gtk.FileDialog, result: Gio.AsyncResult) -> None:
+    def _on_file_dialog_finish(
+        self, dialog: Gtk.FileDialog, result: Gio.AsyncResult
+    ) -> None:
         try:
             gfile = dialog.open_finish(result)
             if gfile:
                 path = gfile.get_path()
                 if path:
                     self.load_media_file(path)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass  # User cancelled dialog
 
     def choose_output_destination(self, is_audio: bool = False) -> None:
@@ -62,9 +65,13 @@ class WindowProbingMixin:
             dialog.set_initial_name(current.name)
             dialog.set_initial_folder(Gio.File.new_for_path(str(current.parent)))
 
-        dialog.save(self, None, lambda d, res: self._on_dest_dialog_finish(d, res, is_audio))
+        dialog.save(
+            self, None, lambda d, res: self._on_dest_dialog_finish(d, res, is_audio)
+        )
 
-    def _on_dest_dialog_finish(self, dialog: Gtk.FileDialog, result: Gio.AsyncResult, is_audio: bool) -> None:
+    def _on_dest_dialog_finish(
+        self, dialog: Gtk.FileDialog, result: Gio.AsyncResult, is_audio: bool
+    ) -> None:
         try:
             gfile = dialog.save_finish(result)
             if gfile and gfile.get_path():
@@ -77,13 +84,19 @@ class WindowProbingMixin:
                     self.video_output_path = p
                     self._video_output_custom = True
                     self.video_dest_row.set_subtitle(str(p))
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass  # User cancelled
 
     def load_media_file(self, path: str | Path, sync: bool = False) -> None:
         """Inspect media file and configure widgets asynchronously."""
-        if getattr(self, "state", None) in (WindowState.RUNNING, WindowState.CANCELLING, WindowState.CLOSED) or getattr(self, "is_transcoding", False):
-            self.toast_overlay.add_toast(Adw.Toast(title="Cannot load file while transcoding is in progress."))
+        if getattr(self, "state", None) in (
+            WindowState.RUNNING,
+            WindowState.CANCELLING,
+            WindowState.CLOSED,
+        ) or getattr(self, "is_transcoding", False):
+            self.toast_overlay.add_toast(
+                Adw.Toast(title="Cannot load file while transcoding is in progress.")
+            )
             return
         p = Path(path).resolve()
         if not p.exists():
@@ -98,7 +111,10 @@ class WindowProbingMixin:
         self.media_info = None
         self.transcode_btn.set_sensitive(False)
         self.extract_btn.set_sensitive(False)
-        if getattr(self, "is_batch_active", False) and len(getattr(self, "batch_queue", [])) > 1:
+        if (
+            getattr(self, "is_batch_active", False)
+            and len(getattr(self, "batch_queue", [])) > 1
+        ):
             q_len = len(self.batch_queue)
             q_idx = self.batch_index + 1
             self.window_title.set_subtitle(f"[{q_idx}/{q_len}] Probing {p.name}...")
@@ -118,11 +134,14 @@ class WindowProbingMixin:
         try:
             media_info = probe_media(p)
             GLib.idle_add(self._on_probe_success, p, req_id, media_info)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             GLib.idle_add(self._on_probe_error, p, req_id, str(exc))
 
     def _on_probe_success(self, p: Path, req_id: int, media_info: MediaInfo) -> bool:
-        if getattr(self, "state", None) == WindowState.CLOSED or req_id != self._probe_request_id:
+        if (
+            getattr(self, "state", None) == WindowState.CLOSED
+            or req_id != self._probe_request_id
+        ):
             return False  # Discard stale completion
 
         self.input_file = p
@@ -130,7 +149,10 @@ class WindowProbingMixin:
         self.state = WindowState.READY
         self._video_output_custom = False
         self._audio_output_custom = False
-        if getattr(self, "is_batch_active", False) and len(getattr(self, "batch_queue", [])) > 1:
+        if (
+            getattr(self, "is_batch_active", False)
+            and len(getattr(self, "batch_queue", [])) > 1
+        ):
             q_len = len(self.batch_queue)
             q_idx = self.batch_index + 1
             self.window_title.set_subtitle(f"[{q_idx}/{q_len}] {p.name}")
@@ -150,8 +172,11 @@ class WindowProbingMixin:
         self._set_ui_controls_sensitive(True)
 
         if getattr(self, "is_batch_running", False) is True:
+
             def _trigger_batch() -> bool:
-                if getattr(self, "batch_is_extract", False) is True and hasattr(self, "_start_extract_audio"):
+                if getattr(self, "batch_is_extract", False) is True and hasattr(
+                    self, "_start_extract_audio"
+                ):
                     self._start_extract_audio()
                 elif hasattr(self, "_start_transcode"):
                     self._start_transcode()
@@ -162,7 +187,10 @@ class WindowProbingMixin:
         return False
 
     def _on_probe_error(self, _p: Path, req_id: int, error_msg: str) -> bool:
-        if getattr(self, "state", None) == WindowState.CLOSED or req_id != self._probe_request_id:
+        if (
+            getattr(self, "state", None) == WindowState.CLOSED
+            or req_id != self._probe_request_id
+        ):
             return False
 
         self.state = WindowState.EMPTY
@@ -171,7 +199,9 @@ class WindowProbingMixin:
         self._set_ui_controls_sensitive(True)
         self.transcode_btn.set_sensitive(False)
         self.extract_btn.set_sensitive(False)
-        self.toast_overlay.add_toast(Adw.Toast(title=f"Failed to probe media: {error_msg}"))
+        self.toast_overlay.add_toast(
+            Adw.Toast(title=f"Failed to probe media: {error_msg}")
+        )
         return False
 
     def _update_default_output_paths(self) -> None:
@@ -182,7 +212,9 @@ class WindowProbingMixin:
         # Video path
         if not getattr(self, "_video_output_custom", False):
             video_preset = self.get_current_video_preset()
-            is_target_size = (self.rate_widget.get_mode() == "target_size") and video_preset not in ("gif", "prores")
+            is_target_size = (
+                self.rate_widget.get_mode() == "target_size"
+            ) and video_preset not in ("gif", "prores")
             self.video_output_path = resolve_default_output_path(
                 input_file,
                 video_preset,

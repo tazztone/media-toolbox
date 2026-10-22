@@ -7,9 +7,10 @@ Libadwaita / GTK4 Application entrypoint and lifecycle manager for media_toolbox
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import sys
-from typing import Any, Optional, Sequence
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Any
 
 try:
     import gi
@@ -42,7 +43,7 @@ def has_graphical_display() -> bool:
         if not Gtk.init_check():
             return False
         return Gdk.Display.get_default() is not None
-    except Exception:
+    except Exception:  # noqa: BLE001
         return False
 
 
@@ -129,7 +130,9 @@ class MediaToolboxApp(_AppBase):  # type: ignore[misc,valid-type]
         win = self.window or self.get_active_window()
         from media_toolbox import __version__
 
-        about_cls = getattr(Adw, "AboutDialog", None) or getattr(Adw, "AboutWindow", None)
+        about_cls = getattr(Adw, "AboutDialog", None) or getattr(
+            Adw, "AboutWindow", None
+        )
         if about_cls is None:
             return
 
@@ -151,7 +154,7 @@ class MediaToolboxApp(_AppBase):  # type: ignore[misc,valid-type]
             about.present()
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """
     Desktop UI entrypoint. Checks for graphical display availability before running.
     """

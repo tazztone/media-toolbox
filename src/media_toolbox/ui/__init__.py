@@ -7,10 +7,10 @@ from __future__ import annotations
 from typing import Any
 
 __all__ = [
-    "MediaToolboxApp",
     "MainWindow",
-    "main",
+    "MediaToolboxApp",
     "has_graphical_display",
+    "main",
 ]
 
 
@@ -34,4 +34,3 @@ def __getattr__(name: str) -> Any:
         return importlib.import_module(f".{name}", __name__)
     except ModuleNotFoundError:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from None
-
