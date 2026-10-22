@@ -641,6 +641,33 @@ class TestTransactionalJobExecution:
         run_job(config, builder=capturing_builder, runner=fake_runner)
         assert captured_builder_kwargs.get("ffmpeg_bin") == "/custom/ffmpeg"
 
+    @patch("media_toolbox.core.jobs.probe_media")
+    def test_job_config_forwards_custom_ffprobe_bin(
+        self, mock_probe: MagicMock, tmp_path: Path, dummy_media_info: MediaInfo
+    ):
+        """JobConfig.ffprobe_bin is forwarded to probe_media when media_info is absent."""
+        mock_probe.return_value = dummy_media_info
+        inp = tmp_path / "in.mp4"
+        inp.touch()
+        out = tmp_path / "out.mp4"
+
+        def fake_builder(*_args: Any, **_kwargs: Any) -> list[list[str]]:
+            return [["ffmpeg", "-y", "-i", str(inp), str(_args[1])]]
+
+        def fake_runner(cmds: list[list[str]], **_kwargs: Any) -> None:
+            Path(cmds[-1][-1]).write_bytes(b"data")
+
+        config = JobConfig(
+            input_path=inp,
+            output_path=out,
+            options=EncodeOptions(),
+            overwrite=True,
+            ffprobe_bin="/custom/ffprobe",
+        )
+        run_job(config, builder=fake_builder, runner=fake_runner)
+        assert mock_probe.call_count == 1
+        assert mock_probe.call_args[1].get("ffprobe_bin") == "/custom/ffprobe"
+
     def test_builder_type_error_is_propagated_not_swallowed(
         self, tmp_path: Path, dummy_media_info: MediaInfo
     ):

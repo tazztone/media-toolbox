@@ -16,6 +16,7 @@ from __future__ import annotations
 import os
 import tempfile
 from pathlib import Path
+from typing import Any
 
 from media_toolbox.core.bitrate import calculate_target_video_bitrate
 from media_toolbox.core.filtergraph import (
@@ -147,6 +148,56 @@ def extract_two_pass_video_extra_args(extra_args: tuple[str, ...]) -> list[str]:
 
         args.append(arg)
         i += 1
+    return args
+
+
+def _build_audio_args(
+    options: EncodeOptions,
+    spec: ResolvedJobSpec,
+    media_info: MediaInfo | None,
+) -> list[str]:
+    """Construct audio codec, filter, and bitrate CLI flags."""
+    if options.mute_audio or (media_info is not None and not media_info.has_audio):
+        return ["-an"]
+    args: list[str] = []
+    a_codec = spec.audio_codec or "aac"
+    if a_codec != "copy":
+        args.extend(
+            build_audio_filter_args(
+                speed=options.speed,
+                normalize_loudness=options.normalize_audio,
+                volume_boost_db=options.volume_boost_db,
+            )
+        )
+    args.extend(["-c:a", a_codec])
+    if not a_codec.startswith("pcm_") and a_codec != "copy":
+        args.extend(["-b:a", f"{options.audio_bitrate_kbps}k"])
+    return args
+
+
+def _build_metadata_args(options: EncodeOptions) -> list[str]:
+    """Construct metadata and chapters mapping flags."""
+    args: list[str] = []
+    if options.copy_metadata and "-map_metadata" not in options.extra_args:
+        args.extend(["-map_metadata", "0"])
+    if options.copy_chapters and "-map_chapters" not in options.extra_args:
+        args.extend(["-map_chapters", "0"])
+    return args
+
+
+def _build_container_args(
+    v_preset: Any | None,
+    output_path: str,
+    extra_args: tuple[str, ...],
+) -> list[str]:
+    """Construct container format arguments, extra flags, and destination path."""
+    args: list[str] = []
+    if v_preset is not None:
+        args.extend(v_preset.build_container_args(output_path))
+    else:
+        args.extend(get_container_faststart_args(output_path))
+    args.extend(extra_args)
+    args.append(output_path)
     return args
 
 
@@ -431,33 +482,9 @@ def build_two_pass_commands(
             cmd.extend(extract_two_pass_video_extra_args(options.extra_args))
             cmd.extend(["-an", "-f", "null", os.devnull])
         else:
-            if options.mute_audio or not media_info.has_audio:
-                cmd.append("-an")
-            else:
-                a_codec = spec.audio_codec or "aac"
-                if a_codec != "copy":
-                    cmd.extend(
-                        build_audio_filter_args(
-                            speed=options.speed,
-                            normalize_loudness=options.normalize_audio,
-                            volume_boost_db=options.volume_boost_db,
-                        )
-                    )
-                cmd.extend(["-c:a", a_codec])
-                if not a_codec.startswith("pcm_") and a_codec != "copy":
-                    cmd.extend(["-b:a", f"{options.audio_bitrate_kbps}k"])
-
-            if options.copy_metadata and "-map_metadata" not in options.extra_args:
-                cmd.extend(["-map_metadata", "0"])
-            if options.copy_chapters and "-map_chapters" not in options.extra_args:
-                cmd.extend(["-map_chapters", "0"])
-
-            if v_preset is not None:
-                cmd.extend(v_preset.build_container_args(output_path))
-            else:
-                cmd.extend(get_container_faststart_args(output_path))
-            cmd.extend(options.extra_args)
-            cmd.append(output_path)
+            cmd.extend(_build_audio_args(options, spec, media_info))
+            cmd.extend(_build_metadata_args(options))
+            cmd.extend(_build_container_args(v_preset, output_path, options.extra_args))
         return cmd
 
     return [_pass_cmd(1), _pass_cmd(2)]
@@ -524,33 +551,9 @@ def build_single_pass_command(
             cmd.extend(["-preset", speed_preset])
 
     # Audio handling
-    if options.mute_audio or (media_info is not None and not media_info.has_audio):
-        cmd.append("-an")
-    else:
-        a_codec = spec.audio_codec or "aac"
-        if a_codec != "copy":
-            cmd.extend(
-                build_audio_filter_args(
-                    speed=options.speed,
-                    normalize_loudness=options.normalize_audio,
-                    volume_boost_db=options.volume_boost_db,
-                )
-            )
-        cmd.extend(["-c:a", a_codec])
-        if not a_codec.startswith("pcm_") and a_codec != "copy":
-            cmd.extend(["-b:a", f"{options.audio_bitrate_kbps}k"])
-
-    if options.copy_metadata and "-map_metadata" not in options.extra_args:
-        cmd.extend(["-map_metadata", "0"])
-    if options.copy_chapters and "-map_chapters" not in options.extra_args:
-        cmd.extend(["-map_chapters", "0"])
-
-    if v_preset is not None:
-        cmd.extend(v_preset.build_container_args(output_path))
-    else:
-        cmd.extend(get_container_faststart_args(output_path))
-    cmd.extend(options.extra_args)
-    cmd.append(output_path)
+    cmd.extend(_build_audio_args(options, spec, media_info))
+    cmd.extend(_build_metadata_args(options))
+    cmd.extend(_build_container_args(v_preset, output_path, options.extra_args))
 
     return cmd
 

@@ -35,7 +35,6 @@ from media_toolbox.core.runner import (
     RunnerCancelledError,
     RunnerError,
     parse_progress_stream,
-    run_command,
     run_ffmpeg,
     run_ffmpeg_pipeline,
 )
@@ -64,7 +63,6 @@ __all__ = [
     "parse_rotation",
     "parse_stream_fps",
     "probe_media",
-    "run_command",
     "run_ffmpeg",
     "run_ffmpeg_pipeline",
 ]

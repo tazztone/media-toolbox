@@ -10,7 +10,6 @@ INVARIANT: Strict zero GUI imports (gi, Gtk, Adw, Nautilus, tkinter, PyQt, PySid
 from __future__ import annotations
 
 import math
-import warnings
 from pathlib import Path
 
 from media_toolbox.core.filtergraph import (
@@ -56,6 +55,12 @@ def validate_extra_args(extra_args: tuple[str, ...]) -> None:
     """
     Validate that extra_args contains only valid FFmpeg option flags and parameter pairs.
     Rejects naked positional file arguments, input flags, or conflicting output flags.
+
+    Threat Model Note:
+        extra_args validation ensures FFmpeg pipeline integrity and guards against command-line
+        flag collisions or unintended file overwrites. It does NOT serve as an untrusted-user
+        sandbox boundary (e.g. FFmpeg filtergraph directives like `subtitles=` can read local files).
+        Callers must treat extra_args as privileged developer/user inputs.
     """
     forbidden_flags = {
         "-y",
@@ -154,13 +159,6 @@ def resolve_job_spec(
             effective_acodec = a_preset.codec_name
         elif options.audio_codec:
             effective_acodec = options.audio_codec
-        elif options.video_codec in ("mp3", "aac", "opus", "flac"):
-            warnings.warn(
-                "Passing audio codec via video_codec for audio operations is deprecated; pass audio_codec instead",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            effective_acodec = options.video_codec
         else:
             effective_acodec = "mp3"
     else:

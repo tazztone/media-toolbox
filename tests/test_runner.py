@@ -37,7 +37,6 @@ from media_toolbox.core.runner import (
     parse_progress_stream,
     parse_speed,
     parse_time_to_seconds,
-    run_command,
     run_ffmpeg,
     run_ffmpeg_pipeline,
     terminate_process_group,
@@ -416,14 +415,13 @@ class TestRunFFmpegExecution:
         assert events[-1].percentage == 100.0
         assert events[-1].is_completed is True
 
-    def test_run_command_alias_compatibility(self) -> None:
-        """run_command alias supports total_duration and runs successfully."""
+    def test_run_ffmpeg_pipeline_execution(self) -> None:
+        """run_ffmpeg successfully executes a command and parses progress events."""
         script = "print('frame=1\\nout_time_us=1000000\\nprogress=end', flush=True)"
         cmd = [sys.executable, "-c", script]
         events: list[ProgressEvent] = []
 
-        with pytest.deprecated_call():
-            run_command(cmd, total_duration=1.0, progress_callback=events.append)
+        run_ffmpeg(cmd, total_duration_seconds=1.0, progress_callback=events.append)
         assert len(events) >= 1
         assert events[-1].is_completed is True
 

@@ -46,22 +46,19 @@ class RunnerError(MediaToolboxError):
 
     def __init__(
         self,
-        message_or_cmd: str | list[str] = "",
+        message: str = "",
+        *,
         cmd: list[str] | None = None,
         returncode: int = 1,
         stderr: str = "",
         stdout: str = "",
-        **kwargs: Any,
     ) -> None:
-        if isinstance(message_or_cmd, list):
-            the_cmd = list(message_or_cmd)
-            msg = f"FFmpeg command failed with exit code {returncode}: {' '.join(the_cmd)}\n{stderr}".strip()
+        the_cmd = list(cmd) if cmd is not None else []
+        if message:
+            msg = str(message)
         else:
-            the_cmd = list(cmd) if cmd is not None else []
-            if message_or_cmd:
-                msg = str(message_or_cmd)
-            else:
-                msg = f"FFmpeg command failed with exit code {returncode}: {' '.join(the_cmd)}\n{stderr}".strip()
+            cmd_str = " ".join(the_cmd) if the_cmd else "<unknown>"
+            msg = f"FFmpeg command failed with exit code {returncode}: {cmd_str}\n{stderr}".strip()
 
         self.cmd = the_cmd
         self.returncode = returncode
@@ -102,23 +99,16 @@ class RunnerCancelledError(RunnerError):
 
     def __init__(
         self,
-        message_or_cmd: str | list[str] = "Execution was cancelled",
+        message: str = "Execution was cancelled",
+        *,
         cmd: list[str] | None = None,
         returncode: int = -15,
         stderr: str = "",
         stdout: str = "",
-        **kwargs: Any,
     ) -> None:
-        if isinstance(message_or_cmd, list):
-            the_cmd = list(message_or_cmd)
-            msg = "Execution was cancelled"
-        else:
-            the_cmd = list(cmd) if cmd is not None else []
-            msg = str(message_or_cmd) if message_or_cmd else "Execution was cancelled"
-
         super().__init__(
-            message_or_cmd=msg,
-            cmd=the_cmd,
+            message=message,
+            cmd=cmd,
             returncode=returncode,
             stderr=stderr,
             stdout=stdout,
@@ -130,19 +120,17 @@ class RunnerFileNotFoundError(FileNotFoundError, RunnerError):
 
     def __init__(
         self,
-        message_or_cmd: str | list[str] = "FFmpeg executable not found",
+        message: str = "FFmpeg executable not found",
+        *,
         cmd: list[str] | None = None,
         returncode: int = 127,
         stderr: str = "",
         stdout: str = "",
-        **kwargs: Any,
     ) -> None:
-        the_cmd = list(cmd) if cmd is not None else []
-        msg = str(message_or_cmd) if message_or_cmd else "FFmpeg executable not found"
         RunnerError.__init__(
             self,
-            message_or_cmd=msg,
-            cmd=the_cmd,
+            message=message,
+            cmd=cmd,
             returncode=returncode,
             stderr=stderr,
             stdout=stdout,
@@ -447,7 +435,6 @@ def run_ffmpeg(
     progress_callback: Callable[[ProgressEvent], None] | None = None,
     cancel_event: threading.Event | None = None,
     sigterm_timeout: float = 2.0,
-    total_duration: float | None = None,
     is_ffmpeg: bool | None = None,
 ) -> None:
     """
@@ -459,7 +446,6 @@ def run_ffmpeg(
         progress_callback: Callback receiving ProgressEvent updates.
         cancel_event: Event to signal execution cancellation.
         sigterm_timeout: Grace period in seconds before SIGKILL escalation.
-        total_duration: Compatibility parameter for total_duration_seconds (deprecated).
         is_ffmpeg: Explicit flag indicating whether command is FFmpeg (for -progress injection).
 
     Raises:
@@ -471,16 +457,7 @@ def run_ffmpeg(
     if not cmd:
         raise ValueError("cmd argument list cannot be empty")
 
-    if total_duration is not None:
-        warnings.warn(
-            "total_duration is deprecated, use total_duration_seconds",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
-    dur = (
-        total_duration_seconds if total_duration_seconds is not None else total_duration
-    )
+    dur = total_duration_seconds
 
     if cancel_event is not None and cancel_event.is_set():
         raise RunnerCancelledError("Execution cancelled before start", cmd=cmd)
@@ -642,32 +619,6 @@ def run_ffmpeg(
             final_evt = parser.finish()
             if final_evt is not None:
                 progress_callback(final_evt)
-
-
-def run_command(
-    cmd: list[str],
-    total_duration: float | None = None,
-    progress_callback: Callable[[ProgressEvent], None] | None = None,
-    cancel_event: threading.Event | None = None,
-    total_duration_seconds: float | None = None,
-    sigterm_timeout: float = 2.0,
-) -> None:
-    """Compatibility alias for run_ffmpeg supporting total_duration and total_duration_seconds (deprecated)."""
-    warnings.warn(
-        "run_command is deprecated, use run_ffmpeg instead",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    dur = (
-        total_duration_seconds if total_duration_seconds is not None else total_duration
-    )
-    run_ffmpeg(
-        cmd=cmd,
-        total_duration_seconds=dur,
-        progress_callback=progress_callback,
-        cancel_event=cancel_event,
-        sigterm_timeout=sigterm_timeout,
-    )
 
 
 def run_ffmpeg_pipeline(

@@ -56,6 +56,7 @@ class JobConfig:
     allow_unprobed: bool = False
     allow_non_atomic_fallback: bool = False
     ffmpeg_bin: str = "ffmpeg"
+    ffprobe_bin: str = "ffprobe"
 
 
 @dataclass(frozen=True, slots=True)
@@ -303,6 +304,56 @@ def publish_output(
             pass
 
 
+def _encode_to_staging(
+    builder_fn: Callable[..., list[list[str]]],
+    runner_fn: Callable[..., None],
+    in_path: Path,
+    staging_path: Path,
+    options: EncodeOptions,
+    duration: float | None,
+    builder_kwargs: dict[str, Any],
+    progress_callback: Callable[[ProgressEvent], None] | None,
+    pipeline_progress_callback: Callable[[int, int, ProgressEvent], None] | None,
+    cancel_event: threading.Event | None,
+    sigterm_timeout: float,
+    *,
+    is_retry: bool = False,
+) -> int:
+    """Execute command generation and runner pipeline, verifying staging output file. Returns file size in bytes."""
+    cmds = builder_fn(
+        str(in_path),
+        str(staging_path),
+        options,
+        **builder_kwargs,
+    )
+
+    runner_fn(
+        cmds,
+        total_duration_seconds=duration,
+        progress_callback=progress_callback,
+        pipeline_progress_callback=pipeline_progress_callback,
+        cancel_event=cancel_event,
+        sigterm_timeout=sigterm_timeout,
+    )
+
+    if cancel_event is not None and cancel_event.is_set():
+        raise RunnerCancelledError("Job cancelled before publication")
+
+    suffix = " on retry" if is_retry else ""
+    if not staging_path.exists():
+        raise OutputPublishError(
+            f"Encoded output file was not produced{suffix}: {staging_path}"
+        )
+
+    file_size = staging_path.stat().st_size
+    if file_size == 0:
+        raise OutputPublishError(
+            f"Encoded output file is empty (0 bytes){suffix}: {staging_path}"
+        )
+
+    return file_size
+
+
 def run_job(
     config: JobConfig,
     progress_callback: Callable[[ProgressEvent], None] | None = None,
@@ -354,7 +405,7 @@ def run_job(
     media_info = config.media_info
     if media_info is None:
         try:
-            media_info = probe_media(in_path)
+            media_info = probe_media(in_path, ffprobe_bin=config.ffprobe_bin)
         except Exception as err:
             if config.allow_unprobed:
                 media_info = None
@@ -421,37 +472,19 @@ def run_job(
     }
 
     try:
-        cmds = builder_fn(
-            str(in_path),
-            str(staging_path),
+        file_size = _encode_to_staging(
+            builder_fn,
+            runner_fn,
+            in_path,
+            staging_path,
             config.options,
-            **builder_kwargs,
+            duration,
+            builder_kwargs,
+            progress_callback,
+            pipeline_progress_callback,
+            cancel_event,
+            config.sigterm_timeout,
         )
-
-        runner_fn(
-            cmds,
-            total_duration_seconds=duration,
-            progress_callback=progress_callback,
-            pipeline_progress_callback=pipeline_progress_callback,
-            cancel_event=cancel_event,
-            sigterm_timeout=config.sigterm_timeout,
-        )
-
-        # Check cancellation immediately prior to publishing
-        if cancel_event is not None and cancel_event.is_set():
-            raise RunnerCancelledError("Job cancelled before publication")
-
-        # Output validation and atomic publication
-        if not staging_path.exists():
-            raise OutputPublishError(
-                f"Encoded output file was not produced: {staging_path}"
-            )
-
-        file_size = staging_path.stat().st_size
-        if file_size == 0:
-            raise OutputPublishError(
-                f"Encoded output file is empty (0 bytes): {staging_path}"
-            )
 
         target_size_bytes: int | None = None
         exceeded_target = False
@@ -478,33 +511,20 @@ def run_job(
             except OSError:
                 pass
 
-            retry_cmds = builder_fn(
-                str(in_path),
-                str(staging_path),
+            file_size = _encode_to_staging(
+                builder_fn,
+                runner_fn,
+                in_path,
+                staging_path,
                 retry_options,
-                **builder_kwargs,
+                duration,
+                builder_kwargs,
+                progress_callback,
+                pipeline_progress_callback,
+                cancel_event,
+                config.sigterm_timeout,
+                is_retry=True,
             )
-            runner_fn(
-                retry_cmds,
-                total_duration_seconds=duration,
-                progress_callback=progress_callback,
-                pipeline_progress_callback=pipeline_progress_callback,
-                cancel_event=cancel_event,
-                sigterm_timeout=config.sigterm_timeout,
-            )
-
-            if cancel_event is not None and cancel_event.is_set():
-                raise RunnerCancelledError("Job cancelled before publication")
-
-            if not staging_path.exists():
-                raise OutputPublishError(
-                    f"Encoded output file was not produced on retry: {staging_path}"
-                )
-            file_size = staging_path.stat().st_size
-            if file_size == 0:
-                raise OutputPublishError(
-                    f"Encoded output file is empty (0 bytes) on retry: {staging_path}"
-                )
             exceeded_target = file_size > target_size_bytes
 
         publish_output(

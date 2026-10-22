@@ -74,8 +74,9 @@ fi
 # 3. Ensure media_toolbox module is in PYTHONPATH if running from source checkout
 SCRIPT_PATH="$(readlink -f -- "$0" 2>/dev/null || realpath -- "$0" 2>/dev/null || echo "$0")"
 SCRIPT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" >/dev/null 2>&1 && pwd)"
-REPO_SRC="$(cd -- "$SCRIPT_DIR/../../.." >/dev/null 2>&1 && pwd)/src"
-if [[ -f "$REPO_SRC/media_toolbox/__init__.py" ]]; then
+REPO_ROOT="$(cd -- "$SCRIPT_DIR/../../.." >/dev/null 2>&1 && pwd)"
+REPO_SRC="$REPO_ROOT/src"
+if [[ -f "$REPO_ROOT/pyproject.toml" && -f "$REPO_SRC/media_toolbox/__init__.py" ]]; then
     export PYTHONPATH="$REPO_SRC${PYTHONPATH:+:$PYTHONPATH}"
 fi
 

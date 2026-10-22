@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import dataclasses
 import threading
-import warnings
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +43,10 @@ class WindowWorkerMixin:
     _active_worker: threading.Thread | None = None
     _job_generation: int = 0
     _close_after_cleanup: bool = False
+    batch_queue: list[Path]
+    batch_index: int = 0
+    is_batch_running: bool = False
+    is_batch_active: bool = False
 
     def _set_ui_controls_sensitive(self, sensitive: bool) -> None:
         if hasattr(self, "view_stack") and self.view_stack is not None:
@@ -185,15 +188,6 @@ class WindowWorkerMixin:
         )
         self._active_worker = worker_thread
         worker_thread.start()
-
-    def _launch_worker_pipeline(self, *args: Any, **kwargs: Any) -> None:
-        """Deprecated alias for _start_worker."""
-        warnings.warn(
-            "_launch_worker_pipeline is deprecated; use _start_worker instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        WindowWorkerMixin._start_worker(self, *args, **kwargs)
 
     def _worker_thread_entry(
         self,

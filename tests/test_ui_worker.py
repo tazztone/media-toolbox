@@ -33,7 +33,7 @@ class TestNonBlockingWorkerThread:
     """Verifies daemon worker thread execution and GLib.idle_add main loop marshalling using genuine production methods."""
 
     def test_worker_thread_spawns_daemon(self, tmp_path: Path) -> None:
-        """Verify MainWindow._launch_worker_pipeline spawns a daemon thread with correct name and target."""
+        """Verify MainWindow._start_worker spawns a daemon thread with correct name and target."""
         from media_toolbox.ui.window import MainWindow
 
         mock_win = MagicMock()
@@ -50,8 +50,7 @@ class TestNonBlockingWorkerThread:
             mock_thread_inst = MagicMock()
             mock_thread_cls.return_value = mock_thread_inst
 
-            with pytest.deprecated_call():
-                MainWindow._launch_worker_pipeline(mock_win, config, "Encoding...")
+            MainWindow._start_worker(mock_win, config, "Encoding...")
 
             assert mock_win.is_transcoding is True
             assert isinstance(mock_win.cancel_event, threading.Event)
