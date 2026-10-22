@@ -162,6 +162,8 @@ class MainWindow(Adw.ApplicationWindow, WindowProbingMixin, WindowWorkerMixin):
         norm = self.audio_widget.get_normalize()
         boost = self.audio_widget.get_volume_boost()
         audio_br = self.audio_widget.get_audio_bitrate()
+        audio_track_idx = self.audio_widget.get_audio_track_index()
+        keep_subs = self.audio_widget.get_keep_subtitles()
 
         return build_encode_options_from_state(
             preset=preset,
@@ -176,6 +178,8 @@ class MainWindow(Adw.ApplicationWindow, WindowProbingMixin, WindowWorkerMixin):
             audio_bitrate_kbps=audio_br,
             speed_factor=speed_factor,
             is_extract_audio=False,
+            audio_track_index=audio_track_idx,
+            keep_subtitles=keep_subs,
         )
 
     def get_extract_audio_options(self) -> EncodeOptions:

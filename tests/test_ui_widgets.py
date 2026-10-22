@@ -136,6 +136,50 @@ class TestDynamicRevealers:
         mock_self.set_sensitive.assert_called_with(False)
         mock_self.set_description.assert_called_with("Source file contains no audio streams")
 
+    def test_audio_options_tracks_revealer_and_selection(self) -> None:
+        """Verify multi-track audio reveals track dropdown, while single/zero tracks hide it."""
+        from media_toolbox.ui.widgets import AudioOptionsWidget
+
+        mock_self = MagicMock()
+        mock_self.audio_tracks_model = MagicMock()
+        mock_self.audio_track_row = MagicMock()
+        mock_self.audio_track_revealer = MagicMock()
+
+        # Multi-track: 2 audio streams
+        s1 = AudioStream(index=1, codec_name="aac", channels=2, sample_rate=48000)
+        s2 = AudioStream(index=2, codec_name="ac3", channels=6, sample_rate=48000)
+        AudioOptionsWidget.set_audio_tracks(mock_self, [s1, s2])
+        assert mock_self._num_audio_tracks == 2
+        mock_self.audio_track_revealer.set_reveal_child.assert_called_with(True)
+
+        mock_self.audio_track_row.get_selected.return_value = 1
+        assert AudioOptionsWidget.get_audio_track_index(mock_self) == 1
+
+        # Single track: hides revealer
+        AudioOptionsWidget.set_audio_tracks(mock_self, [s1])
+        assert mock_self._num_audio_tracks == 1
+        mock_self.audio_track_revealer.set_reveal_child.assert_called_with(False)
+        assert AudioOptionsWidget.get_audio_track_index(mock_self) is None
+
+        # Zero tracks: hides revealer
+        AudioOptionsWidget.set_audio_tracks(mock_self, [])
+        assert mock_self._num_audio_tracks == 0
+        mock_self.audio_track_revealer.set_reveal_child.assert_called_with(False)
+        assert AudioOptionsWidget.get_audio_track_index(mock_self) is None
+
+    def test_audio_options_subtitles_getter(self) -> None:
+        """Verify get_keep_subtitles returns switch active state."""
+        from media_toolbox.ui.widgets import AudioOptionsWidget
+
+        mock_self = MagicMock()
+        mock_self.keep_subs_switch = MagicMock()
+        mock_self.keep_subs_switch.get_active.return_value = True
+        assert AudioOptionsWidget.get_keep_subtitles(mock_self) is True
+
+        mock_self.keep_subs_switch.get_active.return_value = False
+        assert AudioOptionsWidget.get_keep_subtitles(mock_self) is False
+
+
         AudioOptionsWidget.set_has_audio(mock_self, True)
         mock_self.set_sensitive.assert_called_with(True)
         mock_self.set_description.assert_called_with("")

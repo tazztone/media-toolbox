@@ -34,6 +34,8 @@ def build_encode_options_from_state(
     crop: Optional[str] = None,
     speed_preset: Optional[str] = None,
     is_extract_audio: bool = False,
+    audio_track_index: Optional[int] = None,
+    keep_subtitles: bool = False,
 ) -> EncodeOptions:
     """
     Pure conversion of form widget states into an immutable EncodeOptions dataclass.
@@ -88,6 +90,8 @@ def build_encode_options_from_state(
         two_pass=two_pass,
         preset=preset,
         speed_preset=speed_preset,
+        audio_track_index=audio_track_index if not eff_mute else None,
+        keep_subtitles=keep_subtitles if not is_extract_audio else False,
     )
 
 

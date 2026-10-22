@@ -249,6 +249,47 @@ class TestWidgetStateToEncodeOptions:
         assert opts.crop is None
         assert opts.scale is None
 
+    def test_build_encode_options_audio_track_and_subtitles(self) -> None:
+        """Verify audio_track_index and keep_subtitles pass to EncodeOptions."""
+        from media_toolbox.ui.forms import build_encode_options_from_state
+
+        opts = build_encode_options_from_state(
+            preset="h264",
+            rate_mode="crf",
+            crf_value=23,
+            target_size_mb=25.0,
+            scale=None,
+            mute_audio=False,
+            normalize_audio=False,
+            volume_boost_db=None,
+            audio_bitrate_kbps=128,
+            audio_track_index=1,
+            keep_subtitles=True,
+        )
+        assert opts.audio_track_index == 1
+        assert opts.keep_subtitles is True
+
+    def test_build_encode_options_muted_clears_audio_track_index(self) -> None:
+        """When mute_audio is True, audio_track_index is reset to None."""
+        from media_toolbox.ui.forms import build_encode_options_from_state
+
+        opts = build_encode_options_from_state(
+            preset="h264",
+            rate_mode="crf",
+            crf_value=23,
+            target_size_mb=25.0,
+            scale=None,
+            mute_audio=True,
+            normalize_audio=False,
+            volume_boost_db=None,
+            audio_bitrate_kbps=128,
+            audio_track_index=1,
+            keep_subtitles=True,
+        )
+        assert opts.audio_track_index is None
+        assert opts.keep_subtitles is True
+
+
 
 # ---------------------------------------------------------------------------
 # 4. Default Output Path Resolution Tests

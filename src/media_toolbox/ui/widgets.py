@@ -15,7 +15,7 @@ Features:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Sequence
 
 import gi
 
@@ -259,7 +259,28 @@ class AudioOptionsWidget(Adw.PreferencesGroup):
         )
         self.add(self.mute_switch)
 
+        self.keep_subs_switch = Adw.SwitchRow(
+            title="Keep Subtitles",
+            subtitle="Preserve subtitle tracks in output container (-c:s copy)",
+            active=False,
+        )
+        self.add(self.keep_subs_switch)
+
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+
+        self._num_audio_tracks = 0
+        self.audio_tracks_model = Gtk.StringList.new(["Track 1 (Default)"])
+        self.audio_track_row = Adw.ComboRow(
+            title="Audio Track",
+            model=self.audio_tracks_model,
+            selected=0,
+        )
+        self.audio_track_revealer = Gtk.Revealer(
+            child=self.audio_track_row,
+            reveal_child=False,
+            transition_type=Gtk.RevealerTransitionType.SLIDE_DOWN,
+        )
+        box.append(self.audio_track_revealer)
 
         self.norm_switch = Adw.SwitchRow(
             title="Normalize Loudness",
@@ -330,6 +351,39 @@ class AudioOptionsWidget(Adw.PreferencesGroup):
 
     def get_audio_bitrate(self) -> int:
         return int(self.bitrate_row.get_value())
+
+    def set_audio_tracks(self, streams: Sequence[Any]) -> None:
+        self._num_audio_tracks = len(streams)
+        if len(streams) > 1:
+            labels = []
+            for i, s in enumerate(streams):
+                codec = getattr(s, "codec_name", "") or "audio"
+                ch = getattr(s, "channels", 2)
+                rate = getattr(s, "sample_rate_khz", 48.0)
+                labels.append(f"Track {i + 1}: {codec} ({ch}ch, {rate:.1f}kHz)")
+            self.audio_tracks_model.splice(0, self.audio_tracks_model.get_n_items(), labels)
+            self.audio_track_row.set_selected(0)
+            self.audio_track_revealer.set_reveal_child(True)
+        elif len(streams) == 1:
+            s = streams[0]
+            codec = getattr(s, "codec_name", "") or "audio"
+            ch = getattr(s, "channels", 2)
+            rate = getattr(s, "sample_rate_khz", 48.0)
+            self.audio_tracks_model.splice(0, self.audio_tracks_model.get_n_items(), [f"Track 1: {codec} ({ch}ch, {rate:.1f}kHz)"])
+            self.audio_track_row.set_selected(0)
+            self.audio_track_revealer.set_reveal_child(False)
+        else:
+            self.audio_tracks_model.splice(0, self.audio_tracks_model.get_n_items(), ["No audio tracks"])
+            self.audio_track_row.set_selected(0)
+            self.audio_track_revealer.set_reveal_child(False)
+
+    def get_audio_track_index(self) -> Optional[int]:
+        if getattr(self, "_num_audio_tracks", 0) > 1:
+            return int(self.audio_track_row.get_selected())
+        return None
+
+    def get_keep_subtitles(self) -> bool:
+        return bool(self.keep_subs_switch.get_active())
 
 
 class MetadataCard(Adw.PreferencesGroup):

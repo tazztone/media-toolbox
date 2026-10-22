@@ -134,6 +134,7 @@ class WindowProbingMixin:
             self.res_widget.set_source_resolution(eff_w, eff_h)
 
         self.audio_widget.set_has_audio(media_info.has_audio)
+        self.audio_widget.set_audio_tracks(media_info.audio_streams)
         self._update_default_output_paths()
         self.main_stack.set_visible_child_name("loaded")
         self._set_ui_controls_sensitive(True)
