@@ -263,6 +263,19 @@ def test_two_pass_commands_count(sample_mediainfo_standard_mp4: MediaInfo) -> No
     assert len(cmds) == 2
 
 
+def test_two_pass_builder_requires_target_size(
+    sample_mediainfo_standard_mp4: MediaInfo,
+) -> None:
+    """build_two_pass_commands directly rejects missing target_size_mb."""
+    from media_toolbox.core.builder import build_two_pass_commands
+
+    options = EncodeOptions(two_pass=True)
+    with pytest.raises(ValueError, match="Target size in MB is required"):
+        build_two_pass_commands(
+            "in.mp4", "out.mp4", options, media_info=sample_mediainfo_standard_mp4
+        )
+
+
 def test_two_pass_pass1_null(sample_mediainfo_standard_mp4: MediaInfo) -> None:
     """Pass 1 writes statistics to null sink with audio disabled."""
     options = EncodeOptions(two_pass=True, target_size_mb=25.0)

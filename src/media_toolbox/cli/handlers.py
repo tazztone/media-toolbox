@@ -19,6 +19,7 @@ from media_toolbox import cli
 from media_toolbox.cli.formatting import (
     create_progress_reporter,
     format_media_info_json,
+    media_info_to_dict,
     parse_scale_arg,
     render_media_info_text,
     should_colorize,
@@ -44,28 +45,46 @@ from media_toolbox.nautilus.installer import (
 
 def handle_inspect(args: argparse.Namespace) -> int:
     """Handle 'inspect' subcommand."""
-    file_arg = args.file
-    try:
-        info = cli.probe_media(
-            file_arg, ffprobe_bin=getattr(args, "ffprobe_bin", "ffprobe")
-        )
-    except FileNotFoundError as err:
-        sys.stderr.write(f"Error: File not found: {err}\n")
-        return 1
-    except ProbeError as err:
-        sys.stderr.write(f"Error probing media: {err}\n")
-        return 1
-    except Exception as err:  # noqa: BLE001
-        sys.stderr.write(f"Unexpected error probing media: {err}\n")
-        return 1
+    files: list[str] = getattr(args, "files", None) or (
+        [args.file] if hasattr(args, "file") else []
+    )
+    ffprobe_bin = getattr(args, "ffprobe_bin", "ffprobe")
+    json_mode = getattr(args, "json", False)
 
-    if getattr(args, "json", False):
-        sys.stdout.write(format_media_info_json(info) + "\n")
-    else:
-        use_color = should_colorize(sys.stdout)
-        sys.stdout.write(render_media_info_text(info, use_color=use_color) + "\n")
+    exit_code = 0
+    results: list[tuple[str, Any]] = []
 
-    return 0
+    for idx, file_arg in enumerate(files):
+        try:
+            info = cli.probe_media(file_arg, ffprobe_bin=ffprobe_bin)
+            results.append((file_arg, info))
+            if not json_mode:
+                use_color = should_colorize(sys.stdout)
+                if idx > 0:
+                    sys.stdout.write("\n")
+                sys.stdout.write(
+                    render_media_info_text(info, use_color=use_color) + "\n"
+                )
+        except FileNotFoundError as err:
+            sys.stderr.write(f"Error: File not found: {err}\n")
+            exit_code = 1
+        except ProbeError as err:
+            sys.stderr.write(f"Error probing media: {err}\n")
+            exit_code = 1
+        except Exception as err:  # noqa: BLE001
+            sys.stderr.write(f"Unexpected error probing media: {err}\n")
+            exit_code = 1
+
+    if json_mode and results:
+        if len(files) == 1:
+            sys.stdout.write(format_media_info_json(results[0][1]) + "\n")
+        else:
+            sys.stdout.write(
+                json.dumps([media_info_to_dict(info) for _, info in results], indent=2)
+                + "\n"
+            )
+
+    return exit_code
 
 
 def _run_cli_job(

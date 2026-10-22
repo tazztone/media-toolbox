@@ -640,3 +640,63 @@ class TestTransactionalJobExecution:
         )
         run_job(config, builder=capturing_builder, runner=fake_runner)
         assert captured_builder_kwargs.get("ffmpeg_bin") == "/custom/ffmpeg"
+
+    def test_builder_type_error_is_propagated_not_swallowed(
+        self, tmp_path: Path, dummy_media_info: MediaInfo
+    ):
+        """TypeError raised inside builder_fn is propagated directly without silent retry."""
+        inp = tmp_path / "in.mp4"
+        inp.touch()
+        out = tmp_path / "out.mp4"
+
+        def buggy_builder(*_args: Any, **_kwargs: Any) -> list[list[str]]:
+            raise TypeError("Internal builder type mismatch bug")
+
+        config = JobConfig(
+            input_path=inp,
+            output_path=out,
+            options=EncodeOptions(),
+            media_info=dummy_media_info,
+            overwrite=True,
+            ffmpeg_bin="/custom/ffmpeg",
+        )
+        with pytest.raises(TypeError, match="Internal builder type mismatch bug"):
+            run_job(config, builder=buggy_builder)
+
+    def test_cleanup_stale_staging_dirs_preserves_active_pid(self, tmp_path: Path):
+        """Staging directory older than max_age is preserved if .pid belongs to an active process."""
+        import time
+
+        stale_dir = tmp_path / ".tmp_media_toolbox_active_pid"
+        stale_dir.mkdir()
+        pid_file = stale_dir / ".pid"
+        pid_file.write_text(str(os.getpid()), encoding="utf-8")
+
+        now = time.time()
+        os.utime(stale_dir, (now - 100_000, now - 100_000))
+        os.utime(pid_file, (now - 100_000, now - 100_000))
+
+        cleaned = cleanup_stale_staging_dirs(tmp_path, max_age_seconds=86400)
+        assert cleaned == 0
+        assert stale_dir.exists()
+
+    def test_cleanup_stale_staging_dirs_preserves_active_writing_file(
+        self, tmp_path: Path
+    ):
+        """Staging directory with old dir mtime is preserved if a file inside was recently modified."""
+        import time
+
+        stale_dir = tmp_path / ".tmp_media_toolbox_active_write"
+        stale_dir.mkdir()
+        inner_file = stale_dir / "output.mp4"
+        inner_file.write_bytes(b"chunk")
+
+        now = time.time()
+        # Old directory mtime
+        os.utime(stale_dir, (now - 100_000, now - 100_000))
+        # Recent file mtime (modified 10 seconds ago)
+        os.utime(inner_file, (now - 10, now - 10))
+
+        cleaned = cleanup_stale_staging_dirs(tmp_path, max_age_seconds=86400)
+        assert cleaned == 0
+        assert stale_dir.exists()

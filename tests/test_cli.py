@@ -466,6 +466,51 @@ class TestCliInspectCommand:
         assert exit_code == 0
         assert "1920x1080" in capsys.readouterr().out
 
+    @patch("media_toolbox.cli.probe_media")
+    def test_inspect_multiple_files_text_mode(
+        self,
+        mock_probe: MagicMock,
+        mock_standard_video_info: MediaInfo,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """inspect with multiple file arguments outputs info for each file."""
+        mock_probe.return_value = mock_standard_video_info
+        exit_code = cli.main(["inspect", "file1.mp4", "file2.mp4"])
+        assert exit_code == 0
+        assert mock_probe.call_count == 2
+        out = capsys.readouterr().out
+        assert out.count("1920x1080") == 2
+
+    @patch("media_toolbox.cli.probe_media")
+    def test_inspect_multiple_files_json_mode(
+        self,
+        mock_probe: MagicMock,
+        mock_standard_video_info: MediaInfo,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """inspect --json with multiple files outputs a JSON array."""
+        mock_probe.return_value = mock_standard_video_info
+        exit_code = cli.main(["inspect", "--json", "file1.mp4", "file2.mp4"])
+        assert exit_code == 0
+        assert mock_probe.call_count == 2
+        import json
+
+        data = json.loads(capsys.readouterr().out)
+        assert isinstance(data, list)
+        assert len(data) == 2
+
+    @patch("media_toolbox.cli.probe_media")
+    def test_shortcut_multiple_files_inspect_syntax(
+        self,
+        mock_probe: MagicMock,
+        mock_standard_video_info: MediaInfo,
+    ) -> None:
+        """Direct multi-file arguments shortcut to inspect all files."""
+        mock_probe.return_value = mock_standard_video_info
+        exit_code = cli.main(["file1.mp4", "file2.mp4"])
+        assert exit_code == 0
+        assert mock_probe.call_count == 2
+
 
 # ---------------------------------------------------------------------------
 # Test Suite 3: Mock Execution Tests for `transcode`

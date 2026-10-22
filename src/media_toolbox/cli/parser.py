@@ -75,7 +75,9 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_parser = subparsers.add_parser(
         "inspect", help="Inspect media technical metadata"
     )
-    inspect_parser.add_argument("file", help="Path to media file")
+    inspect_parser.add_argument(
+        "files", nargs="+", metavar="file", help="Path(s) to media file(s)"
+    )
     inspect_parser.add_argument(
         "--json", action="store_true", help="Print structured metadata in JSON format"
     )

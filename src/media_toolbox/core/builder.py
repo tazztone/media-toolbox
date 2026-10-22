@@ -343,7 +343,9 @@ def build_two_pass_commands(
     else:
         audio_br = options.audio_bitrate_kbps
 
-    target_mb = options.target_size_mb if options.target_size_mb is not None else 25.0
+    if options.target_size_mb is None:
+        raise ValueError("Target size in MB is required for two-pass bitrate targeting")
+    target_mb = options.target_size_mb
     v_bitrate_kbps = calculate_target_video_bitrate(
         target_size_mb=target_mb,
         duration_seconds=duration,

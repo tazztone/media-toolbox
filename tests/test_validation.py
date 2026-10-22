@@ -220,13 +220,22 @@ class TestValidationAndPresetNormalization:
 
     def test_crf_and_two_pass_or_target_size_mutually_exclusive(self) -> None:
         """CRF cannot be combined with two-pass or target-size mode."""
-        opts_two_pass = EncodeOptions(crf=23, two_pass=True)
+        opts_two_pass = EncodeOptions(crf=23, two_pass=True, target_size_mb=25.0)
         with pytest.raises(ValueError, match="CRF rate control is mutually exclusive"):
             validate_encode_options(opts_two_pass)
 
         opts_target_size = EncodeOptions(crf=23, target_size_mb=25.0)
         with pytest.raises(ValueError, match="CRF rate control is mutually exclusive"):
             validate_encode_options(opts_target_size)
+
+    def test_two_pass_requires_target_size_mb(self) -> None:
+        """Two-pass encoding requires an explicit target_size_mb."""
+        opts = EncodeOptions(two_pass=True)
+        with pytest.raises(
+            ValueError,
+            match="Two-pass encoding requires target_size_mb to be specified",
+        ):
+            validate_encode_options(opts)
 
     def test_webm_incompatible_audio_codec_rejected(self) -> None:
         """Explicitly requesting an incompatible audio codec for WebM raises ValueError."""

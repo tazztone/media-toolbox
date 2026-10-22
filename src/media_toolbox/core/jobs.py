@@ -70,12 +70,25 @@ class JobResult:
     target_size_bytes: int | None = None
 
 
+def _is_pid_alive(pid: int) -> bool:
+    """Check if process with given PID is currently alive."""
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError as err:
+        return err.errno == errno.EPERM
+
+
 def cleanup_stale_staging_dirs(
     target_dir: Path | str, max_age_seconds: float = 86400.0
 ) -> int:
     """
     Remove orphaned .tmp_media_toolbox_* staging directories older than max_age_seconds
-    within target_dir. Returns number of directories cleaned up.
+    within target_dir. Skips directories owned by active processes (via .pid file)
+    or containing files modified within max_age_seconds.
+    Returns number of directories cleaned up.
     """
     cleaned = 0
     p = Path(target_dir)
@@ -86,8 +99,30 @@ def cleanup_stale_staging_dirs(
         for entry in p.iterdir():
             if entry.is_dir() and entry.name.startswith(".tmp_media_toolbox_"):
                 try:
+                    # 1. Skip if owned by an active process
+                    pid_file = entry / ".pid"
+                    if pid_file.is_file():
+                        try:
+                            pid_str = pid_file.read_text(encoding="utf-8").strip()
+                            if pid_str.isdigit() and _is_pid_alive(int(pid_str)):
+                                continue
+                        except OSError:
+                            pass
+
+                    # 2. Check newest mtime across directory and all contained files
                     stat = entry.stat()
-                    if (now - stat.st_mtime) > max_age_seconds:
+                    newest_mtime = stat.st_mtime
+                    try:
+                        for sub in entry.rglob("*"):
+                            try:
+                                sub_mtime = sub.stat().st_mtime
+                                newest_mtime = max(newest_mtime, sub_mtime)
+                            except OSError:
+                                pass
+                    except OSError:
+                        pass
+
+                    if (now - newest_mtime) > max_age_seconds:
                         shutil.rmtree(entry, ignore_errors=True)
                         cleaned += 1
                 except OSError:
@@ -362,6 +397,11 @@ def run_job(
         prefix=".tmp_media_toolbox_",
     )
     staging_path = Path(staging_temp_dir.name) / out_path.name
+    pid_file = Path(staging_temp_dir.name) / ".pid"
+    try:
+        pid_file.write_text(str(os.getpid()), encoding="utf-8")
+    except OSError:
+        pass
 
     # Isolated temporary directory for multi-pass logs
     pass_tmp_dir: tempfile.TemporaryDirectory[str] | None = None
@@ -377,26 +417,16 @@ def run_job(
         "media_info": media_info,
         "pass_logfile": pass_logfile_prefix,
         "include_progress": True,
+        "ffmpeg_bin": config.ffmpeg_bin,
     }
-    if config.ffmpeg_bin != "ffmpeg":
-        builder_kwargs["ffmpeg_bin"] = config.ffmpeg_bin
 
     try:
-        try:
-            cmds = builder_fn(
-                str(in_path),
-                str(staging_path),
-                config.options,
-                **builder_kwargs,
-            )
-        except TypeError:
-            builder_kwargs.pop("ffmpeg_bin", None)
-            cmds = builder_fn(
-                str(in_path),
-                str(staging_path),
-                config.options,
-                **builder_kwargs,
-            )
+        cmds = builder_fn(
+            str(in_path),
+            str(staging_path),
+            config.options,
+            **builder_kwargs,
+        )
 
         runner_fn(
             cmds,
@@ -448,21 +478,12 @@ def run_job(
             except OSError:
                 pass
 
-            try:
-                retry_cmds = builder_fn(
-                    str(in_path),
-                    str(staging_path),
-                    retry_options,
-                    **builder_kwargs,
-                )
-            except TypeError:
-                builder_kwargs.pop("ffmpeg_bin", None)
-                retry_cmds = builder_fn(
-                    str(in_path),
-                    str(staging_path),
-                    retry_options,
-                    **builder_kwargs,
-                )
+            retry_cmds = builder_fn(
+                str(in_path),
+                str(staging_path),
+                retry_options,
+                **builder_kwargs,
+            )
             runner_fn(
                 retry_cmds,
                 total_duration_seconds=duration,

@@ -374,7 +374,13 @@ def validate_encode_options(
                 "CRF rate control is not supported for GIF preset"
             )
 
-    # Mode 3: CRF boundaries (enforced on resolved preset even if requested via codec)
+    # Mode 3: Two-pass target size requirement
+    if options.two_pass and options.target_size_mb is None:
+        raise InvalidOptionsError(
+            "Two-pass encoding requires target_size_mb to be specified"
+        )
+
+    # Mode 4: CRF boundaries (enforced on resolved preset even if requested via codec)
     if options.crf is not None:
         if v_preset is not None and v_preset.crf_range is not None:
             min_crf, max_crf = v_preset.crf_range
