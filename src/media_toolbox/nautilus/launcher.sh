@@ -81,12 +81,15 @@ fi
 
 # 4. Dispatch execution
 if [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]]; then
+    LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/media-toolbox"
+    mkdir -p "$LOG_DIR" 2>/dev/null || true
+    LOG_FILE="$LOG_DIR/launch.log"
     if [[ -z "${INSTALLED_PYTHON:-}" && -z "${MEDIA_TOOLBOX_PYTHON:-}" ]] && command -v media-toolbox-gui >/dev/null 2>&1; then
-        nohup media-toolbox-gui "${FILES[@]}" >/dev/null 2>&1 &
+        nohup media-toolbox-gui "${FILES[@]}" >> "$LOG_FILE" 2>&1 &
         exit 0
     fi
     # Graphical environment: launch GUI detached
-    nohup "$PYTHON" -m media_toolbox.ui.app "${FILES[@]}" >/dev/null 2>&1 &
+    nohup "$PYTHON" -m media_toolbox.ui.app "${FILES[@]}" >> "$LOG_FILE" 2>&1 &
     exit 0
 else
     if [[ -z "${INSTALLED_PYTHON:-}" && -z "${MEDIA_TOOLBOX_PYTHON:-}" ]] && command -v media-toolbox >/dev/null 2>&1; then

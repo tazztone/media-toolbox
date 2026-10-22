@@ -128,6 +128,7 @@ def extract_two_pass_video_extra_args(extra_args: tuple[str, ...]) -> list[str]:
 
 def resolve_stream_mappings(
     media_info: Optional[MediaInfo],
+    audio_track_index: Optional[int] = None,
 ) -> tuple[str, str]:
     """
     Resolve deterministic video and audio stream mapping identifiers.
@@ -137,7 +138,10 @@ def resolve_stream_mappings(
         v_map = f"0:{media_info.primary_video.index}"
     else:
         v_map = "0:v:0"
-    a_map = "0:a:0?"
+    if audio_track_index is not None:
+        a_map = f"0:a:{audio_track_index}"
+    else:
+        a_map = "0:a:0?"
     return v_map, a_map
 
 
@@ -162,7 +166,7 @@ def build_audio_extract_command(
 
     has_user_map = has_stream_map(options.extra_args)
     if not has_user_map:
-        _, a_map = resolve_stream_mappings(media_info)
+        _, a_map = resolve_stream_mappings(media_info, audio_track_index=options.audio_track_index)
         cmd.extend(["-i", input_path, "-vn", "-map", a_map])
     else:
         cmd.extend(["-i", input_path, "-vn"])
@@ -191,6 +195,11 @@ def build_audio_extract_command(
         if not codec.startswith("pcm_") and codec != "copy":
             cmd.extend(["-b:a", f"{options.audio_bitrate_kbps}k"])
 
+    if options.copy_metadata and "-map_metadata" not in options.extra_args:
+        cmd.extend(["-map_metadata", "0"])
+    if options.copy_chapters and "-map_chapters" not in options.extra_args:
+        cmd.extend(["-map_chapters", "0"])
+
     cmd.extend(options.extra_args)
     cmd.append(output_path)
     return cmd
@@ -213,12 +222,20 @@ def build_gif_command(
 
     cmd.extend(["-i", input_path])
 
+    scale = options.scale
+    fps = options.fps
+    if media_info and media_info.primary_video:
+        if scale is None and media_info.primary_video.width and media_info.primary_video.width > 800:
+            scale = (800, -2)
+        if fps is None and media_info.primary_video.fps and media_info.primary_video.fps > 15:
+            fps = 15
+
     vf = build_video_filter(
-        scale=options.scale,
+        scale=scale,
         crop=options.crop,
         pad=options.pad,
         speed=options.speed,
-        fps=options.fps,
+        fps=fps,
     )
 
     v_label = (
@@ -296,7 +313,7 @@ def build_two_pass_commands(
 
     v_preset = VIDEO_PRESETS.get(spec.video_preset_name) if spec.video_preset_name else None
     speed_preset = resolve_speed_preset(options)
-    v_map, a_map = resolve_stream_mappings(media_info)
+    v_map, a_map = resolve_stream_mappings(media_info, audio_track_index=options.audio_track_index)
     has_user_map = has_stream_map(options.extra_args)
 
     def _pass_cmd(pass_num: int) -> list[str]:
@@ -308,6 +325,8 @@ def build_two_pass_commands(
             cmd.extend(["-map", v_map])
             if pass_num == 2 and not options.mute_audio and (media_info is None or media_info.has_audio):
                 cmd.extend(["-map", a_map])
+            if pass_num == 2 and options.keep_subtitles:
+                cmd.extend(["-map", "0:s?", "-c:s", "copy"])
         cmd.extend(vf_args)
 
         if v_preset is not None:
@@ -358,6 +377,11 @@ def build_two_pass_commands(
                 if not a_codec.startswith("pcm_") and a_codec != "copy":
                     cmd.extend(["-b:a", f"{options.audio_bitrate_kbps}k"])
 
+            if options.copy_metadata and "-map_metadata" not in options.extra_args:
+                cmd.extend(["-map_metadata", "0"])
+            if options.copy_chapters and "-map_chapters" not in options.extra_args:
+                cmd.extend(["-map_chapters", "0"])
+
             if v_preset is not None:
                 cmd.extend(v_preset.build_container_args(output_path))
             else:
@@ -391,10 +415,12 @@ def build_single_pass_command(
     cmd.extend(["-i", input_path])
     has_user_map = has_stream_map(options.extra_args)
     if not has_user_map:
-        v_map, a_map = resolve_stream_mappings(media_info)
+        v_map, a_map = resolve_stream_mappings(media_info, audio_track_index=options.audio_track_index)
         cmd.extend(["-map", v_map])
         if not options.mute_audio and (media_info is None or media_info.has_audio):
             cmd.extend(["-map", a_map])
+        if options.keep_subtitles:
+            cmd.extend(["-map", "0:s?", "-c:s", "copy"])
 
     # Video filters
     cmd.extend(
@@ -437,6 +463,11 @@ def build_single_pass_command(
         cmd.extend(["-c:a", a_codec])
         if not a_codec.startswith("pcm_") and a_codec != "copy":
             cmd.extend(["-b:a", f"{options.audio_bitrate_kbps}k"])
+
+    if options.copy_metadata and "-map_metadata" not in options.extra_args:
+        cmd.extend(["-map_metadata", "0"])
+    if options.copy_chapters and "-map_chapters" not in options.extra_args:
+        cmd.extend(["-map_chapters", "0"])
 
     if v_preset is not None:
         cmd.extend(v_preset.build_container_args(output_path))

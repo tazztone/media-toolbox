@@ -145,9 +145,14 @@ tests/
 - `build_atempo_chain(speed: float) -> list[str]`
 - `build_audio_filter(speed: Optional[float], normalize_loudness: bool, volume_boost_db: Optional[float]) -> list[str]`
 
+### `core/models.py`
+- `EncodeOptions`: Data structure supporting stream selection (`audio_track_index`, `keep_subtitles`), metadata passthrough (`copy_metadata`, `copy_chapters`), size budget enforcement (`strict_size`), speed, and filters.
+- `InvalidOptionsError`: Specialized exception subclassing `MediaToolboxError` and `ValueError`.
+
 ### `core/builder.py`
 - `build_ffmpeg_commands(input_path: str, output_path: str, options: EncodeOptions, ffmpeg_bin: str = "ffmpeg") -> list[list[str]]`
-  (Returns 1 command for CRF/single-pass, or 2 commands for 2-pass bitrate mode with unified pass generation and configurable binary path).
+  (Returns 1 command for CRF/single-pass, or 2 commands for 2-pass bitrate mode with unified pass generation, stream mapping, subtitle passthrough, metadata/chapters copying, and configurable binary path).
+- `build_gif_command(...)`: Paletted animated GIF pipeline with automated bounds capping (max 800px width, max 15 fps) when input media exceeds thresholds and options do not explicitly specify them.
 
 ### `core/runner.py`
 - `run_ffmpeg(cmd: list[str], total_duration_seconds: Optional[float] = None, ...)`: Subprocess execution with process-group isolation and graceful SIGTERM to SIGKILL escalation.
@@ -168,5 +173,8 @@ tests/
 - `_run_cli_job(args: argparse.Namespace, options: EncodeOptions, label: str, error_prefix: str = "FFmpeg") -> int`: Unified CLI job runner encapsulating signal trapping, probing, execution, and error handling.
 
 ### `ui/window_worker.py`
-- `WindowWorkerMixin`: Asynchronous worker execution with GLib idle loop dispatch, generation guards (`_job_generation`) dropping stale completion/progress events from superseded jobs, consolidated teardown handler (`_finish`), and cancel-then-close lifecycle ensuring application quit during active transcodes defers window destruction until staging cleanup completes without orphaned FFmpeg processes. Deprecates `_launch_worker_pipeline` in favor of `_start_worker`.
+- `WindowWorkerMixin`: Asynchronous worker execution with GLib idle loop dispatch, generation guards (`_job_generation`) dropping stale completion/progress events from superseded jobs, consolidated teardown handler (`_finish`), modern `Adw.AlertDialog` overwrite prompt with `Adw.MessageDialog` fallback, and cancel-then-close lifecycle ensuring application quit during active transcodes defers window destruction until staging cleanup completes without orphaned FFmpeg processes. Deprecates `_launch_worker_pipeline` in favor of `_start_worker`.
+
+### `nautilus/launcher.sh`
+- Background execution script logging GUI diagnostic output to `${XDG_STATE_HOME:-$HOME/.local/state}/media-toolbox/launch.log`.
 

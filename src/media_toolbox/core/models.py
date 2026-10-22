@@ -287,6 +287,10 @@ class EncodeOptions:
     preset: Optional[str] = None
     speed_preset: Optional[str] = None
     strict_size: bool = False
+    audio_track_index: Optional[int] = None
+    keep_subtitles: bool = False
+    copy_metadata: bool = False
+    copy_chapters: bool = False
     extra_args: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:

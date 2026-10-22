@@ -331,4 +331,28 @@ class TestValidationAndPresetNormalization:
         assert isinstance(err, MediaToolboxError)
         assert isinstance(err, ValueError)
 
+    def test_audio_track_index_validation(self) -> None:
+        """audio_track_index must be non-negative and within available audio streams bounds."""
+        with pytest.raises(InvalidOptionsError, match="must be non-negative"):
+            validate_encode_options(EncodeOptions(audio_track_index=-1))
+
+        with pytest.raises(InvalidOptionsError, match="Cannot specify audio_track_index when mute_audio is True"):
+            validate_encode_options(EncodeOptions(audio_track_index=0, mute_audio=True))
+
+        info = MediaInfo(
+            format=FormatInfo(filename="test.mp4", format_name="mp4", duration=10.0),
+            video_streams=(
+                VideoStream(index=0, codec_name="h264", width=1920, height=1080),
+            ),
+            audio_streams=(
+                AudioStream(index=1, codec_name="aac", channels=2, sample_rate=48000),
+            ),
+        )
+        # Track 0 valid (1 audio stream)
+        validate_encode_options(EncodeOptions(audio_track_index=0), media_info=info)
+
+        # Track 1 out of bounds (only 1 audio stream present)
+        with pytest.raises(InvalidOptionsError, match="Audio track index 1 out of range"):
+            validate_encode_options(EncodeOptions(audio_track_index=1), media_info=info)
+
 

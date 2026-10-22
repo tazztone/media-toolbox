@@ -826,6 +826,33 @@ class TestCliTranscodeCommand:
         config: JobConfig = mock_run_job.call_args[0][0]
         assert config.options.strict_size is True
 
+    @patch("media_toolbox.cli.run_job")
+    @patch("media_toolbox.cli.validate_job_paths")
+    @patch("media_toolbox.cli.probe_media")
+    def test_transcode_stream_and_metadata_flags(
+        self,
+        mock_probe: MagicMock,
+        _mock_val: MagicMock,
+        mock_run_job: MagicMock,
+        mock_standard_video_info: MediaInfo,
+    ) -> None:
+        """--audio-track, --keep-subs, --map-metadata, --map-chapters set options properly."""
+        mock_probe.return_value = mock_standard_video_info
+        mock_run_job.return_value = MagicMock(exceeded_target=False, output_path=Path("out.mp4"))
+        exit_code = cli.main([
+            "transcode", "in.mp4", "out.mp4",
+            "--audio-track", "1",
+            "--keep-subs",
+            "--map-metadata",
+            "--map-chapters",
+        ])
+        assert exit_code == 0
+        config: JobConfig = mock_run_job.call_args[0][0]
+        assert config.options.audio_track_index == 1
+        assert config.options.keep_subtitles is True
+        assert config.options.copy_metadata is True
+        assert config.options.copy_chapters is True
+
     @patch("media_toolbox.cli.validate_job_paths")
     @patch("media_toolbox.cli.probe_media")
     def test_transcode_probe_error_exits_1(

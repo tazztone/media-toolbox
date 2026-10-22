@@ -212,6 +212,10 @@ def handle_transcode(args: argparse.Namespace) -> int:
         mute_audio=args.mute_audio,
         normalize_audio=args.normalize,
         strict_size=getattr(args, "strict_size", False),
+        audio_track_index=getattr(args, "audio_track", None),
+        keep_subtitles=getattr(args, "keep_subs", False),
+        copy_metadata=getattr(args, "map_metadata", False),
+        copy_chapters=getattr(args, "map_chapters", False),
     )
     return _run_cli_job(args, options, label="Transcoding", error_prefix="FFmpeg")
 
@@ -224,6 +228,8 @@ def handle_extract_audio(args: argparse.Namespace) -> int:
         audio_bitrate_kbps=args.bitrate,
         speed=args.speed,
         normalize_audio=args.normalize,
+        audio_track_index=getattr(args, "audio_track", None),
+        copy_metadata=getattr(args, "map_metadata", False),
     )
     return _run_cli_job(args, options, label="Audio extraction", error_prefix="audio extraction")
 

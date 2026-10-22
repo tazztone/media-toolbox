@@ -783,5 +783,78 @@ def test_custom_ffmpeg_bin_parameter() -> None:
     assert audio_cmds[0][0] == "/custom/bin/ffmpeg"
 
 
+def test_stream_selection_audio_track_index() -> None:
+    """Explicit audio_track_index maps specified audio stream index."""
+    options = EncodeOptions(audio_track_index=1)
+    cmds = build_ffmpeg_commands("in.mp4", "out.mp4", options)
+    assert len(cmds) == 1
+    cmd = cmds[0]
+    assert "-map" in cmd
+    assert "0:a:1" in cmd
+
+    # Audio extraction with track selection
+    audio_cmds = build_ffmpeg_commands("in.mp4", "out.mp3", EncodeOptions(extract_audio=True, audio_track_index=2))
+    assert "0:a:2" in audio_cmds[0]
+
+
+def test_stream_selection_keep_subtitles() -> None:
+    """keep_subtitles maps subtitle streams with copy codec."""
+    options = EncodeOptions(keep_subtitles=True)
+    cmds = build_ffmpeg_commands("in.mp4", "out.mp4", options)
+    assert len(cmds) == 1
+    cmd = cmds[0]
+    sub_idx = cmd.index("0:s?")
+    assert cmd[sub_idx - 1] == "-map"
+    assert cmd[sub_idx + 1] == "-c:s"
+    assert cmd[sub_idx + 2] == "copy"
+
+
+def test_stream_mapping_metadata_and_chapters() -> None:
+    """copy_metadata and copy_chapters include -map_metadata 0 and -map_chapters 0."""
+    options = EncodeOptions(copy_metadata=True, copy_chapters=True)
+    cmds = build_ffmpeg_commands("in.mp4", "out.mp4", options)
+    assert len(cmds) == 1
+    cmd = cmds[0]
+    assert "-map_metadata" in cmd
+    assert cmd[cmd.index("-map_metadata") + 1] == "0"
+    assert "-map_chapters" in cmd
+    assert cmd[cmd.index("-map_chapters") + 1] == "0"
+
+
+def test_gif_capping_when_mediainfo_exceeds_limits() -> None:
+    """Probed media exceeding 800px width or 15 fps are capped to 800:-2 and 15 fps for GIF."""
+    info = MediaInfo(
+        format=FormatInfo(filename="highres.mp4", format_name="mp4", duration=5.0),
+        video_streams=(
+            VideoStream(index=0, codec_name="h264", width=1920, height=1080, fps=30.0),
+        ),
+    )
+    cmd = build_gif_command("in.mp4", "out.gif", EncodeOptions(preset="gif"), media_info=info)
+    assert "-filter_complex" in cmd
+    filter_expr = cmd[cmd.index("-filter_complex") + 1]
+    assert "scale=800:-2" in filter_expr
+    assert "fps=fps=15" in filter_expr
+
+
+def test_gif_capping_preserved_when_user_specified() -> None:
+    """User-specified scale and fps take precedence over automatic GIF capping."""
+    info = MediaInfo(
+        format=FormatInfo(filename="highres.mp4", format_name="mp4", duration=5.0),
+        video_streams=(
+            VideoStream(index=0, codec_name="h264", width=1920, height=1080, fps=30.0),
+        ),
+    )
+    cmd = build_gif_command(
+        "in.mp4",
+        "out.gif",
+        EncodeOptions(preset="gif", scale=(640, -2), fps=24),
+        media_info=info,
+    )
+    assert "-filter_complex" in cmd
+    filter_expr = cmd[cmd.index("-filter_complex") + 1]
+    assert "scale=640:-2" in filter_expr
+    assert "fps=fps=24" in filter_expr
+
+
 
 

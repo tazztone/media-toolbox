@@ -72,6 +72,9 @@ media-toolbox transcode video.mp4 output.mp4 --target-mb 25
 # 2-Pass with strict size retry enforcement
 media-toolbox transcode video.mp4 output.mp4 --target-mb 25 --strict-size
 
+# Stream selection and metadata passthrough
+media-toolbox transcode video.mkv output.mp4 --audio-track 1 --keep-subs --map-metadata --map-chapters
+
 # Overwrite existing destination safely
 media-toolbox transcode video.mp4 output.mp4 --overwrite
 

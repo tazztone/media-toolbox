@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `--strict-size` CLI flag and automated retry pass when output exceeds target file size budget.
+- `--audio-track`, `--keep-subs`, `--map-metadata`, and `--map-chapters` flags for stream selection and metadata passthrough.
+- Automatic GIF dimension (800px max width) and frame rate (15 fps max) capping in `build_gif_command`.
+- Modern `Adw.AlertDialog` support for GTK4/Libadwaita overwrite dialog with backwards-compatible fallback.
+- Persistent GUI launcher background logging to `${XDG_STATE_HOME:-$HOME/.local/state}/media-toolbox/launch.log`.
 - `InvalidOptionsError` typed exception hierarchy inheriting from `MediaToolboxError` and `ValueError`.
 - Security validation in `validate_extra_args` rejecting unsafe flags (`-filter_complex`, `-lavfi`, `-passlogfile`, `-report`, `-dump_attachment`, `-protocol_whitelist`) and filter injections (`movie=`, `amovie=`).
 - Automated startup sweep of stale `.tmp_media_toolbox_*` staging directories older than 24 hours.

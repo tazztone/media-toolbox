@@ -16,7 +16,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, GLib
+from gi.repository import Adw, GLib, Gtk
 
 from media_toolbox.core.jobs import JobConfig, JobResult, run_job
 from media_toolbox.core.models import ProgressEvent
@@ -69,20 +69,9 @@ class WindowWorkerMixin:
             if hasattr(self, "open_btn") and self.open_btn is not None and hasattr(self.open_btn, "set_sensitive"):
                 self.open_btn.set_sensitive(False)
 
-            dialog = Adw.MessageDialog(
-                transient_for=self,
-                heading="Replace File?",
-                body=f"'{out_p.name}' already exists. Overwriting will replace its contents.",
-            )
-            dialog.add_response("cancel", "Cancel")
-            dialog.add_response("replace", "Replace")
-            dialog.set_response_appearance("replace", Adw.ResponseAppearance.DESTRUCTIVE)
-            dialog.set_default_response("cancel")
-            dialog.set_close_response("cancel")
-
             current_input = getattr(self, "input_file", None)
 
-            def _on_response(_d: Any, response_id: str) -> None:
+            def _handle_response(response_id: str) -> None:
                 self._pending_confirmation = False
                 if getattr(self, "state", None) == WindowState.CLOSED:
                     return
@@ -102,8 +91,44 @@ class WindowWorkerMixin:
                     if hasattr(self, "open_btn") and self.open_btn is not None and hasattr(self.open_btn, "set_sensitive"):
                         self.open_btn.set_sensitive(True)
 
-            dialog.connect("response", _on_response)
-            dialog.present()
+            alert_dialog_cls = getattr(Adw, "AlertDialog", None)
+            if alert_dialog_cls is not None:
+                dialog = alert_dialog_cls(
+                    heading="Replace File?",
+                    body=f"'{out_p.name}' already exists. Overwriting will replace its contents.",
+                )
+                dialog.add_response("cancel", "Cancel")
+                dialog.add_response("replace", "Replace")
+                dialog.set_response_appearance("replace", Adw.ResponseAppearance.DESTRUCTIVE)
+                dialog.set_default_response("cancel")
+                dialog.set_close_response("cancel")
+
+                def _on_alert_response(_dialog_obj: Any, result: Any, *_user_data: Any) -> None:
+                    try:
+                        resp = dialog.choose_finish(result)
+                    except Exception:
+                        resp = "cancel"
+                    _handle_response(resp)
+
+                parent = self if isinstance(self, Gtk.Widget) else None
+                dialog.choose(parent, None, _on_alert_response)
+            else:
+                dialog = Adw.MessageDialog(
+                    transient_for=self if isinstance(self, Gtk.Window) else None,
+                    heading="Replace File?",
+                    body=f"'{out_p.name}' already exists. Overwriting will replace its contents.",
+                )
+                dialog.add_response("cancel", "Cancel")
+                dialog.add_response("replace", "Replace")
+                dialog.set_response_appearance("replace", Adw.ResponseAppearance.DESTRUCTIVE)
+                dialog.set_default_response("cancel")
+                dialog.set_close_response("cancel")
+
+                def _on_response(_d: Any, response_id: str) -> None:
+                    _handle_response(response_id)
+
+                dialog.connect("response", _on_response)
+                dialog.present()
         else:
             self._start_worker(config, title)
 

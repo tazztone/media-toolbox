@@ -369,6 +369,20 @@ def validate_encode_options(
                 f"Volume boost must be finite and between -60 and +60 dB, got {options.volume_boost_db}"
             )
 
+    if options.audio_track_index is not None:
+        if options.audio_track_index < 0:
+            raise InvalidOptionsError(
+                f"Audio track index must be non-negative, got {options.audio_track_index}"
+            )
+        if options.mute_audio:
+            raise InvalidOptionsError("Cannot specify audio_track_index when mute_audio is True")
+        if media_info is not None and media_info.audio_streams:
+            if options.audio_track_index >= len(media_info.audio_streams):
+                raise InvalidOptionsError(
+                    f"Audio track index {options.audio_track_index} out of range "
+                    f"(media has {len(media_info.audio_streams)} audio track(s))"
+                )
+
     # Mode 5: extra_args security and boundary validation
     if options.extra_args:
         validate_extra_args(options.extra_args)

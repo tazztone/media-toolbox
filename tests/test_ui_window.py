@@ -240,7 +240,7 @@ class TestWindowStateAndProgressDecoupling:
         MainWindow._confirm_overwrite_and_start(mock_win, cfg1, "Encoding...")
         mock_win._start_worker.assert_called_once_with(cfg1, "Encoding...")
 
-        # Case 2: existing destination triggers message dialog
+        # Case 2: existing destination triggers dialog
         mock_win._start_worker.reset_mock()
         mock_win.state = WindowState.READY
         mock_win.input_file = "in.mp4"
@@ -248,13 +248,15 @@ class TestWindowStateAndProgressDecoupling:
         existing.touch()
         cfg2 = JobConfig(input_path="in.mp4", output_path=existing, options=EncodeOptions())
 
-        with patch("gi.repository.Adw.MessageDialog") as mock_dialog_cls:
+        # Subcase 2a: Adw.AlertDialog (Libadwaita 1.5+)
+        with patch("gi.repository.Adw.AlertDialog") as mock_dialog_cls:
             mock_dialog = MagicMock()
             mock_dialog_cls.return_value = mock_dialog
 
             MainWindow._confirm_overwrite_and_start(mock_win, cfg2, "Encoding...")
             mock_dialog_cls.assert_called_once()
-            mock_dialog.present.assert_called_once()
+            mock_dialog.choose.assert_called_once()
+            choose_callback = mock_dialog.choose.call_args[0][2]
             # Worker must NOT start before user confirmation
             mock_win._start_worker.assert_not_called()
             # UI controls must be disabled while dialog is open
@@ -262,14 +264,14 @@ class TestWindowStateAndProgressDecoupling:
             assert mock_win._pending_confirmation is True
 
             # Duplicate confirmation request while dialog is open must be ignored
-            mock_dialog.present.reset_mock()
+            mock_dialog.choose.reset_mock()
             MainWindow._confirm_overwrite_and_start(mock_win, cfg2, "Encoding...")
-            mock_dialog.present.assert_not_called()
+            mock_dialog.choose.assert_not_called()
 
             # Callback handling: user cancels -> re-enable controls, no worker
-            response_callback = mock_dialog.connect.call_args[0][1]
+            mock_dialog.choose_finish.return_value = "cancel"
             mock_win._set_ui_controls_sensitive.reset_mock()
-            response_callback(mock_dialog, "cancel")
+            choose_callback(mock_dialog, MagicMock())
             assert mock_win._pending_confirmation is False
             mock_win._set_ui_controls_sensitive.assert_called_with(True)
             mock_win._start_worker.assert_not_called()
@@ -277,10 +279,28 @@ class TestWindowStateAndProgressDecoupling:
             # User replaces -> starts worker with overwrite=True
             mock_win._start_worker.reset_mock()
             mock_win._pending_confirmation = True
-            response_callback(mock_dialog, "replace")
+            mock_dialog.choose_finish.return_value = "replace"
+            choose_callback(mock_dialog, MagicMock())
             assert mock_win._pending_confirmation is False
             mock_win._start_worker.assert_called_once()
             assert mock_win._start_worker.call_args[0][0].overwrite is True
+
+        # Subcase 2b: Fallback to Adw.MessageDialog (Libadwaita < 1.5)
+        mock_win._start_worker.reset_mock()
+        mock_win._pending_confirmation = False
+        import gi.repository.Adw as AdwModule
+        with patch.object(AdwModule, "AlertDialog", None):
+            with patch("gi.repository.Adw.MessageDialog") as mock_msg_cls:
+                mock_msg = MagicMock()
+                mock_msg_cls.return_value = mock_msg
+
+                MainWindow._confirm_overwrite_and_start(mock_win, cfg2, "Encoding...")
+                mock_msg_cls.assert_called_once()
+                mock_msg.present.assert_called_once()
+                resp_cb = mock_msg.connect.call_args[0][1]
+                mock_win._pending_confirmation = True
+                resp_cb(mock_msg, "replace")
+                assert mock_win._start_worker.call_args[0][0].overwrite is True
 
     def test_start_worker_ignores_duplicate_when_worker_alive(self) -> None:
         """MainWindow._start_worker does not launch a second worker if one is active and alive."""
