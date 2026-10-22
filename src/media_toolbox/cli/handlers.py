@@ -216,6 +216,8 @@ def handle_transcode(args: argparse.Namespace) -> int:
         keep_subtitles=getattr(args, "keep_subs", False),
         copy_metadata=getattr(args, "map_metadata", False),
         copy_chapters=getattr(args, "map_chapters", False),
+        gif_max_colors=getattr(args, "gif_max_colors", 256),
+        gif_dither=getattr(args, "gif_dither", "sierra2_4a"),
     )
     return _run_cli_job(args, options, label="Transcoding", error_prefix="FFmpeg")
 

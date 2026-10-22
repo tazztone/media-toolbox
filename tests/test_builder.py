@@ -225,6 +225,22 @@ def test_gif_with_scale_fps() -> None:
     assert "-an" in cmd
 
 
+def test_gif_custom_palette_options() -> None:
+    """GIF export incorporates custom max_colors and dither algorithm into filtergraph."""
+    options = EncodeOptions(
+        video_codec="gif",
+        gif_max_colors=128,
+        gif_dither="bayer",
+        gif_stats_mode="diff",
+    )
+    cmd = build_ffmpeg_commands("in.mp4", "out.gif", options)[0]
+    fc_idx = cmd.index("-filter_complex")
+    filter_expr = cmd[fc_idx + 1]
+    assert "palettegen=max_colors=128:stats_mode=diff[p]" in filter_expr
+    assert "[p]paletteuse=dither=bayer" in filter_expr
+
+
+
 def test_gif_two_pass_error() -> None:
     """GIF preset rejects two-pass rate control."""
     options = EncodeOptions(video_codec="gif", two_pass=True)

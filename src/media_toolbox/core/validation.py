@@ -14,6 +14,10 @@ from pathlib import Path
 from typing import Optional
 import warnings
 
+from media_toolbox.core.filtergraph import (
+    VALID_GIF_DITHERS,
+    VALID_GIF_STATS_MODES,
+)
 from media_toolbox.core.models import (
     EncodeOptions,
     InvalidOptionsError,
@@ -382,6 +386,22 @@ def validate_encode_options(
                     f"Audio track index {options.audio_track_index} out of range "
                     f"(media has {len(media_info.audio_streams)} audio track(s))"
                 )
+
+    if options.gif_max_colors is not None:
+        if not (4 <= options.gif_max_colors <= 256):
+            raise InvalidOptionsError(
+                f"gif_max_colors must be between 4 and 256, got {options.gif_max_colors}"
+            )
+    if options.gif_dither is not None:
+        if options.gif_dither.strip().lower() not in VALID_GIF_DITHERS:
+            raise InvalidOptionsError(
+                f"Invalid gif_dither '{options.gif_dither}'. Valid options: {sorted(VALID_GIF_DITHERS)}"
+            )
+    if options.gif_stats_mode is not None:
+        if options.gif_stats_mode.strip().lower() not in VALID_GIF_STATS_MODES:
+            raise InvalidOptionsError(
+                f"Invalid gif_stats_mode '{options.gif_stats_mode}'. Valid options: {sorted(VALID_GIF_STATS_MODES)}"
+            )
 
     # Mode 5: extra_args security and boundary validation
     if options.extra_args:

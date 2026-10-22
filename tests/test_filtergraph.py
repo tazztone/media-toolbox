@@ -17,12 +17,16 @@ import pytest
 from media_toolbox.core.filtergraph import (
     ASPECT_RATIO_CROPS,
     EBU_R128_LOUDNORM,
+    VALID_GIF_DITHERS,
+    VALID_GIF_STATS_MODES,
     build_atempo_chain,
     build_audio_filter,
     build_audio_filter_args,
     build_crop_filter,
     build_fps_filter,
     build_pad_filter,
+    build_palettegen_filter,
+    build_paletteuse_filter,
     build_scale_filter,
     build_setpts_filter,
     build_video_filter,
@@ -245,6 +249,48 @@ def test_filter_args_helpers() -> None:
 
     af_empty = build_audio_filter_args()
     assert af_empty == []
+
+
+def test_build_palettegen_filter_defaults() -> None:
+    """Default palettegen produces bare 'palettegen'."""
+    assert build_palettegen_filter() == "palettegen"
+    assert build_palettegen_filter(max_colors=256) == "palettegen"
+
+
+def test_build_palettegen_filter_custom_colors_and_stats() -> None:
+    """Custom max_colors and stats_mode format properly."""
+    assert build_palettegen_filter(max_colors=128) == "palettegen=max_colors=128"
+    assert build_palettegen_filter(max_colors=64, stats_mode="diff") == "palettegen=max_colors=64:stats_mode=diff"
+    assert build_palettegen_filter(stats_mode="full") == "palettegen=stats_mode=full"
+
+
+def test_build_palettegen_filter_invalid_bounds() -> None:
+    """Out of range max_colors or invalid stats_mode raise ValueError."""
+    with pytest.raises(ValueError, match="max_colors"):
+        build_palettegen_filter(max_colors=2)
+    with pytest.raises(ValueError, match="max_colors"):
+        build_palettegen_filter(max_colors=512)
+    with pytest.raises(ValueError, match="stats_mode"):
+        build_palettegen_filter(stats_mode="invalid_mode")
+
+
+def test_build_paletteuse_filter_defaults() -> None:
+    """Default dither produces bare 'paletteuse'."""
+    assert build_paletteuse_filter() == "paletteuse"
+    assert build_paletteuse_filter(dither="sierra2_4a") == "paletteuse"
+
+
+def test_build_paletteuse_filter_custom() -> None:
+    """Non-default dither algorithms format properly."""
+    assert build_paletteuse_filter(dither="bayer") == "paletteuse=dither=bayer"
+    assert build_paletteuse_filter(dither="floyd_steinberg") == "paletteuse=dither=floyd_steinberg"
+    assert build_paletteuse_filter(dither="none") == "paletteuse=dither=none"
+
+
+def test_build_paletteuse_filter_invalid() -> None:
+    """Invalid dither string raises ValueError."""
+    with pytest.raises(ValueError, match="dither"):
+        build_paletteuse_filter(dither="unknown_dither")
 
 
 def test_filtergraph_zero_gui() -> None:

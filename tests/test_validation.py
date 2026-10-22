@@ -355,4 +355,25 @@ class TestValidationAndPresetNormalization:
         with pytest.raises(InvalidOptionsError, match="Audio track index 1 out of range"):
             validate_encode_options(EncodeOptions(audio_track_index=1), media_info=info)
 
+    def test_gif_options_validation(self) -> None:
+        """GIF options validate bounds and allowed algorithms."""
+        # Valid
+        validate_encode_options(EncodeOptions(gif_max_colors=128, gif_dither="bayer", gif_stats_mode="diff"))
+        validate_encode_options(EncodeOptions(gif_max_colors=4, gif_dither="none"))
+        validate_encode_options(EncodeOptions(gif_max_colors=256))
+
+        # Invalid max_colors
+        with pytest.raises(InvalidOptionsError, match="gif_max_colors"):
+            validate_encode_options(EncodeOptions(gif_max_colors=3))
+        with pytest.raises(InvalidOptionsError, match="gif_max_colors"):
+            validate_encode_options(EncodeOptions(gif_max_colors=257))
+
+        # Invalid dither
+        with pytest.raises(InvalidOptionsError, match="gif_dither"):
+            validate_encode_options(EncodeOptions(gif_dither="invalid_dither"))
+
+        # Invalid stats_mode
+        with pytest.raises(InvalidOptionsError, match="gif_stats_mode"):
+            validate_encode_options(EncodeOptions(gif_stats_mode="invalid_stats"))
+
 

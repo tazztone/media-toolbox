@@ -22,6 +22,8 @@ from media_toolbox.core.bitrate import calculate_target_video_bitrate
 from media_toolbox.core.filtergraph import (
     build_audio_filter,
     build_audio_filter_args,
+    build_palettegen_filter,
+    build_paletteuse_filter,
     build_video_filter,
     build_video_filter_args,
 )
@@ -244,10 +246,18 @@ def build_gif_command(
         else "0:v"
     )
 
+    pgen = build_palettegen_filter(
+        max_colors=options.gif_max_colors,
+        stats_mode=options.gif_stats_mode,
+    )
+    puse = build_paletteuse_filter(
+        dither=options.gif_dither,
+    )
+
     if vf:
-        filter_spec = f"[{v_label}]{','.join(vf)},split[a][b];[a]palettegen[p];[b][p]paletteuse"
+        filter_spec = f"[{v_label}]{','.join(vf)},split[a][b];[a]{pgen}[p];[b][p]{puse}"
     else:
-        filter_spec = f"[{v_label}]split[a][b];[a]palettegen[p];[b][p]paletteuse"
+        filter_spec = f"[{v_label}]split[a][b];[a]{pgen}[p];[b][p]{puse}"
 
     cmd.extend(["-filter_complex", filter_spec, "-an"])
 

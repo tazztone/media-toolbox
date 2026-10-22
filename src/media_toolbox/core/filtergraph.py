@@ -248,3 +248,53 @@ def build_audio_filter_args(
         volume_boost_db=volume_boost_db,
     )
     return ["-af", join_filter_chain(filters)] if filters else []
+
+
+VALID_GIF_DITHERS: frozenset[str] = frozenset({
+    "bayer",
+    "heckbert",
+    "floyd_steinberg",
+    "sierra2",
+    "sierra2_4a",
+    "none",
+})
+
+VALID_GIF_STATS_MODES: frozenset[str] = frozenset({
+    "full",
+    "diff",
+    "single",
+})
+
+
+def build_palettegen_filter(
+    max_colors: int = 256,
+    stats_mode: Optional[str] = None,
+) -> str:
+    """
+    Generate palettegen filter with max_colors and optional stats_mode.
+    FFmpeg palettegen supports max_colors from 4 to 256.
+    """
+    if not (4 <= max_colors <= 256):
+        raise ValueError(f"max_colors must be between 4 and 256, got {max_colors}")
+    opts: list[str] = []
+    if max_colors != 256:
+        opts.append(f"max_colors={max_colors}")
+    if stats_mode is not None:
+        sm = stats_mode.strip().lower()
+        if sm not in VALID_GIF_STATS_MODES:
+            raise ValueError(f"Invalid stats_mode '{stats_mode}', valid: {sorted(VALID_GIF_STATS_MODES)}")
+        opts.append(f"stats_mode={sm}")
+    return f"palettegen={':'.join(opts)}" if opts else "palettegen"
+
+
+def build_paletteuse_filter(
+    dither: str = "sierra2_4a",
+) -> str:
+    """
+    Generate paletteuse filter with dither algorithm.
+    """
+    d = dither.strip().lower()
+    if d not in VALID_GIF_DITHERS:
+        raise ValueError(f"Invalid dither '{dither}', valid: {sorted(VALID_GIF_DITHERS)}")
+    return "paletteuse" if d == "sierra2_4a" else f"paletteuse=dither={d}"
+

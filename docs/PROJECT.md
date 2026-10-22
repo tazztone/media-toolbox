@@ -152,7 +152,10 @@ tests/
 ### `core/builder.py`
 - `build_ffmpeg_commands(input_path: str, output_path: str, options: EncodeOptions, ffmpeg_bin: str = "ffmpeg") -> list[list[str]]`
   (Returns 1 command for CRF/single-pass, or 2 commands for 2-pass bitrate mode with unified pass generation, stream mapping, subtitle passthrough, metadata/chapters copying, and configurable binary path).
-- `build_gif_command(...)`: Paletted animated GIF pipeline with automated bounds capping (max 800px width, max 15 fps) when input media exceeds thresholds and options do not explicitly specify them.
+- `build_gif_command(...)`: Paletted animated GIF pipeline with automated bounds capping (max 800px width, max 15 fps) when input media exceeds thresholds, and customizable `palettegen` / `paletteuse` parameters (`gif_max_colors`, `gif_dither`, `gif_stats_mode`).
+
+### `core/filtergraph.py`
+- Video/audio filter chains, orientation-agnostic crop, aspect pad, atempo splitting (>2.0x, <0.5x), and GIF palette generator/user helpers (`build_palettegen_filter`, `build_paletteuse_filter`).
 
 ### `core/runner.py`
 - `run_ffmpeg(cmd: list[str], total_duration_seconds: Optional[float] = None, ...)`: Subprocess execution with process-group isolation and graceful SIGTERM to SIGKILL escalation.

@@ -735,6 +735,38 @@ class TestCliTranscodeCommand:
     @patch("media_toolbox.cli.run_ffmpeg_pipeline")
     @patch("media_toolbox.cli.build_ffmpeg_commands")
     @patch("media_toolbox.cli.probe_media")
+    def test_transcode_gif_options(
+        self,
+        mock_probe: MagicMock,
+        mock_builder: MagicMock,
+        mock_runner: MagicMock,
+        mock_standard_video_info: MediaInfo,
+    ) -> None:
+        """--gif-max-colors and --gif-dither configure EncodeOptions."""
+        mock_probe.return_value = mock_standard_video_info
+        mock_builder.side_effect = _fake_builder
+        mock_runner.side_effect = _fake_runner
+
+        exit_code = cli.main([
+            "transcode",
+            "in.mp4",
+            "out.gif",
+            "--preset",
+            "gif",
+            "--gif-max-colors",
+            "128",
+            "--gif-dither",
+            "bayer",
+        ])
+        assert exit_code == 0
+
+        opts: EncodeOptions = mock_builder.call_args[0][2]
+        assert opts.gif_max_colors == 128
+        assert opts.gif_dither == "bayer"
+
+    @patch("media_toolbox.cli.run_ffmpeg_pipeline")
+    @patch("media_toolbox.cli.build_ffmpeg_commands")
+    @patch("media_toolbox.cli.probe_media")
     def test_transcode_output_flag_and_target_mb_alias(
         self,
         mock_probe: MagicMock,

@@ -108,6 +108,18 @@ def build_parser() -> argparse.ArgumentParser:
     trans_parser.add_argument("--map-metadata", action="store_true", help="Copy global metadata from input to output")
     trans_parser.add_argument("--map-chapters", action="store_true", help="Copy chapters from input to output")
     trans_parser.add_argument("--normalize", action="store_true", help="Normalize audio loudness using EBU R128")
+    trans_parser.add_argument(
+        "--gif-max-colors",
+        type=int,
+        default=256,
+        help="Maximum palette colors for GIF encoding (4-256, default: 256)",
+    )
+    trans_parser.add_argument(
+        "--gif-dither",
+        default="sierra2_4a",
+        choices=["bayer", "heckbert", "floyd_steinberg", "sierra2", "sierra2_4a", "none"],
+        help="Dithering algorithm for GIF encoding (default: sierra2_4a)",
+    )
     trans_parser.add_argument("-f", "--overwrite", action="store_true", help="Overwrite destination file if it exists")
     trans_parser.add_argument("--allow-fallback-copy", action="store_true", help="Allow non-atomic copy publication on filesystems lacking hard link support")
     trans_parser.add_argument("--quiet", action="store_true", help="Suppress interactive progress bar")
