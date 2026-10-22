@@ -133,6 +133,30 @@ class TestPerformanceAndTiming:
         assert ret2 is False
         mock_win.window_title.set_subtitle.assert_called_with(file2.name)
 
+    @pytest.mark.usefixtures("gi_env")
+    def test_probe_error_sets_empty_state_and_shows_toast(self) -> None:
+        """Verify _on_probe_error resets window state to EMPTY, updates UI controls, and adds toast."""
+        from media_toolbox.ui.window import MainWindow, WindowState
+
+        mock_win = MagicMock()
+        mock_win.state = WindowState.PROBING
+        mock_win._probe_request_id = 1
+        mock_win.is_batch_running = False
+
+        target = Path("/tmp/broken.mp4")
+        ret = MainWindow._on_probe_error(
+            mock_win, target, 1, "Invalid container header"
+        )
+
+        assert ret is False
+        assert mock_win.state == WindowState.EMPTY
+        mock_win.window_title.set_subtitle.assert_called_with("No media selected")
+        mock_win.main_stack.set_visible_child_name.assert_called_with("empty")
+        mock_win._set_ui_controls_sensitive.assert_called_with(True)
+        mock_win.transcode_btn.set_sensitive.assert_called_with(False)
+        mock_win.extract_btn.set_sensitive.assert_called_with(False)
+        mock_win.toast_overlay.add_toast.assert_called_once()
+
 
 class TestWindowStateAndProgressDecoupling:
     """Verifies MainWindow state machine, probing lockout, overwrite confirmation, and progress decoupling."""

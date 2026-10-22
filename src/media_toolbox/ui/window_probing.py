@@ -44,6 +44,9 @@ class WindowProbingMixin:
     is_batch_active: bool
 
     def _set_ui_controls_sensitive(self, _sensitive: bool) -> None: ...
+
+    _finish: Any
+
     def _start_transcode(self) -> None: ...
     def _start_extract_audio(self) -> None: ...
     def get_current_video_preset(self) -> Any: ...
@@ -121,7 +124,16 @@ class WindowProbingMixin:
             return
         p = Path(path).resolve()
         if not p.exists():
-            self.toast_overlay.add_toast(Adw.Toast(title=f"File not found: {p.name}"))
+            if getattr(self, "is_batch_running", False) is True and hasattr(
+                self, "_finish"
+            ):
+                self._finish(
+                    False, f"File not found: {p.name}", f"File not found: {p.name}"
+                )
+            else:
+                self.toast_overlay.add_toast(
+                    Adw.Toast(title=f"File not found: {p.name}")
+                )
             return
 
         self._probe_request_id += 1
@@ -220,9 +232,18 @@ class WindowProbingMixin:
         self._set_ui_controls_sensitive(True)
         self.transcode_btn.set_sensitive(False)
         self.extract_btn.set_sensitive(False)
-        self.toast_overlay.add_toast(
-            Adw.Toast(title=f"Failed to probe media: {error_msg}")
-        )
+        if getattr(self, "is_batch_running", False) is True and hasattr(
+            self, "_finish"
+        ):
+            self._finish(
+                False,
+                f"Failed to probe media: {error_msg}",
+                f"Failed to probe media: {error_msg}",
+            )
+        else:
+            self.toast_overlay.add_toast(
+                Adw.Toast(title=f"Failed to probe media: {error_msg}")
+            )
         return False
 
     def _update_default_output_paths(self) -> None:

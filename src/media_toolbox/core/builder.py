@@ -16,7 +16,6 @@ from __future__ import annotations
 import os
 import tempfile
 from pathlib import Path
-from typing import Any
 
 from media_toolbox.core.bitrate import calculate_target_video_bitrate
 from media_toolbox.core.filtergraph import (
@@ -30,6 +29,7 @@ from media_toolbox.core.models import EncodeOptions, MediaInfo, ResolvedJobSpec
 from media_toolbox.core.presets import (
     AUDIO_PRESETS,
     VIDEO_PRESETS,
+    VideoPreset,
     get_audio_preset,
     get_container_faststart_args,
     is_audio_preset,
@@ -186,7 +186,7 @@ def _build_metadata_args(options: EncodeOptions) -> list[str]:
 
 
 def _build_container_args(
-    v_preset: Any | None,
+    v_preset: VideoPreset | None,
     output_path: str,
     extra_args: tuple[str, ...],
 ) -> list[str]:

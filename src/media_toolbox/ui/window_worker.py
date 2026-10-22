@@ -40,7 +40,7 @@ class WindowWorkerMixin:
     progress_footer: Any = None
     toast_overlay: Any = None
     destroy: Any = None
-    load_media_file: Any = None
+    load_media_file: Any
     _pending_confirmation: bool = False
     _active_worker: threading.Thread | None = None
     _job_generation: int = 0
@@ -341,6 +341,8 @@ class WindowWorkerMixin:
             else:
                 self.is_batch_running = False
                 self.is_batch_active = False
+                if getattr(self, "input_file", None) is None:
+                    self.state = WindowState.EMPTY
                 total = len(queue) if isinstance(queue, list) else 0
                 failed_cnt = len(self.batch_failed_files)
                 succ_cnt = total - failed_cnt

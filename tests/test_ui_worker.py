@@ -546,3 +546,53 @@ class TestBatchQueueResilience:
         assert mock_win.batch_index == 0
         assert mock_win.is_batch_running is True
         mock_win.load_media_file.assert_called_once_with(file_fail1)
+
+    @pytest.mark.usefixtures("gi_env")
+    def test_batch_continues_on_missing_file(self) -> None:
+        """load_media_file for non-existent file advances batch queue instead of stalling."""
+        from media_toolbox.ui.window import MainWindow
+
+        mock_win = MagicMock()
+        mock_win.is_batch_running = True
+        mock_win.is_batch_active = True
+        mock_win.batch_index = 0
+        missing_file = Path("/nonexistent/missing_file.mp4")
+        next_file = Path("file2.mp4")
+        mock_win.batch_queue = [missing_file, next_file]
+        mock_win.batch_failed_files = []
+        mock_win.is_transcoding = False
+        mock_win.state = None
+        mock_win._finish = MagicMock()
+
+        MainWindow.load_media_file(mock_win, missing_file)
+
+        mock_win._finish.assert_called_once_with(
+            False,
+            "File not found: missing_file.mp4",
+            "File not found: missing_file.mp4",
+        )
+
+    @pytest.mark.usefixtures("gi_env")
+    def test_batch_continues_on_probe_error(self) -> None:
+        """_on_probe_error advances batch queue and records failed file."""
+        from media_toolbox.ui.window import MainWindow
+
+        mock_win = MagicMock()
+        mock_win.is_batch_running = True
+        mock_win.is_batch_active = True
+        mock_win.batch_index = 0
+        corrupt_file = Path("corrupt.mp4")
+        next_file = Path("file2.mp4")
+        mock_win.batch_queue = [corrupt_file, next_file]
+        mock_win.batch_failed_files = []
+        mock_win._probe_request_id = 1
+        mock_win.state = None
+        mock_win._finish = MagicMock()
+
+        MainWindow._on_probe_error(mock_win, corrupt_file, 1, "moov atom not found")
+
+        mock_win._finish.assert_called_once_with(
+            False,
+            "Failed to probe media: moov atom not found",
+            "Failed to probe media: moov atom not found",
+        )

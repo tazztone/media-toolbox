@@ -87,8 +87,8 @@ def cleanup_stale_staging_dirs(
 ) -> int:
     """
     Remove orphaned .tmp_media_toolbox_* staging directories older than max_age_seconds
-    within target_dir. Skips directories owned by active processes (via .pid file)
-    or containing files modified within max_age_seconds.
+    within target_dir. Skips directories containing files modified within max_age_seconds
+    or owned by active processes (via .pid file) unless exceeding hard limit (max_age_seconds * 7).
     Returns number of directories cleaned up.
     """
     cleaned = 0
@@ -96,21 +96,12 @@ def cleanup_stale_staging_dirs(
     if not p.is_dir():
         return 0
     now = time.time()
+    hard_max_age = max_age_seconds * 7.0
     try:
         for entry in p.iterdir():
             if entry.is_dir() and entry.name.startswith(".tmp_media_toolbox_"):
                 try:
-                    # 1. Skip if owned by an active process
-                    pid_file = entry / ".pid"
-                    if pid_file.is_file():
-                        try:
-                            pid_str = pid_file.read_text(encoding="utf-8").strip()
-                            if pid_str.isdigit() and _is_pid_alive(int(pid_str)):
-                                continue
-                        except OSError:
-                            pass
-
-                    # 2. Check newest mtime across directory and all contained files
+                    # 1. Check newest mtime across directory and all contained files
                     stat = entry.stat()
                     newest_mtime = stat.st_mtime
                     try:
@@ -123,9 +114,24 @@ def cleanup_stale_staging_dirs(
                     except OSError:
                         pass
 
-                    if (now - newest_mtime) > max_age_seconds:
-                        shutil.rmtree(entry, ignore_errors=True)
-                        cleaned += 1
+                    age = now - newest_mtime
+                    if age <= max_age_seconds:
+                        continue
+
+                    # 2. Skip if owned by an active process and below hard age limit (guards PID reuse)
+                    if age <= hard_max_age:
+                        pid_file = entry / ".pid"
+                        if pid_file.is_file():
+                            try:
+                                pid_str = pid_file.read_text(encoding="utf-8").strip()
+                                if pid_str.isdigit() and _is_pid_alive(int(pid_str)):
+                                    continue
+                            except OSError:
+                                pass
+
+                    # Stale: either dead PID or exceeded hard maximum age
+                    shutil.rmtree(entry, ignore_errors=True)
+                    cleaned += 1
                 except OSError:
                     pass
     except OSError:

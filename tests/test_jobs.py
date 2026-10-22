@@ -721,9 +721,27 @@ class TestTransactionalJobExecution:
         now = time.time()
         # Old directory mtime
         os.utime(stale_dir, (now - 100_000, now - 100_000))
-        # Recent file mtime (modified 10 seconds ago)
-        os.utime(inner_file, (now - 10, now - 10))
-
         cleaned = cleanup_stale_staging_dirs(tmp_path, max_age_seconds=86400)
         assert cleaned == 0
         assert stale_dir.exists()
+
+    def test_cleanup_stale_staging_dirs_purges_wrapped_pid_after_hard_limit(
+        self, tmp_path: Path
+    ):
+        """Staging directory older than hard limit (7x max_age) is purged even if PID is alive (PID reuse guard)."""
+        import time
+
+        stale_dir = tmp_path / ".tmp_media_toolbox_wrapped_pid"
+        stale_dir.mkdir()
+        pid_file = stale_dir / ".pid"
+        pid_file.write_text(str(os.getpid()), encoding="utf-8")
+
+        now = time.time()
+        # 8 days old (exceeds 7 * 86400 = 604800s)
+        old_time = now - 700_000
+        os.utime(stale_dir, (old_time, old_time))
+        os.utime(pid_file, (old_time, old_time))
+
+        cleaned = cleanup_stale_staging_dirs(tmp_path, max_age_seconds=86400)
+        assert cleaned == 1
+        assert not stale_dir.exists()
