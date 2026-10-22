@@ -111,6 +111,11 @@ class MainWindow(Adw.ApplicationWindow, WindowProbingMixin, WindowWorkerMixin):
         self._probe_request_id: int = 0
         self._pending_confirmation: bool = False
         self._active_worker: Optional[threading.Thread] = None
+        self.batch_queue: list[Path] = []
+        self.batch_index: int = 0
+        self.is_batch_active: bool = False
+        self.is_batch_running: bool = False
+        self.batch_is_extract: bool = False
 
         self._build_ui()
         self.connect("close-request", self._on_close_request)
@@ -205,6 +210,17 @@ class MainWindow(Adw.ApplicationWindow, WindowProbingMixin, WindowWorkerMixin):
             is_extract_audio=True,
         )
 
+    def load_media_files(self, paths: Any) -> None:
+        """Load multiple files into the batch queue and inspect the first file."""
+        resolved = [Path(p).resolve() for p in paths if Path(p).exists()]
+        if not resolved:
+            return
+        self.batch_queue = resolved
+        self.batch_index = 0
+        self.is_batch_active = len(resolved) > 1
+        self.is_batch_running = False
+        self.load_media_file(self.batch_queue[0])
+
     # -----------------------------------------------------------------------
     # Action Triggers
     # -----------------------------------------------------------------------
@@ -213,6 +229,10 @@ class MainWindow(Adw.ApplicationWindow, WindowProbingMixin, WindowWorkerMixin):
         if self.state != WindowState.READY or not self.input_file or not self.media_info:
             self.toast_overlay.add_toast(Adw.Toast(title="Please open a media file first."))
             return
+
+        if self.is_batch_active:
+            self.is_batch_running = True
+            self.batch_is_extract = False
 
         options = self.get_transcode_options()
         out_path = self.video_output_path
@@ -228,12 +248,21 @@ class MainWindow(Adw.ApplicationWindow, WindowProbingMixin, WindowWorkerMixin):
             overwrite=False,
         )
 
-        self._confirm_overwrite_and_start(config, "Transcoding video...")
+        title = (
+            f"[{self.batch_index + 1}/{len(self.batch_queue)}] Transcoding video..."
+            if self.is_batch_active and len(self.batch_queue) > 1
+            else "Transcoding video..."
+        )
+        self._confirm_overwrite_and_start(config, title)
 
     def _start_extract_audio(self) -> None:
         if self.state != WindowState.READY or not self.input_file or not self.media_info:
             self.toast_overlay.add_toast(Adw.Toast(title="Please open a media file first."))
             return
+
+        if self.is_batch_active:
+            self.is_batch_running = True
+            self.batch_is_extract = True
 
         options = self.get_extract_audio_options()
         out_path = self.audio_output_path
@@ -249,4 +278,9 @@ class MainWindow(Adw.ApplicationWindow, WindowProbingMixin, WindowWorkerMixin):
             overwrite=False,
         )
 
-        self._confirm_overwrite_and_start(config, "Extracting audio...")
+        title = (
+            f"[{self.batch_index + 1}/{len(self.batch_queue)}] Extracting audio..."
+            if self.is_batch_active and len(self.batch_queue) > 1
+            else "Extracting audio..."
+        )
+        self._confirm_overwrite_and_start(config, title)

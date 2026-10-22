@@ -98,7 +98,12 @@ class WindowProbingMixin:
         self.media_info = None
         self.transcode_btn.set_sensitive(False)
         self.extract_btn.set_sensitive(False)
-        self.window_title.set_subtitle(f"Probing {p.name}...")
+        if getattr(self, "is_batch_active", False) and len(getattr(self, "batch_queue", [])) > 1:
+            q_len = len(self.batch_queue)
+            q_idx = self.batch_index + 1
+            self.window_title.set_subtitle(f"[{q_idx}/{q_len}] Probing {p.name}...")
+        else:
+            self.window_title.set_subtitle(f"Probing {p.name}...")
 
         if sync:
             self._probe_worker(p, req_id)
@@ -125,7 +130,12 @@ class WindowProbingMixin:
         self.state = WindowState.READY
         self._video_output_custom = False
         self._audio_output_custom = False
-        self.window_title.set_subtitle(p.name)
+        if getattr(self, "is_batch_active", False) and len(getattr(self, "batch_queue", [])) > 1:
+            q_len = len(self.batch_queue)
+            q_idx = self.batch_index + 1
+            self.window_title.set_subtitle(f"[{q_idx}/{q_len}] {p.name}")
+        else:
+            self.window_title.set_subtitle(p.name)
         self.metadata_card.set_media_info(media_info)
 
         if media_info.primary_video:
@@ -138,6 +148,17 @@ class WindowProbingMixin:
         self._update_default_output_paths()
         self.main_stack.set_visible_child_name("loaded")
         self._set_ui_controls_sensitive(True)
+
+        if getattr(self, "is_batch_running", False) is True:
+            def _trigger_batch() -> bool:
+                if getattr(self, "batch_is_extract", False) is True and hasattr(self, "_start_extract_audio"):
+                    self._start_extract_audio()
+                elif hasattr(self, "_start_transcode"):
+                    self._start_transcode()
+                return False
+
+            GLib.idle_add(_trigger_batch)
+
         return False
 
     def _on_probe_error(self, _p: Path, req_id: int, error_msg: str) -> bool:

@@ -7,6 +7,7 @@ Libadwaita / GTK4 Application entrypoint and lifecycle manager for media_toolbox
 from __future__ import annotations
 
 import os
+from pathlib import Path
 import sys
 from typing import Any, Optional, Sequence
 
@@ -101,15 +102,12 @@ class MediaToolboxApp(_AppBase):  # type: ignore[misc,valid-type]
             self.window = MainWindow(application=self)
 
         if n_files > 0 and files:
-            first_path = files[0].get_path()
-            if first_path:
-                self.window.load_media_file(first_path)
-            if len(files) > 1 and hasattr(self.window, "toast_overlay"):
-                ignored_count = len(files) - 1
-                s = "s" if ignored_count > 1 else ""
-                self.window.toast_overlay.add_toast(
-                    Adw.Toast(title=f"Loaded first file. {ignored_count} additional file{s} ignored.")
-                )
+            paths = [Path(p) for f in files if (p := f.get_path())]
+            if paths:
+                if hasattr(self.window, "load_media_files"):
+                    self.window.load_media_files(paths)
+                elif hasattr(self.window, "load_media_file"):
+                    self.window.load_media_file(str(paths[0]))
             self.window.present()
 
     def _on_action_quit(self, _action: Gio.SimpleAction, _param: Any) -> None:

@@ -136,7 +136,7 @@ class TestMediaToolboxApp:
         mock_win.present.assert_called_once()
 
     def test_app_do_open_routes_file_to_window(self, gi_env, tmp_path: Path) -> None:
-        """Verify passing a file to do_open delegates to window.load_media_file."""
+        """Verify passing a file to do_open delegates to window.load_media_files."""
         _, _, _, _, Gio, _ = gi_env
         from media_toolbox.ui.app import MediaToolboxApp
 
@@ -149,7 +149,7 @@ class TestMediaToolboxApp:
         gfile = Gio.File.new_for_path(str(test_file))
 
         app.do_open([gfile], 1, "")
-        mock_win.load_media_file.assert_called_once_with(str(test_file))
+        mock_win.load_media_files.assert_called_once_with([test_file])
         mock_win.present.assert_called_once()
 
     @pytest.mark.usefixtures("gi_env")
@@ -162,10 +162,10 @@ class TestMediaToolboxApp:
         app.window = mock_win
 
         app.do_open([], 0, "")
-        mock_win.load_media_file.assert_not_called()
+        mock_win.load_media_files.assert_not_called()
 
-    def test_app_do_open_multiple_files_loads_first_and_toasts_warning(self, gi_env, tmp_path: Path) -> None:
-        """Verify passing multiple files loads only the first and emits an in-app notice."""
+    def test_app_do_open_multiple_files_delegates_to_batch_queue(self, gi_env, tmp_path: Path) -> None:
+        """Verify passing multiple files passes full sequence to load_media_files."""
         _, _, _, _, Gio, _ = gi_env
         from media_toolbox.ui.app import MediaToolboxApp
 
@@ -182,8 +182,7 @@ class TestMediaToolboxApp:
         gfile2 = Gio.File.new_for_path(str(file2))
 
         app.do_open([gfile1, gfile2], 2, "")
-        mock_win.load_media_file.assert_called_once_with(str(file1))
-        mock_win.toast_overlay.add_toast.assert_called_once()
+        mock_win.load_media_files.assert_called_once_with([file1, file2])
         mock_win.present.assert_called_once()
 
     @pytest.mark.usefixtures("gi_env")

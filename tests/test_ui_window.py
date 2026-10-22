@@ -360,3 +360,52 @@ class TestWindowStateAndProgressDecoupling:
 
         MainWindow._on_probe_success(mock_win, target, 1, info)
         mock_win.res_widget.set_source_resolution.assert_called_once_with(1080, 1920)
+
+    def test_batch_queue_load_and_advancement(self, tmp_path: Path) -> None:
+        """load_media_files populates batch_queue and _finish advances to next queue item."""
+        from media_toolbox.ui.window import MainWindow
+
+        mock_win = MagicMock()
+        mock_win.batch_queue = []
+        mock_win.batch_index = 0
+        mock_win.is_batch_active = False
+        mock_win.is_batch_running = False
+
+        f1 = tmp_path / "1.mp4"
+        f1.touch()
+        f2 = tmp_path / "2.mp4"
+        f2.touch()
+
+        MainWindow.load_media_files(mock_win, [f1, f2])
+        assert mock_win.batch_queue == [f1, f2]
+        assert mock_win.batch_index == 0
+        assert mock_win.is_batch_active is True
+        mock_win.load_media_file.assert_called_once_with(f1)
+
+        # Worker finish advances to f2
+        mock_win.is_batch_running = True
+        mock_win.state = None
+        mock_win._close_after_cleanup = False
+        with patch("media_toolbox.ui.window_worker.GLib.idle_add") as mock_idle:
+            MainWindow._finish(mock_win, success=True, footer_msg="Saved: 1.mp4", toast_msg="Done")
+            assert mock_win.batch_index == 1
+            mock_idle.assert_called_once()
+            cb = mock_idle.call_args[0][0]
+            assert callable(cb)
+            cb()
+            mock_win.load_media_file.assert_called_with(f2)
+
+    def test_batch_queue_cancel_resets_batch(self) -> None:
+        """User cancellation resets batch active and running states."""
+        from media_toolbox.ui.window import MainWindow
+
+        mock_win = MagicMock()
+        mock_win.is_batch_active = True
+        mock_win.is_batch_running = True
+        mock_win.cancel_event = MagicMock()
+        mock_win.progress_footer = MagicMock()
+
+        MainWindow._on_cancel_clicked(mock_win)
+        assert mock_win.is_batch_active is False
+        assert mock_win.is_batch_running is False
+

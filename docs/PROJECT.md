@@ -179,7 +179,7 @@ tests/
 - `_run_cli_job(args: argparse.Namespace, options: EncodeOptions, label: str, error_prefix: str = "FFmpeg") -> int`: Unified CLI job runner encapsulating signal trapping, probing, execution, and error handling.
 
 ### `ui/window_worker.py`
-- `WindowWorkerMixin`: Asynchronous worker execution with GLib idle loop dispatch, generation guards (`_job_generation`) dropping stale completion/progress events from superseded jobs, consolidated teardown handler (`_finish`), modern `Adw.AlertDialog` overwrite prompt with `Adw.MessageDialog` fallback, and cancel-then-close lifecycle ensuring application quit during active transcodes defers window destruction until staging cleanup completes without orphaned FFmpeg processes. Deprecates `_launch_worker_pipeline` in favor of `_start_worker`.
+- `WindowWorkerMixin`: Asynchronous worker execution with GLib idle loop dispatch, generation guards (`_job_generation`) dropping stale completion/progress events from superseded jobs, consolidated teardown handler (`_finish`) with sequential multi-file batch queue execution, modern `Adw.AlertDialog` overwrite prompt with `Adw.MessageDialog` fallback, and cancel-then-close lifecycle ensuring application quit during active transcodes defers window destruction until staging cleanup completes without orphaned FFmpeg processes. Deprecates `_launch_worker_pipeline` in favor of `_start_worker`.
 
 ### `nautilus/launcher.sh`
 - Background execution script logging GUI diagnostic output to `${XDG_STATE_HOME:-$HOME/.local/state}/media-toolbox/launch.log`.

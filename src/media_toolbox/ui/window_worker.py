@@ -42,6 +42,7 @@ class WindowWorkerMixin:
     progress_footer: Any = None
     toast_overlay: Any = None
     destroy: Any = None
+    load_media_file: Any = None
     _pending_confirmation: bool = False
     _active_worker: Optional[threading.Thread] = None
     _job_generation: int = 0
@@ -241,6 +242,32 @@ class WindowWorkerMixin:
         self._set_ui_controls_sensitive(True)
         if self.open_btn is not None:
             self.open_btn.set_sensitive(True)
+
+        is_batch_running = getattr(self, "is_batch_running", False) is True
+        if success and is_batch_running:
+            raw_idx = getattr(self, "batch_index", 0)
+            next_idx = (int(raw_idx) if isinstance(raw_idx, int) else 0) + 1
+            queue = getattr(self, "batch_queue", [])
+            if isinstance(queue, list) and next_idx < len(queue):
+                self.batch_index = next_idx
+                next_file = queue[next_idx]
+                if self.progress_footer is not None and hasattr(self.progress_footer, "finish"):
+                    self.progress_footer.finish(True, footer_msg)
+                if self.toast_overlay is not None and hasattr(self.toast_overlay, "add_toast"):
+                    self.toast_overlay.add_toast(Adw.Toast(title=toast_msg))
+                def _trigger_next_load() -> bool:
+                    self.load_media_file(next_file)
+                    return False
+                GLib.idle_add(_trigger_next_load)
+                return GLib.SOURCE_REMOVE
+            else:
+                self.is_batch_running = False
+                self.is_batch_active = False
+                toast_msg = f"Batch complete: {len(queue) if isinstance(queue, list) else 0} files processed."
+        elif not success and is_batch_running:
+            self.is_batch_running = False
+            self.is_batch_active = False
+
         if self.progress_footer is not None:
             self.progress_footer.finish(success, footer_msg)
         if self.toast_overlay is not None:
@@ -263,12 +290,16 @@ class WindowWorkerMixin:
         return WindowWorkerMixin._finish(self, False, f"Failed: {error_message}", f"Encoding failed: {error_message}")
 
     def _on_cancel_clicked(self) -> None:
+        self.is_batch_running = False
+        self.is_batch_active = False
         self.state = WindowState.CANCELLING
         if self.cancel_event:
             self.cancel_event.set()
         self.progress_footer.set_cancelling()
 
     def _on_close_request(self, *_args: Any) -> bool:
+        self.is_batch_running = False
+        self.is_batch_active = False
         if getattr(self, "is_transcoding", False):
             self._close_after_cleanup = True
             self.state = WindowState.CANCELLING
