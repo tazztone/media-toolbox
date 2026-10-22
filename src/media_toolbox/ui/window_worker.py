@@ -5,6 +5,7 @@ Background worker thread lifecycle, GLib idle synchronization, and overwrite con
 from __future__ import annotations
 
 import dataclasses
+import errno
 import threading
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,7 @@ from media_toolbox.core.models import ProgressEvent
 from media_toolbox.core.runner import (
     RunnerCancelledError,
     RunnerError,
+    RunnerFileNotFoundError,
 )
 from media_toolbox.ui.constants import WindowState
 
@@ -44,9 +46,23 @@ class WindowWorkerMixin:
     _job_generation: int = 0
     _close_after_cleanup: bool = False
     batch_queue: list[Path]
+    batch_failed_files: list[Path]
     batch_index: int = 0
     is_batch_running: bool = False
     is_batch_active: bool = False
+
+    def retry_failed_batch(self) -> None:
+        """Re-queue and restart processing for all files that failed in the last batch run."""
+        failed = getattr(self, "batch_failed_files", [])
+        if not failed or not isinstance(failed, list):
+            return
+        self.batch_queue = list(failed)
+        self.batch_failed_files = []
+        self.batch_index = 0
+        self.is_batch_running = True
+        self.is_batch_active = True
+        if hasattr(self, "load_media_file"):
+            self.load_media_file(self.batch_queue[0])
 
     def _set_ui_controls_sensitive(self, sensitive: bool) -> None:
         if hasattr(self, "view_stack") and self.view_stack is not None:
@@ -221,11 +237,16 @@ class WindowWorkerMixin:
                 GLib.idle_add(self._on_cancelled_idle, Path(config.output_path))
         except RunnerError as err:
             err_msg = err.last_error_line or str(err)
+            is_systemic = isinstance(err, RunnerFileNotFoundError)
             if getattr(self, "_job_generation", 0) == current_gen:
-                GLib.idle_add(self._on_error_idle, err_msg)
+                GLib.idle_add(self._on_error_idle, err_msg, is_systemic)
+        except OSError as err:
+            is_systemic = err.errno in (errno.ENOSPC, errno.EACCES, errno.EROFS)
+            if getattr(self, "_job_generation", 0) == current_gen:
+                GLib.idle_add(self._on_error_idle, str(err), is_systemic)
         except Exception as exc:  # noqa: BLE001
             if getattr(self, "_job_generation", 0) == current_gen:
-                GLib.idle_add(self._on_error_idle, str(exc))
+                GLib.idle_add(self._on_error_idle, str(exc), False)
 
     def _on_progress_idle(self, event: ProgressEvent) -> bool:
         if getattr(self, "state", None) in (WindowState.CLOSED, WindowState.CANCELLING):
@@ -246,7 +267,14 @@ class WindowWorkerMixin:
         self.progress_footer.update_progress(event, pass_info=pass_info)
         return GLib.SOURCE_REMOVE
 
-    def _finish(self, success: bool, footer_msg: str, toast_msg: str) -> bool:
+    def _finish(
+        self,
+        success: bool,
+        footer_msg: str,
+        toast_msg: str,
+        *,
+        is_systemic: bool = False,
+    ) -> bool:
         if getattr(self, "state", None) == WindowState.CLOSED:
             return GLib.SOURCE_REMOVE
 
@@ -264,17 +292,41 @@ class WindowWorkerMixin:
             self.open_btn.set_sensitive(True)
 
         is_batch_running = getattr(self, "is_batch_running", False) is True
-        if success and is_batch_running:
-            raw_idx = getattr(self, "batch_index", 0)
-            next_idx = (int(raw_idx) if isinstance(raw_idx, int) else 0) + 1
+
+        # Systemic error: halt entire batch immediately
+        if not success and is_systemic and is_batch_running:
+            self.is_batch_running = False
+            self.is_batch_active = False
+            if self.progress_footer is not None:
+                self.progress_footer.finish(False, footer_msg)
+            if self.toast_overlay is not None:
+                self.toast_overlay.add_toast(
+                    Adw.Toast(title=f"Systemic error: {toast_msg}")
+                )
+            return GLib.SOURCE_REMOVE
+
+        # Unattended batch queue advancement (on success or per-file failure)
+        if is_batch_running:
             queue = getattr(self, "batch_queue", [])
+            raw_idx = getattr(self, "batch_index", 0)
+            current_idx = int(raw_idx) if isinstance(raw_idx, int) else 0
+
+            if not hasattr(self, "batch_failed_files") or not isinstance(
+                self.batch_failed_files, list
+            ):
+                self.batch_failed_files = []
+
+            if not success and isinstance(queue, list) and current_idx < len(queue):
+                self.batch_failed_files.append(queue[current_idx])
+
+            next_idx = current_idx + 1
             if isinstance(queue, list) and next_idx < len(queue):
                 self.batch_index = next_idx
                 next_file = queue[next_idx]
                 if self.progress_footer is not None and hasattr(
                     self.progress_footer, "finish"
                 ):
-                    self.progress_footer.finish(True, footer_msg)
+                    self.progress_footer.finish(success, footer_msg)
                 if self.toast_overlay is not None and hasattr(
                     self.toast_overlay, "add_toast"
                 ):
@@ -289,10 +341,15 @@ class WindowWorkerMixin:
             else:
                 self.is_batch_running = False
                 self.is_batch_active = False
-                toast_msg = f"Batch complete: {len(queue) if isinstance(queue, list) else 0} files processed."
-        elif not success and is_batch_running:
-            self.is_batch_running = False
-            self.is_batch_active = False
+                total = len(queue) if isinstance(queue, list) else 0
+                failed_cnt = len(self.batch_failed_files)
+                succ_cnt = total - failed_cnt
+                if failed_cnt > 0:
+                    toast_msg = (
+                        f"Batch complete: {succ_cnt} succeeded, {failed_cnt} failed."
+                    )
+                else:
+                    toast_msg = f"Batch complete: {total} files processed."
 
         if self.progress_footer is not None:
             self.progress_footer.finish(success, footer_msg)
@@ -318,9 +375,14 @@ class WindowWorkerMixin:
             self, False, "Operation cancelled", "Operation cancelled by user."
         )
 
-    def _on_error_idle(self, error_message: str) -> bool:
+    def _on_error_idle(self, error_message: str, is_systemic: bool = False) -> bool:
+        log_hint = " (see ~/.local/state/media-toolbox/launch.log)"
         return WindowWorkerMixin._finish(
-            self, False, f"Failed: {error_message}", f"Encoding failed: {error_message}"
+            self,
+            False,
+            f"Failed: {error_message}",
+            f"Encoding failed: {error_message}{log_hint}",
+            is_systemic=is_systemic,
         )
 
     def _on_cancel_clicked(self) -> None:

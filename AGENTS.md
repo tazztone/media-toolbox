@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-`media-toolbox` — Python media inspection, transcoding, and audio extraction (FFmpeg front-end). Three layers: headless core, Libadwaita/GTK4 GUI, dual Nautilus integration. Python >= 3.10, Apache-2.0. Hard dependencies: None (headless CLI uses pure standard library); PyGObject is optional for desktop GUI (`pip install .[desktop]`). External binaries `ffmpeg`/`ffprobe` required on PATH (not packaged).
+`media-toolbox` — Python media inspection, transcoding, and audio extraction (FFmpeg front-end). Three layers: headless core, Libadwaita/GTK4 GUI, dual Nautilus integration. Python >= 3.10 (3.10–3.14 supported), Apache-2.0. Hard dependencies: None (headless CLI uses pure standard library); PyGObject is optional for desktop GUI (`pip install .[desktop]`). External binaries `ffmpeg`/`ffprobe` required on PATH (not packaged).
 
 ## Architecture & Data Flow
 
@@ -48,7 +48,7 @@ CI configured via GitHub Actions (`.github/workflows/ci.yml`): headless tests, d
 - **Lazy imports for GUI**: `__main__.py` and `nautilus/__init__.py` use lazy `__getattr__`/conditional imports so headless environments never touch GTK.
 - **Mock all subprocess calls in tests** (`unittest.mock.patch`); never require real ffmpeg in unit tests.
 - Registry pattern in `presets.py` with alias map `_PRESET_ALIASES` (case-insensitive lookup).
-- No docstring/style enforcement; keep modules self-contained, stdlib-first.
+- Code style and formatting enforced by Ruff (pinned 0.17.1 default rules and format check); keep modules self-contained, stdlib-first.
 
 ## Important Files
 

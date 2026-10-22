@@ -470,3 +470,79 @@ class TestCancellationFlow:
         ret = MainWindow._on_close_request(mock_win)
         assert ret is False
         assert not mock_win.cancel_event.is_set()
+
+
+class TestBatchQueueResilience:
+    """Test unattended batch queue execution, systemic abortion, and retry of failed files."""
+
+    @pytest.mark.usefixtures("gi_env")
+    def test_batch_continues_on_per_file_error(self) -> None:
+        """A per-file transcode failure records the failure and advances to the next queue item."""
+        from media_toolbox.ui.window import MainWindow
+
+        mock_win = MagicMock()
+        mock_win.is_batch_running = True
+        mock_win.is_batch_active = True
+        mock_win.batch_index = 0
+        file1 = Path("file1.mp4")
+        file2 = Path("file2.mp4")
+        mock_win.batch_queue = [file1, file2]
+        mock_win.batch_failed_files = []
+
+        # File 1 fails with non-systemic error
+        MainWindow._finish(
+            mock_win,
+            False,
+            "Failed: bad frame",
+            "Encoding failed: bad frame",
+            is_systemic=False,
+        )
+
+        assert mock_win.batch_failed_files == [file1]
+        assert mock_win.batch_index == 1
+        assert mock_win.is_batch_running is True
+
+    @pytest.mark.usefixtures("gi_env")
+    def test_batch_aborts_on_systemic_error(self) -> None:
+        """A systemic failure (e.g. missing ffmpeg binary, disk full) halts entire batch queue immediately."""
+        from media_toolbox.ui.window import MainWindow
+
+        mock_win = MagicMock()
+        mock_win.is_batch_running = True
+        mock_win.is_batch_active = True
+        mock_win.batch_index = 0
+        file1 = Path("file1.mp4")
+        file2 = Path("file2.mp4")
+        mock_win.batch_queue = [file1, file2]
+        mock_win.batch_failed_files = []
+
+        MainWindow._finish(
+            mock_win,
+            False,
+            "Failed: ffmpeg not found",
+            "Binary missing",
+            is_systemic=True,
+        )
+
+        assert mock_win.is_batch_running is False
+        assert mock_win.is_batch_active is False
+
+    def test_retry_failed_batch_requeues_failed_files(self) -> None:
+        """retry_failed_batch resets state and restarts queue with failed files only."""
+        from media_toolbox.ui.window import MainWindow
+
+        mock_win = MagicMock()
+        file_fail1 = Path("fail1.mp4")
+        file_fail2 = Path("fail2.mp4")
+        mock_win.batch_failed_files = [file_fail1, file_fail2]
+        mock_win.batch_queue = [Path("ok.mp4"), file_fail1, file_fail2]
+        mock_win.batch_index = 2
+        mock_win.is_batch_running = False
+
+        MainWindow.retry_failed_batch(mock_win)
+
+        assert mock_win.batch_queue == [file_fail1, file_fail2]
+        assert mock_win.batch_failed_files == []
+        assert mock_win.batch_index == 0
+        assert mock_win.is_batch_running is True
+        mock_win.load_media_file.assert_called_once_with(file_fail1)

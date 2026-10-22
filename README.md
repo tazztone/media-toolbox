@@ -60,11 +60,18 @@ pip install ".[all]"
 ### CLI
 
 ```bash
-# Inspect media metadata
+# Inspect media metadata (supports single or multiple files)
 media-toolbox inspect video.mp4
+media-toolbox inspect clip1.mp4 clip2.mp4 --json
 
 # Transcode using preset
 media-toolbox transcode video.mp4 output.mp4 --preset h264
+
+# Hardware accelerated encoding (auto, vaapi, nvenc, qsv, videotoolbox)
+media-toolbox transcode video.mp4 output.mp4 --preset h264 --hwaccel auto
+
+# Animated GIF generation via palettegen/paletteuse
+media-toolbox transcode clip.mp4 animation.gif --preset gif
 
 # 2-Pass target size transcode (in decimal MB)
 media-toolbox transcode video.mp4 output.mp4 --target-mb 25
@@ -78,15 +85,21 @@ media-toolbox transcode video.mkv output.mp4 --audio-track 1 --keep-subs --map-m
 # Overwrite existing destination safely
 media-toolbox transcode video.mp4 output.mp4 --overwrite
 
+# Filesystem fallback copy when hardlinks are unsupported (e.g. FAT/exFAT/cross-device)
+media-toolbox transcode video.mp4 /media/external/output.mp4 --allow-fallback-copy
+
 # Extract audio
 media-toolbox extract-audio video.mp4 audio.mp3
 ```
 
-### Desktop GUI
+### Desktop GUI & Batch Queue
 
 ```bash
 # Launch GUI directly or with a file
 media-toolbox-gui video.mp4
+
+# Multi-file batch queue (runs sequential unattended transcoding with retry on failures)
+media-toolbox-gui clip1.mp4 clip2.mp4 clip3.mp4
 ```
 
 ### Nautilus Integration
