@@ -294,6 +294,7 @@ class EncodeOptions:
     gif_max_colors: int = 256
     gif_dither: str = "sierra2_4a"
     gif_stats_mode: Optional[str] = None
+    hwaccel: Optional[str] = None
     extra_args: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:

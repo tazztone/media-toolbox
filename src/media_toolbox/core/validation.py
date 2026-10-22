@@ -30,6 +30,7 @@ from media_toolbox.core.presets import (
     VIDEO_PRESETS,
     _PRESET_ALIASES,
     is_speed_preset,
+    resolve_hardware_preset,
 )
 
 
@@ -114,6 +115,9 @@ def resolve_job_spec(
             canon_codec = normalize_preset_name(options.video_codec)
             if canon_codec and canon_codec in VIDEO_PRESETS:
                 v_preset = VIDEO_PRESETS[canon_codec]
+
+        if options.hwaccel and options.hwaccel != "none" and v_preset is not None:
+            v_preset = resolve_hardware_preset(v_preset.name, hwaccel=options.hwaccel)
 
     ext = Path(output_path).suffix.lower().lstrip(".") if output_path else None
 
@@ -401,6 +405,12 @@ def validate_encode_options(
         if options.gif_stats_mode.strip().lower() not in VALID_GIF_STATS_MODES:
             raise InvalidOptionsError(
                 f"Invalid gif_stats_mode '{options.gif_stats_mode}'. Valid options: {sorted(VALID_GIF_STATS_MODES)}"
+            )
+
+    if options.hwaccel is not None:
+        if options.hwaccel.strip().lower() not in {"auto", "nvenc", "vaapi", "qsv", "none"}:
+            raise InvalidOptionsError(
+                f"Invalid hwaccel '{options.hwaccel}'. Valid options: auto, nvenc, vaapi, qsv, none"
             )
 
     # Mode 5: extra_args security and boundary validation

@@ -767,6 +767,35 @@ class TestCliTranscodeCommand:
     @patch("media_toolbox.cli.run_ffmpeg_pipeline")
     @patch("media_toolbox.cli.build_ffmpeg_commands")
     @patch("media_toolbox.cli.probe_media")
+    def test_transcode_hwaccel_flag(
+        self,
+        mock_probe: MagicMock,
+        mock_builder: MagicMock,
+        mock_runner: MagicMock,
+        mock_standard_video_info: MediaInfo,
+    ) -> None:
+        """--hwaccel flag passes to EncodeOptions."""
+        mock_probe.return_value = mock_standard_video_info
+        mock_builder.side_effect = _fake_builder
+        mock_runner.side_effect = _fake_runner
+
+        exit_code = cli.main([
+            "transcode",
+            "in.mp4",
+            "out.mp4",
+            "--preset",
+            "h264",
+            "--hwaccel",
+            "auto",
+        ])
+        assert exit_code == 0
+
+        opts: EncodeOptions = mock_builder.call_args[0][2]
+        assert opts.hwaccel == "auto"
+
+    @patch("media_toolbox.cli.run_ffmpeg_pipeline")
+    @patch("media_toolbox.cli.build_ffmpeg_commands")
+    @patch("media_toolbox.cli.probe_media")
     def test_transcode_output_flag_and_target_mb_alias(
         self,
         mock_probe: MagicMock,

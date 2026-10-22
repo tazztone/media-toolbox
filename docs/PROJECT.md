@@ -146,8 +146,11 @@ tests/
 - `build_audio_filter(speed: Optional[float], normalize_loudness: bool, volume_boost_db: Optional[float]) -> list[str]`
 
 ### `core/models.py`
-- `EncodeOptions`: Data structure supporting stream selection (`audio_track_index`, `keep_subtitles`), metadata passthrough (`copy_metadata`, `copy_chapters`), size budget enforcement (`strict_size`), speed, and filters.
+- `EncodeOptions`: Data structure supporting stream selection (`audio_track_index`, `keep_subtitles`), hardware acceleration (`hwaccel`), GIF palette options (`gif_max_colors`, `gif_dither`, `gif_stats_mode`), metadata passthrough (`copy_metadata`, `copy_chapters`), size budget enforcement (`strict_size`), speed, and filters.
 - `InvalidOptionsError`: Specialized exception subclassing `MediaToolboxError` and `ValueError`.
+
+### `core/presets.py`
+- Hardware-accelerated presets (`h264_nvenc`, `hevc_nvenc`, `h264_vaapi`, `hevc_vaapi`, `h264_qsv`, `hevc_qsv`), hardware encoder detection (`get_available_encoders`), and automated hwaccel resolution (`resolve_hardware_preset`).
 
 ### `core/builder.py`
 - `build_ffmpeg_commands(input_path: str, output_path: str, options: EncodeOptions, ffmpeg_bin: str = "ffmpeg") -> list[list[str]]`

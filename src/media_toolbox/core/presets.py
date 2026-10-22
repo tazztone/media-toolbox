@@ -27,6 +27,12 @@ class PresetName(str, Enum):
     VP9 = "vp9"
     GIF = "gif"
     PRORES = "prores"
+    H264_NVENC = "h264_nvenc"
+    HEVC_NVENC = "hevc_nvenc"
+    H264_VAAPI = "h264_vaapi"
+    HEVC_VAAPI = "hevc_vaapi"
+    H264_QSV = "h264_qsv"
+    HEVC_QSV = "hevc_qsv"
 
     # Audio
     MP3 = "mp3"
@@ -57,6 +63,7 @@ class VideoPreset:
     prores_profile: Optional[int] = None
     extra_video_args: tuple[str, ...] = ()
     description: str = ""
+    crf_arg: str = "-crf"
 
     def build_video_args(
         self,
@@ -136,7 +143,7 @@ class VideoPreset:
             if self.codec_name == "libvpx-vp9":
                 # Crucial FFmpeg rule: libvpx-vp9 requires -b:v 0 for true CRF mode
                 args.extend(["-b:v", "0"])
-            args.extend(["-crf", str(effective_crf)])
+            args.extend([self.crf_arg, str(effective_crf)])
 
         preset = (
             speed_preset.strip().lower()
@@ -332,6 +339,117 @@ PRORES_PRESET = VideoPreset(
     description="Apple ProRes 422 HQ broadcast master editing format.",
 )
 
+H264_NVENC_PRESET = VideoPreset(
+    name="h264_nvenc",
+    display_name="H.264 (NVIDIA NVENC)",
+    codec_name="h264_nvenc",
+    default_extension="mp4",
+    compatible_extensions=("mp4", "mkv", "mov", "ts"),
+    default_crf=23,
+    crf_range=(0, 51),
+    crf_arg="-cq",
+    default_speed_preset="p4",
+    default_pix_fmt="yuv420p",
+    default_audio_codec="aac",
+    compatible_audio_codecs=("aac", "libmp3lame", "libopus", "flac"),
+    supports_two_pass=False,
+    supports_crf=True,
+    description="Hardware-accelerated H.264 video encoding via NVIDIA NVENC.",
+)
+
+HEVC_NVENC_PRESET = VideoPreset(
+    name="hevc_nvenc",
+    display_name="H.265 / HEVC (NVIDIA NVENC)",
+    codec_name="hevc_nvenc",
+    default_extension="mp4",
+    compatible_extensions=("mp4", "mkv", "mov"),
+    default_crf=28,
+    crf_range=(0, 51),
+    crf_arg="-cq",
+    default_speed_preset="p4",
+    default_pix_fmt="yuv420p",
+    default_audio_codec="aac",
+    compatible_audio_codecs=("aac", "libmp3lame", "libopus", "flac"),
+    supports_two_pass=False,
+    supports_crf=True,
+    apple_tag="hvc1",
+    description="Hardware-accelerated HEVC video encoding via NVIDIA NVENC.",
+)
+
+H264_VAAPI_PRESET = VideoPreset(
+    name="h264_vaapi",
+    display_name="H.264 (VAAPI)",
+    codec_name="h264_vaapi",
+    default_extension="mp4",
+    compatible_extensions=("mp4", "mkv", "mov", "ts"),
+    default_crf=23,
+    crf_range=(0, 51),
+    crf_arg="-qp",
+    default_speed_preset=None,
+    default_pix_fmt=None,
+    default_audio_codec="aac",
+    compatible_audio_codecs=("aac", "libmp3lame", "libopus", "flac"),
+    supports_two_pass=False,
+    supports_crf=True,
+    description="Hardware-accelerated H.264 video encoding via VAAPI (Intel/AMD).",
+)
+
+HEVC_VAAPI_PRESET = VideoPreset(
+    name="hevc_vaapi",
+    display_name="H.265 / HEVC (VAAPI)",
+    codec_name="hevc_vaapi",
+    default_extension="mp4",
+    compatible_extensions=("mp4", "mkv", "mov"),
+    default_crf=28,
+    crf_range=(0, 51),
+    crf_arg="-qp",
+    default_speed_preset=None,
+    default_pix_fmt=None,
+    default_audio_codec="aac",
+    compatible_audio_codecs=("aac", "libmp3lame", "libopus", "flac"),
+    supports_two_pass=False,
+    supports_crf=True,
+    apple_tag="hvc1",
+    description="Hardware-accelerated HEVC video encoding via VAAPI (Intel/AMD).",
+)
+
+H264_QSV_PRESET = VideoPreset(
+    name="h264_qsv",
+    display_name="H.264 (Intel QuickSync)",
+    codec_name="h264_qsv",
+    default_extension="mp4",
+    compatible_extensions=("mp4", "mkv", "mov", "ts"),
+    default_crf=23,
+    crf_range=(0, 51),
+    crf_arg="-global_quality",
+    default_speed_preset="medium",
+    default_pix_fmt="nv12",
+    default_audio_codec="aac",
+    compatible_audio_codecs=("aac", "libmp3lame", "libopus", "flac"),
+    supports_two_pass=False,
+    supports_crf=True,
+    description="Hardware-accelerated H.264 video encoding via Intel QuickSync.",
+)
+
+HEVC_QSV_PRESET = VideoPreset(
+    name="hevc_qsv",
+    display_name="H.265 / HEVC (Intel QuickSync)",
+    codec_name="hevc_qsv",
+    default_extension="mp4",
+    compatible_extensions=("mp4", "mkv", "mov"),
+    default_crf=28,
+    crf_range=(0, 51),
+    crf_arg="-global_quality",
+    default_speed_preset="medium",
+    default_pix_fmt="nv12",
+    default_audio_codec="aac",
+    compatible_audio_codecs=("aac", "libmp3lame", "libopus", "flac"),
+    supports_two_pass=False,
+    supports_crf=True,
+    apple_tag="hvc1",
+    description="Hardware-accelerated HEVC video encoding via Intel QuickSync.",
+)
+
 MP3_PRESET = AudioPreset(
     name="mp3",
     display_name="MP3 (LAME)",
@@ -389,6 +507,12 @@ VIDEO_PRESETS: dict[str, VideoPreset] = {
     "vp9": VP9_PRESET,
     "gif": GIF_PRESET,
     "prores": PRORES_PRESET,
+    "h264_nvenc": H264_NVENC_PRESET,
+    "hevc_nvenc": HEVC_NVENC_PRESET,
+    "h264_vaapi": H264_VAAPI_PRESET,
+    "hevc_vaapi": HEVC_VAAPI_PRESET,
+    "h264_qsv": H264_QSV_PRESET,
+    "hevc_qsv": HEVC_QSV_PRESET,
 }
 
 AUDIO_PRESETS: dict[str, AudioPreset] = {
@@ -409,6 +533,13 @@ VALID_SPEED_PRESETS: frozenset[str] = frozenset({
     "slower",
     "veryslow",
     "placebo",
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5",
+    "p6",
+    "p7",
 })
 
 
@@ -445,6 +576,31 @@ _PRESET_ALIASES: dict[str, str] = {
     "apple_prores": "prores",
     "discord": "h264",
     "discord-h264": "h264",
+    # Hardware video aliases
+    "nvenc": "h264_nvenc",
+    "nvenc_h264": "h264_nvenc",
+    "h264-nvenc": "h264_nvenc",
+    "nvenc_hevc": "hevc_nvenc",
+    "nvenc_h265": "hevc_nvenc",
+    "hevc-nvenc": "hevc_nvenc",
+    "h265_nvenc": "hevc_nvenc",
+    "h265-nvenc": "hevc_nvenc",
+    "vaapi": "h264_vaapi",
+    "vaapi_h264": "h264_vaapi",
+    "h264-vaapi": "h264_vaapi",
+    "vaapi_hevc": "hevc_vaapi",
+    "vaapi_h265": "hevc_vaapi",
+    "hevc-vaapi": "hevc_vaapi",
+    "h265_vaapi": "hevc_vaapi",
+    "h265-vaapi": "hevc_vaapi",
+    "qsv": "h264_qsv",
+    "qsv_h264": "h264_qsv",
+    "h264-qsv": "h264_qsv",
+    "qsv_hevc": "hevc_qsv",
+    "qsv_h265": "hevc_qsv",
+    "hevc-qsv": "hevc_qsv",
+    "h265_qsv": "hevc_qsv",
+    "h265-qsv": "hevc_qsv",
     # Audio aliases
     "mp3": "mp3",
     "libmp3lame": "mp3",
@@ -515,13 +671,9 @@ def list_audio_presets() -> list[AudioPreset]:
     return list(AUDIO_PRESETS.values())
 
 
-def check_encoder_available(codec_name: str, executable: Optional[str] = None) -> bool:
+def get_available_encoders(executable: Optional[str] = None) -> set[str]:
     """
-    Detect if the host FFmpeg installation has support for the requested encoder.
-
-    Args:
-        codec_name: Target encoder name (e.g. 'libx265', 'libx264', 'libvpx-vp9').
-        executable: Optional FFmpeg binary path.
+    Return all available encoder names supported by the host FFmpeg installation.
     """
     ffmpeg_bin = executable or shutil.which("ffmpeg") or "ffmpeg"
     try:
@@ -532,11 +684,59 @@ def check_encoder_available(codec_name: str, executable: Optional[str] = None) -
             timeout=5.0,
             check=False,
         )
+        encoders: set[str] = set()
         for line in proc.stdout.splitlines():
             parts = line.strip().split()
-            if len(parts) >= 2 and parts[1] == codec_name:
-                return True
-        return False
+            if len(parts) >= 2 and len(parts[0]) == 6:
+                encoders.add(parts[1])
+        return encoders
     except Exception:
-        return False
+        return set()
+
+
+def check_encoder_available(codec_name: str, executable: Optional[str] = None) -> bool:
+    """
+    Detect if the host FFmpeg installation has support for the requested encoder.
+
+    Args:
+        codec_name: Target encoder name (e.g. 'libx265', 'libx264', 'libvpx-vp9').
+        executable: Optional FFmpeg binary path.
+    """
+    return codec_name in get_available_encoders(executable)
+
+
+def resolve_hardware_preset(
+    base_preset: str,
+    hwaccel: str = "auto",
+    available_encoders: Optional[set[str]] = None,
+    executable: Optional[str] = None,
+) -> VideoPreset:
+    """
+    Resolve requested base preset (e.g. 'h264', 'h265') to a hardware-accelerated preset
+    if available and requested, otherwise return the standard video preset.
+    """
+    canon = _normalize_preset_key(base_preset)
+    mode = (hwaccel or "none").strip().lower()
+    if mode == "none" or canon not in ("h264", "h265"):
+        return get_video_preset(base_preset)
+
+    prefix = "hevc" if canon == "h265" else "h264"
+
+    # Explicit backend
+    if mode in ("nvenc", "vaapi", "qsv"):
+        candidate_name = f"{prefix}_{mode}"
+        if candidate_name in VIDEO_PRESETS:
+            return VIDEO_PRESETS[candidate_name]
+        return get_video_preset(base_preset)
+
+    # Auto backend: probe available encoders with priority nvenc -> vaapi -> qsv
+    if mode == "auto":
+        encoders = available_encoders if available_encoders is not None else get_available_encoders(executable)
+        for backend in ("nvenc", "vaapi", "qsv"):
+            cand = f"{prefix}_{backend}"
+            if cand in encoders and cand in VIDEO_PRESETS:
+                return VIDEO_PRESETS[cand]
+
+    return get_video_preset(base_preset)
+
 

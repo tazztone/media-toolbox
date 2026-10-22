@@ -120,6 +120,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["bayer", "heckbert", "floyd_steinberg", "sierra2", "sierra2_4a", "none"],
         help="Dithering algorithm for GIF encoding (default: sierra2_4a)",
     )
+    trans_parser.add_argument(
+        "--hwaccel",
+        default=None,
+        choices=["auto", "nvenc", "vaapi", "qsv", "none"],
+        help="Hardware acceleration backend (auto, nvenc, vaapi, qsv, none)",
+    )
     trans_parser.add_argument("-f", "--overwrite", action="store_true", help="Overwrite destination file if it exists")
     trans_parser.add_argument("--allow-fallback-copy", action="store_true", help="Allow non-atomic copy publication on filesystems lacking hard link support")
     trans_parser.add_argument("--quiet", action="store_true", help="Suppress interactive progress bar")

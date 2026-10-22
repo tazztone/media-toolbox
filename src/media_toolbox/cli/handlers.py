@@ -218,6 +218,7 @@ def handle_transcode(args: argparse.Namespace) -> int:
         copy_chapters=getattr(args, "map_chapters", False),
         gif_max_colors=getattr(args, "gif_max_colors", 256),
         gif_dither=getattr(args, "gif_dither", "sierra2_4a"),
+        hwaccel=getattr(args, "hwaccel", None),
     )
     return _run_cli_job(args, options, label="Transcoding", error_prefix="FFmpeg")
 

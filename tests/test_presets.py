@@ -44,15 +44,16 @@ from media_toolbox.core.presets import (
 
 
 def test_all_10_presets_exist() -> None:
-    """Exactly 6 video presets and 4 audio presets must be registered."""
+    """Core video presets (software + hardware) and audio presets must be registered."""
     video_presets = list_video_presets()
     audio_presets = list_audio_presets()
 
-    assert len(video_presets) == 6
+    assert len(video_presets) == 12
     assert len(audio_presets) == 4
 
     video_names = {p.name for p in video_presets}
-    assert video_names == {"h264", "h265", "av1", "vp9", "gif", "prores"}
+    assert {"h264", "h265", "av1", "vp9", "gif", "prores"}.issubset(video_names)
+    assert {"h264_nvenc", "hevc_nvenc", "h264_vaapi", "hevc_vaapi", "h264_qsv", "hevc_qsv"}.issubset(video_names)
 
     audio_names = {p.name for p in audio_presets}
     assert audio_names == {"mp3", "aac", "opus", "flac"}
@@ -290,6 +291,60 @@ def test_check_encoder_available() -> None:
 
     with patch("subprocess.run", side_effect=FileNotFoundError):
         assert check_encoder_available("libx264") is False
+
+
+def test_hardware_presets_build_args() -> None:
+    """Hardware presets emit correct codec and quality flags (-cq for nvenc, -qp for vaapi)."""
+    h264_nv = get_video_preset("h264_nvenc")
+    assert h264_nv.codec_name == "h264_nvenc"
+    args_nv = h264_nv.build_video_args(crf=20)
+    assert "-c:v" in args_nv and "h264_nvenc" in args_nv
+    assert "-cq" in args_nv and "20" in args_nv
+    assert "-crf" not in args_nv
+
+    hevc_nv = get_video_preset("hevc_nvenc")
+    assert hevc_nv.codec_name == "hevc_nvenc"
+    assert hevc_nv.apple_tag == "hvc1"
+    args_hevc_nv = hevc_nv.build_video_args(crf=26)
+    assert "-cq" in args_hevc_nv and "26" in args_hevc_nv
+    assert "-tag:v" in args_hevc_nv and "hvc1" in args_hevc_nv
+
+    h264_va = get_video_preset("h264_vaapi")
+    assert h264_va.codec_name == "h264_vaapi"
+    args_va = h264_va.build_video_args(crf=22)
+    assert "-c:v" in args_va and "h264_vaapi" in args_va
+    assert "-qp" in args_va and "22" in args_va
+
+
+def test_resolve_hardware_preset() -> None:
+    """resolve_hardware_preset maps requested backend or auto-probed encoders."""
+    from media_toolbox.core.presets import resolve_hardware_preset
+
+    # Explicit backend
+    p_nv = resolve_hardware_preset("h264", hwaccel="nvenc")
+    assert p_nv.name == "h264_nvenc"
+
+    p_va = resolve_hardware_preset("h265", hwaccel="vaapi")
+    assert p_va.name == "hevc_vaapi"
+
+    # None mode returns base preset
+    p_none = resolve_hardware_preset("h264", hwaccel="none")
+    assert p_none.name == "h264"
+
+    # Auto mode with mocked available encoders
+    mock_nv_encoders = {"h264_nvenc", "hevc_nvenc", "libx264"}
+    p_auto_nv = resolve_hardware_preset("h264", hwaccel="auto", available_encoders=mock_nv_encoders)
+    assert p_auto_nv.name == "h264_nvenc"
+
+    mock_va_encoders = {"h264_vaapi", "hevc_vaapi", "libx264"}
+    p_auto_va = resolve_hardware_preset("h264", hwaccel="auto", available_encoders=mock_va_encoders)
+    assert p_auto_va.name == "h264_vaapi"
+
+    # Auto mode fallback to CPU when no hardware encoder present
+    mock_cpu_only = {"libx264", "libx265"}
+    p_auto_cpu = resolve_hardware_preset("h264", hwaccel="auto", available_encoders=mock_cpu_only)
+    assert p_auto_cpu.name == "h264"
+
 
 
 
