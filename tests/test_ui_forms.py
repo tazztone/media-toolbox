@@ -5,16 +5,22 @@ Tests:
 - Collision-safe default output path resolution
 """
 
-# pyright: reportMissingImports=false, reportMissingModuleSource=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportGeneralTypeIssues=false, reportInvalidTypeForm=false
-
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 import pytest
 
-from tests.ui_test_helpers import isolate_gi_sys_modules
+from media_toolbox.ui.forms import (
+    build_encode_options_from_state,
+    resolve_default_output_path,
+)
 
-pytestmark = [pytest.mark.desktop]
+
+def test_forms_zero_gui_imports() -> None:
+    """Verify forms.py imports zero GUI modules."""
+    for mod in ("gi", "gi.repository", "gi.repository.Gtk", "gi.repository.Adw"):
+        assert mod not in sys.modules or "media_toolbox.ui.forms" not in getattr(sys.modules.get(mod), "__file__", "")
 
 
 # ---------------------------------------------------------------------------

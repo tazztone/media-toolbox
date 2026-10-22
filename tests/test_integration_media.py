@@ -301,3 +301,41 @@ def test_real_audio_presets(
     assert info.has_audio is True
 
 
+def test_real_two_pass_target_size_budget(synthetic_av_clip: Path, tmp_path: Path) -> None:
+    """Real two-pass encode adheres closely to requested target size budget."""
+    out_file = tmp_path / "budget_output.mp4"
+    target_mb = 0.35
+    opts = EncodeOptions(preset="h264", target_size_mb=target_mb, strict_size=True, audio_bitrate_kbps=64)
+    config = JobConfig(input_path=synthetic_av_clip, output_path=out_file, options=opts)
+    result = run_job(config)
+
+    assert result.output_path == out_file
+    assert out_file.is_file()
+    # Output size should not exceed target budget (0.35 MB ~ 350,000 bytes)
+    assert result.file_size_bytes <= 350_000
+    assert result.exceeded_target is False
+
+
+def test_real_cancellation_cleans_staging_directory(synthetic_av_clip: Path, tmp_path: Path) -> None:
+    """Real FFmpeg pipeline cancelled mid-encode leaves zero residual staging files."""
+    import threading
+    from media_toolbox.core.runner import RunnerCancelledError
+
+    out_file = tmp_path / "cancelled_output.mp4"
+    cancel_evt = threading.Event()
+
+    def _cancelling_progress(_evt):
+        cancel_evt.set()
+
+    opts = EncodeOptions(preset="h264", crf=32)
+    config = JobConfig(input_path=synthetic_av_clip, output_path=out_file, options=opts)
+
+    with pytest.raises(RunnerCancelledError):
+        run_job(config, progress_callback=_cancelling_progress, cancel_event=cancel_evt)
+
+    assert not out_file.exists()
+    stale_dirs = list(tmp_path.glob(".tmp_media_toolbox_*"))
+    assert len(stale_dirs) == 0
+
+
+
