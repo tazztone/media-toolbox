@@ -6,9 +6,10 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 from typing import Any
+
 import pytest
 
 # Ensure repository src directory is in sys.path unless testing installed package
@@ -22,6 +23,16 @@ from media_toolbox.core.models import (
     FormatInfo,
     MediaInfo,
     VideoStream,
+)
+
+# Fixtures used across the suite are registered package-wide here. Test modules only
+# import helper *functions* from ui_test_helpers, so the fixtures no longer need to be
+# re-imported (and shadowed by parameter names) in every module.
+from tests.ui_test_helpers import (  # noqa: F401
+    gi_env,
+    isolate_gi_sys_modules,
+    sample_silent_media_info,
+    sample_video_media_info,
 )
 
 
